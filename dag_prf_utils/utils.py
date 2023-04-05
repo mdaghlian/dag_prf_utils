@@ -1,9 +1,9 @@
 import numpy as np
 
-def qprint(print_str):
+def dag_qprint(print_str):
     print(print_str, flush=True)
 
-def get_roi_idx_from_dot_label(path2dotlabel):
+def dag_roi_idx_from_dot_label(path2dotlabel):
     with open(path2dotlabel) as f:
         contents = f.readline()
     
@@ -20,14 +20,14 @@ def get_roi_idx_from_dot_label(path2dotlabel):
 
     return idx_int
 
-def hyphen_parse(str_prefix, str_in):
+def dag_hyphen_parse(str_prefix, str_in):
     if str_prefix in str_in:
         str_out = str_in
     else: 
         str_out = f'{str_prefix}-{str_in}'
     return str_out
     
-def print_p():
+def dag_print_p():
     p_order = {}
     p_order['gauss'] = {
         'x' : 0,
@@ -84,7 +84,7 @@ def print_p():
 
     return p_order
 
-def rescale_bw(data_in, old_min=None, old_max=None, new_min=0, new_max=1):
+def dag_rescale_bw(data_in, old_min=None, old_max=None, new_min=0, new_max=1):
     data_out = np.copy(data_in)
     if old_min is not None:
         data_out[data_in<old_min] = old_min
@@ -99,7 +99,7 @@ def rescale_bw(data_in, old_min=None, old_max=None, new_min=0, new_max=1):
     data_out = data_out * (new_max-new_min) + new_min # Scale bw new values
     return data_out
 
-def get_rsq(tc_target, tc_fit):
+def dag_get_rsq(tc_target, tc_fit):
     ss_res = np.sum((tc_target-tc_fit)**2, axis=-1)
     ss_tot = np.sum(
         (tc_target-tc_target.mean(axis=-1)[...,np.newaxis])**2, 
@@ -109,7 +109,7 @@ def get_rsq(tc_target, tc_fit):
 
     return rsq
 
-def coord_convert(a,b,old2new):
+def dag_coord_convert(a,b,old2new):
     ''' 
     Convert cartesian to polar and vice versa
     >> a,b          x,y or eccentricity, polar
@@ -124,15 +124,13 @@ def coord_convert(a,b,old2new):
     
     elif old2new=="cart2pol":            
         ecc = np.sqrt( a**2 + b**2 ) # Eccentricity
-        pol = np.zeros_like(a)    
         pol = np.arctan2( b, a ) # Polar angle
-        pol[pol<0] += 2*np.pi
         new_a = ecc
         new_b = pol
                             
     return new_a, new_b    
 
-def get_pos_change(old_x, old_y, new_x, new_y):
+def dag_get_pos_change(old_x, old_y, new_x, new_y):
     dx = new_x - old_x
     dy = new_y - old_y
     dsize = np.sqrt(dx**2 + dy**2)

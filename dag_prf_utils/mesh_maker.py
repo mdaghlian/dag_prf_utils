@@ -3,19 +3,47 @@ import matplotlib.pyplot as plt
 import matplotlib as mpl
 from datetime import datetime
 import os
-import linescanning.utils as lsutils
 opj = os.path.join
 
-# New way of viewing subject surfaces without using pycortex..
+'''
+Experimental way to view MRI surface data (without pycortex; e.g., to view retinotopic maps)
+> why do this? 
+Pycortex is very powerful, but also quite complex. The source code is difficult to follow, and when it doesn't work; it is difficult to find out why. The idea here is to have a simple script which allows you to plot data on the cortical surface quickly. It should also allow you to specify you're own custom color maps. It (hopefully) allows you to view you're surface in a 3D software package of your choice. Here I am using meshlab. 
+
+You can install Meshlab, and specify the path to run the function. 
+
+What it does: 
+[1] For a subject, take a freesurfer surface (e.g., pial, or inflated), convert it into a "mesh file" format which can be easily read by standard 3D rendering software (e.g.,".ply", using meshlab)
+
+[2] Render some anatomical properties of this data on the surface (e.g., the curvature, or sulcal depth) 
+
+[3] Plot arbitrary data on the surface (e.g., retinotopic stuff, like polar angle)
+> this can be any values (of a length which matches the number of vertices), specified by the user
+> you can specify any matplotlib colormap
+> and you can specify the alpha, allowing it to nicely blend with the anatomical data (e.g. the curvature)
+
+This is all saved in a .ply file, and can be viewed using meshlab
+> you can also click on individual vertices inside meshlab, to get there position, index, and values (of the data you specified)
+
+[1] Specify freesurfer directory, subject, and surface type
+> "/my_project/derivatives/freesurfer/"
+> "sub-01"
+> "pial" (or could be "inflated")
+This gives us the location of the freesurfer file which has the coordinates of every vertex in the mesh, as well as which vertices go together to form the face. This freesurfer file is currently in a binarised format - which takes lower memory, but cannot be read as text. 
+[2] Use freesurfer function "mris_convert
+
+
+# Experimental way to view surfaces (without pycortex)
 # Stages:
-# [1] Specify the mesh you want to use
-# -> e.g "pial", or "inflated"
+# [1] Specify the mesh, created by freesurfer you want to use
+# -> e.g "pial", or "inflated" 
 # [2] Convert from freesurfer file to asc
 # -> mris_convert  asc 
 # -> rename .asc as .srf file
-# [3] Convert from .srf to .obj (using brainder scripts)
-# [4] Use .obj file and some values specified by user (e.g., eccentricity) to write a .ply file
-# [5] Load the .ply file in meshlab
+# [3] Convert from .srf to .ply (using brainder scripts)
+# [4] Load the .ply file in meshlab
+'''
+
 
 
 # Programs files:
@@ -27,81 +55,21 @@ srf2obj_path = opj(brainder_script,'srf2obj')
 mesh_lab_init = opj(prog_folder,'MeshLab2022.02-linux', 'usr', 'bin', 'meshlab')
 blender_init = opj(prog_folder,'blender-3.4.1-linux-x64', 'blender')
 
-deriv_dir = '/data1/projects/dumoulinlab/Lab_members/Marcus/projects/amblyopia_emc/derivatives'#os.environ.get('DIR_DATA_DERIV')
-mesh_dir = opj(deriv_dir, 'mesh_files')
-if not os.path.exists(mesh_dir):
-    os.mkdir(mesh_dir)
+def dag_mlab_open(ply_file_list):
+    if not isinstance(ply_file_list, list):
+        ply_file_list = [ply_file_list]
 
-def dag_srf_to_ply(srf_file, rgb_vals, hemi=None, values=None):
-    if not isinstance(values, np.ndarray):
-        values = np.ones(rgb_vals.shape[0])
-    with open(srf_file) as f:
-        srf_lines = f.readlines()
-    n_vx, n_f = srf_lines[1].split(' ')
-    n_vx, n_f = int(n_vx), int(n_f)    
-    # Create the ply string -> following this format
-    ply_str  = f'ply\n'
-    ply_str += f'format ascii 1.0\n'
-    ply_str += f'element vertex {n_vx}\n'
-    ply_str += f'property float x\n'
-    ply_str += f'property float y\n'
-    ply_str += f'property float z\n'
-    ply_str += f'property uchar red\n'
-    ply_str += f'property uchar green\n'
-    ply_str += f'property uchar blue\n'
-    ply_str += f'property float quality\n'
-    ply_str += f'element face {n_f}\n'
-    ply_str += f'property list uchar int vertex_index\n'
-    ply_str += f'end_header\n'
-
-    if hemi==None:
-        x_offset = 0
-    elif 'lh' in hemi:
-        x_offset = -50
-    elif 'rh' in hemi:
-        x_offset = 50
-    # Cycle through the lines of the obj file and add vx + coords + rgb
-    v_idx = 0 # Keep count of vertices     
-    for i in range(2,len(srf_lines)):
-        # If there is a '.' in the line then it is a vertex
-        if '.' in srf_lines[i]:
-            split_coord = srf_lines[i][:-2:].split(' ')                        
-            coord_count = 0
-            for coord in split_coord:
-                if ('.' in coord) & (coord_count==0): # Add x_offset
-                    ply_str += f'{float(coord)+x_offset:.6f} ' 
-                    coord_count += 1
-                elif '.' in coord:
-                    ply_str += f'{float(coord):.6f} ' 
-                    coord_count += 1                    
-            
-            # Now add the value of the parameters...
-            # Now add the rgb values. as integers between 0 and 255
-            ply_str += f' {int(rgb_vals[v_idx][0]*255)} {int(rgb_vals[v_idx][1]*255)} {int(rgb_vals[v_idx][2]*255)} '
-            
-            ply_str += f'{values[v_idx]:.3f}\n'
-            v_idx += 1 # next vertex
-        
-        else:
-            # After we finished all the vertices, we need to define the faces
-            # -> these are triangles (hence 3 at the beginning of each line)
-            # -> the index of the three vx is given
-            # For some reason the index is 1 less in .ply files vs .obj files
-            # ... i guess like the difference between matlab and python
-            ply_str += '3 ' 
-            split_idx = srf_lines[i][:-1:].split(' ')
-            ply_str += f'{int(split_idx[0])} '
-            ply_str += f'{int(split_idx[1])} '
-            ply_str += f'{int(split_idx[2])} '
-            ply_str += '\n'
-    return ply_str
-
+    mlab_cmd = f'{mesh_lab_init} '
+    for i in ply_file_list:
+        mlab_cmd += f'{i} '
+    
+    os.system(mlab_cmd)
 
 
 def dag_fs_to_ply(sub, data, fs_dir, mesh_name='inflated', out_dir=None, under_surf='curv', **kwargs):
     '''
     fs_to_ply:
-        Create surface files for a subject, and a specific parameter.
+        Create surface files for a subject, and a specific parameter.                        
         
     Arguments:
         sub             str             e.g. 'sub-01': Name of subject in freesurfer file
@@ -127,8 +95,12 @@ def dag_fs_to_ply(sub, data, fs_dir, mesh_name='inflated', out_dir=None, under_s
                                                             Default: 10th percentile in data
         vmax            float           Max value for colormap
                                                             Default: 90th percentile in data
-                                                                    
-        open_mlab       bool
+                                                                
+        open_mlab       bool            Open meshlab at the end...
+        return_ply_file bool            Return the ply files which have been made
+
+        
+        TODO: open meshlab to a specific angle...
         # ? possible
         *** CAMERA
         do_scrn_shot    bool            Take screenshots?   Default: True
@@ -140,6 +112,7 @@ def dag_fs_to_ply(sub, data, fs_dir, mesh_name='inflated', out_dir=None, under_s
         ***
     '''
     open_mlab = kwargs.get('open_mlab', True)
+    return_ply_file = kwargs.get('return_ply_file', False)    
     # Get path to subjects surface file
     path_to_sub_surf = opj(fs_dir, sub, 'surf')
     # Check name for surface:
@@ -149,9 +122,6 @@ def dag_fs_to_ply(sub, data, fs_dir, mesh_name='inflated', out_dir=None, under_s
         surf_name = sub + '_' + datetime.now().strftime('%Y-%m-%d_%H-%M')
     else:
         surf_name = sub + '_' + surf_name + '_' + mesh_name
-    # If out_dir not specified, make a folder in mesh_dir
-    if out_dir==None:
-        out_dir = opj(mesh_dir, surf_name)
             
     if not os.path.exists(out_dir):
         os.mkdir(out_dir)
@@ -200,6 +170,9 @@ def dag_fs_to_ply(sub, data, fs_dir, mesh_name='inflated', out_dir=None, under_s
     data_norm.vmin = vmin
     data_norm.vmax = vmax
     data_col = data_cmap(data_norm(data))
+    
+    # CHANGE FOR NAN
+    # data[~data_mask] = 0
 
     # Create rgb values mapping from under_surf to grey cmap
     us_cmap = mpl.cm.__dict__['Greys'] # Always grey underneath
@@ -222,32 +195,139 @@ def dag_fs_to_ply(sub, data, fs_dir, mesh_name='inflated', out_dir=None, under_s
         mesh_name_file = opj(path_to_sub_surf, f'{ih}{mesh_name}')
         asc_surf_file = opj(out_dir,f'{ih}{surf_name}.asc')
         srf_surf_file = opj(out_dir,f'{ih}{surf_name}.srf')
-        # obj_surf_file = opj(out_dir,f'{ih}{surf_name}.obj')
+        # 
+        obj_surf_file = opj(out_dir,f'{ih}{surf_name}.obj')    
+        rgb_surf_file = opj(out_dir,f'{ih}{surf_name}_rgb.csv')    
+        #
         ply_surf_file = opj(out_dir,f'{ih}{surf_name}.ply')
         ply_file_2open.append(ply_surf_file)
         # [1] Make asc file using freesurfer mris_convert command:
         os.system(f'mris_convert {mesh_name_file} {asc_surf_file}')
         # [2] Rename .asc as .srf file to avoid ambiguity (using "brainders" conversion tool)
         os.system(f'cp {asc_surf_file} {srf_surf_file}')
-        # [3] Use brainder script to create .obj file        
-        # os.system(f'{srf2obj_path} {srf_surf_file} > {obj_surf_file}')
+        
+        # *** EXTRA BITS... ****
+        # ***> keeping the option because maybe some people like .obj files?
+        # [*] Use brainder script to create .obj file    
+        os.system(f'{srf2obj_path} {srf_surf_file} > {obj_surf_file}')
+        # ^^^  ^^^
+
         # [4] Use my script to write a ply file...
         if ih=='lh.':
             # ply_str = obj_to_ply(obj_surf_file, display_rgb[:n_hemi_vx[0],:]) # lh
-            ply_str = dag_srf_to_ply(srf_surf_file, display_rgb[:n_hemi_vx[0],:], hemi=ih, values=data) # lh
+            ply_str, rgb_str = dag_srf_to_ply(srf_surf_file, display_rgb[:n_hemi_vx[0],:], hemi=ih, values=data) # lh
         else:
             # ply_str = obj_to_ply(obj_surf_file, display_rgb[n_hemi_vx[0]:,:]) # rh
-            ply_str = dag_srf_to_ply(srf_surf_file, display_rgb[n_hemi_vx[0]:,:],hemi=ih, values=data) # rh
+            ply_str, rgb_str = dag_srf_to_ply(srf_surf_file, display_rgb[n_hemi_vx[0]:,:],hemi=ih, values=data) # rh
         # Now save the ply file
         ply_file_2write = open(ply_surf_file, "w")
         ply_file_2write.write(ply_str)
         ply_file_2write.close()       
+
+        # Now save the rgb csv file
+        rgb_file_2write = open(rgb_surf_file, "w")
+        rgb_file_2write.write(rgb_str)
+        rgb_file_2write.close()       
         
     # Now use meshlab and "import mesh" to view the surfaces
-    if open_mlab:
-        # mlab_cmd = f'{mesh_lab_init} {ply_file_2open[0]} {ply_file_2open[1]}'
+    if open_mlab:        
         mlab_cmd = f'{mesh_lab_init} {ply_file_2open[0]} {ply_file_2open[1]}'
         os.system(mlab_cmd)
+
+    # Return list of .ply files to open...
+    if return_ply_file:
+        return ply_file_2open
+
+
+
+def dag_srf_to_ply(srf_file, rgb_vals, hemi=None, values=None, incl_rgb=False):
+    '''
+    dag_srf_to_ply
+    Convert srf file to .ply
+    
+    '''
+    if not isinstance(values, np.ndarray):
+        values = np.ones(rgb_vals.shape[0])
+    with open(srf_file) as f:
+        srf_lines = f.readlines()
+    n_vx, n_f = srf_lines[1].split(' ')
+    n_vx, n_f = int(n_vx), int(n_f)
+    # Also creating an rgb str...
+    rgb_str = ''    
+    # Create the ply string -> following this format
+    ply_str  = f'ply\n'
+    ply_str += f'format ascii 1.0\n'
+    ply_str += f'element vertex {n_vx}\n'
+    ply_str += f'property float x\n'
+    ply_str += f'property float y\n'
+    ply_str += f'property float z\n'
+    if incl_rgb:
+        ply_str += f'property uchar red\n'
+        ply_str += f'property uchar green\n'
+        ply_str += f'property uchar blue\n'
+    ply_str += f'property float quality\n'
+    ply_str += f'element face {n_f}\n'
+    ply_str += f'property list uchar int vertex_index\n'
+    ply_str += f'end_header\n'
+
+    if hemi==None:
+        x_offset = 0
+    elif 'lh' in hemi:
+        x_offset = -50
+    elif 'rh' in hemi:
+        x_offset = 50
+    # Cycle through the lines of the obj file and add vx + coords + rgb
+    v_idx = 0 # Keep count of vertices     
+    for i in range(2,len(srf_lines)):
+        # If there is a '.' in the line then it is a vertex
+        if '.' in srf_lines[i]:
+            split_coord = srf_lines[i][:-2:].split(' ')                        
+            coord_count = 0
+            for coord in split_coord:
+                if ('.' in coord) & (coord_count==0): # Add x_offset
+                    ply_str += f'{float(coord)+x_offset:.6f} ' 
+                    coord_count += 1
+                elif '.' in coord:
+                    ply_str += f'{float(coord):.6f} ' 
+                    coord_count += 1                    
+            
+            # Now add the value of the parameters...
+            # Now add the rgb values. as integers between 0 and 255
+            if incl_rgb:
+                ply_str += f' {int(rgb_vals[v_idx][0]*255)} {int(rgb_vals[v_idx][1]*255)} {int(rgb_vals[v_idx][2]*255)} '
+
+            # RGB str
+            rgb_str += f'{int(rgb_vals[v_idx][0]*255)},{int(rgb_vals[v_idx][1]*255)},{int(rgb_vals[v_idx][2]*255)}\n'
+            
+            ply_str += f'{values[v_idx]:.3f}\n'
+            v_idx += 1 # next vertex
+        
+        else:
+            # After we finished all the vertices, we need to define the faces
+            # -> these are triangles (hence 3 at the beginning of each line)
+            # -> the index of the three vx is given
+            # For some reason the index is 1 less in .ply files vs .obj files
+            # ... i guess like the difference between matlab and python
+            ply_str += '3 ' 
+            split_idx = srf_lines[i][:-1:].split(' ')
+            ply_str += f'{int(split_idx[0])} '
+            ply_str += f'{int(split_idx[1])} '
+            ply_str += f'{int(split_idx[2])} '
+            ply_str += '\n'
+    return ply_str, rgb_str
+
+def dag_get_rgb_str(rgb_vals):
+    '''
+    dag_srf_to_ply
+    Convert srf file to .ply
+    
+    '''
+    n_vx = rgb_vals.shape[0]
+    # Also creating an rgb str...
+    rgb_str = ''    
+    for v_idx in range(n_vx):
+        rgb_str += f'{rgb_vals[v_idx][0]},{rgb_vals[v_idx][1]},{rgb_vals[v_idx][2]}\n'
+    return rgb_str    
 
 
 

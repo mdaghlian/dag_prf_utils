@@ -7,7 +7,6 @@ import numpy as np
 import nibabel as nb
 import os
 import getopt
-import linescanning.utils as lsutils
 opj = os.path.join
 
 from amb_scripts.load_saved_info import *

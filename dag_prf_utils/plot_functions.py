@@ -70,18 +70,6 @@ def dag_add_axs_basics(axs, **kwargs):
     axs.set_xlim(x_lim)
     axs.set_ylim(y_lim)
 
-def dag_update_axs_fontsize(axs, new_font_size):
-    for item in ([axs.title, axs.xaxis.label, axs.yaxis.label] +
-                axs.get_xticklabels() + axs.get_yticklabels()):
-        item.set_fontsize(new_font_size)        
-    for item in axs.get_children():          
-        if isinstance(item, mpl.legend.Legend):
-            texts = item.get_texts()
-            if not isinstance(texts, list):
-                texts = [texts]
-            for i_txt in texts:
-                i_txt.set_fontsize(new_font_size)
-
 def dag_update_fig_fontsize(fig, new_font_size):
     fig_kids = fig.get_children()
     for i_kid in fig_kids:

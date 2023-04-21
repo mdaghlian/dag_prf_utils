@@ -4,6 +4,10 @@ import matplotlib as mpl
 from datetime import datetime
 import os
 opj = os.path.join
+try:
+    from nibabel.freesurfer.io import write_morph_data
+except ImportError:
+    raise ImportError('Error importing nibabel... Not a problem unless you want to use FSMaker')
 from dag_prf_utils.utils import *
 
 '''
@@ -56,7 +60,6 @@ srf2obj_path = opj(brainder_script,'srf2obj')
 mesh_lab_init = opj(prog_folder,'MeshLab2022.02-linux', 'usr', 'bin', 'meshlab')
 blender_init = opj(prog_folder,'blender-3.4.1-linux-x64', 'blender')
 
-from nibabel.freesurfer.io import read_morph_data, write_morph_data
 class FSMaker(object):
     '''Used to make a freesurfer file, and view a surface in freesurfer. 
     One of many options for surface plotting. 
@@ -133,20 +136,57 @@ class FSMaker(object):
         print('Custom overlay string saved here: (self.overlay_str[surf_name])')
         self.overlay_str[surf_name] = overlay_custom_str
     
-    def open_fs_surface(self, surf_name, mesh='inflated'):
+    def open_fs_surface(self, surf_name, **kwargs):
         # surf name - which surface to load...
-        # mesh -> loading inflated? pial? etc.
+        
         os.chdir(self.sub_surf_dir) # move to freeview dir        
-        fview_cmd = self.save_fs_cmd(surf_name=surf_name, mesh=mesh)
-        os.system(fview_cmd)        
+        fs_cmd = self.write_fs_cmd(surf_name=surf_name, **kwargs)
+        os.system(fs_cmd)        
 
-    def save_fs_cmd(self, surf_name, mesh='inflated'):
+    def save_fs_cmd(self, surf_name, **kwargs):
+        cmd_name = kwargs.get('cmd_name', f'{surf_name}_cmd.txt')
+        fs_cmd = self.write_fs_cmd(surf_name=surf_name, **kwargs)
+        dag_str2file(filename=opj(self.custom_surf_dir, cmd_name),txt=fs_cmd)
+        
+    def write_fs_cmd(self, surf_name, **kwargs):
+        '''
+        Write the bash command to open the specific surface with the overlay
+
+        surf_name       which surface to open (of the custom ones you have made)
+        **kwargs 
+        mesh            which mesh to plot the surface info on (e.g., inflated, pial...)
+        -> Screen shot stuff
+        do_scrn_shot    bool            take a screenshot of the surface when it is loaded?
+        azimuth         float           camera angle(0-360) Default: 0
+        zoom            float           camera zoom         Default: 1.00
+        elevation       float           camera angle(0-360) Default: 0
+        roll            float           camera angle(0-360) Default: 0        
+        '''
+        mesh = kwargs.get('mesh', 'inflated')
+        cam_azimuth     = kwargs.get('azimuth', 0)
+        cam_zoom        = kwargs.get('zoom', 1)
+        cam_elevation   = kwargs.get('elevation', 0)
+        cam_roll        = kwargs.get('roll', 0)
+        do_scrn_shot = kwargs.get('do_scrn_shot', False)
+        scr_shot_file = kwargs.get('scr_shot_file', None)
+        if do_scrn_shot:
+            if scr_shot_file==None:
+                scr_shot_file = opj(self.custom_surf_dir, f'{surf_name}_az{cam_azimuth}_z{cam_zoom}_e{cam_elevation}_r{cam_roll}')
+            scr_shot_flag = f"--ss {scr_shot_file}"
+        else:
+            scr_shot_flag = ""
+        
+        do_col_bar  = kwargs.get('do_col_bar', True)
+        if do_col_bar:
+            col_bar_flag = '--colorscale'
+        else:
+            col_bar_flag = ''
+
         lh_surf_path = opj(self.custom_surf_dir, f'lh.{surf_name}')
         rf_surf_path = opj(self.custom_surf_dir, f'rh.{surf_name}')
 
-        fview_cmd = f'''freeview -f lh.{mesh}:overlay={lh_surf_path}:{self.overlay_str[surf_name]} rh.{mesh}:overlay={rf_surf_path}:{self.overlay_str[surf_name]}'''
-        dag_str2file(filename=opj(self.custom_surf_dir, f'{surf_name}_cmd.txt'),txt=fview_cmd)
-        return fview_cmd
+        fs_cmd = f'''freeview -f lh.{mesh}:overlay={lh_surf_path}:{self.overlay_str[surf_name]} rh.{mesh}:overlay={rf_surf_path}:{self.overlay_str[surf_name]} --camera Azimuth {cam_azimuth} Zoom {cam_zoom} Elevation {cam_elevation} Roll {cam_roll} {col_bar_flag} {scr_shot_flag}'''
+        return fs_cmd 
 
 def dag_mlab_open(ply_file_list):
     if not isinstance(ply_file_list, list):

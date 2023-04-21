@@ -1,6 +1,9 @@
 
 import numpy as np
-import cortex 
+try: 
+    import cortex 
+except ImportError:
+    raise ImportError('Error importing pycortex... Not a problem unless you want to use pycortex stuff')    
 
 
 def pycortex_alpha_plotting(sub, data, data_weight, **kwargs):

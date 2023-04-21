@@ -6,21 +6,11 @@ import os
 opj = os.path.join
 
 from .mesh_maker import *
-'''
-Experimental way to view MRI surface data (without pycortex; e.g., to view retinotopic maps)
-> why do this? 
-Pycortex is very powerful, but also quite complex. The source code is difficult to follow, and when it doesn't work; it is difficult to find out why. The idea here is to have a simple script which allows you to plot data on the cortical surface quickly. It should also allow you to specify you're own custom color maps. It (hopefully) allows you to view you're surface in a 3D software package of your choice. Here I am using meshlab. 
-You can install Blender, and specify the path to run the function. 
-'''
 
 # Programs files:
 prog_folder = os.environ.get('PATH_HOME')
-# Brainder script files, needed to convert from .srf to .obj
-brainder_script = opj(prog_folder, 'brainder_script') 
-srf2obj_path = opj(brainder_script,'srf2obj')
-
-mesh_lab_init = opj(prog_folder,'MeshLab2022.02-linux', 'usr', 'bin', 'meshlab')
 blender_init = opj(prog_folder,'blender-3.5.0-linux-x64', 'blender')
+print(f'If you want to use blender check - is this the path to it? {blender_init}')
 
 class BlendMaker(object):
     '''Used to make a blender file for a single subject
@@ -140,7 +130,7 @@ class BlendMaker(object):
 
         
 
-def dag_fs_to_obj_and_rgb(sub, fs_dir,data=None, mesh_name='inflated', out_dir=None, under_surf='curv', **kwargs):
+def dag_fs_to_ply_and_rgb(sub, fs_dir,data=None, mesh_name='inflated', out_dir=None, under_surf='curv', **kwargs):
     '''
     fs_to_ply:
         Create surface files for a subject, and a specific parameter.                        
@@ -269,8 +259,7 @@ def dag_fs_to_obj_and_rgb(sub, fs_dir,data=None, mesh_name='inflated', out_dir=N
         mesh_name_file = opj(path_to_sub_surf, f'{ih}{mesh_name}')
         asc_surf_file = opj(out_dir,f'{ih}{surf_name}.asc')
         srf_surf_file = opj(out_dir,f'{ih}{surf_name}.srf')
-        ply_surf_file = opj(out_dir,f'{ih}{surf_name}.ply')
-        obj_surf_file = opj(out_dir,f'{ih}{surf_name}.obj')    
+        ply_surf_file = opj(out_dir,f'{ih}{surf_name}.ply')   
         rgb_surf_file = opj(out_dir,f'{ih}{surf_name}_rgb.csv')    
 
         if save_ply:
@@ -278,15 +267,11 @@ def dag_fs_to_obj_and_rgb(sub, fs_dir,data=None, mesh_name='inflated', out_dir=N
             os.system(f'mris_convert {mesh_name_file} {asc_surf_file}')
             # [2] Rename .asc as .srf file to avoid ambiguity (using "brainders" conversion tool)
             os.system(f'cp {asc_surf_file} {srf_surf_file}')        
-            # [*] Use brainder script to create .obj file    
-            os.system(f'{srf2obj_path} {srf_surf_file} > {obj_surf_file}')
 
             # [4] Use my script to write a ply file...
             if ih=='lh.':
-                # ply_str = obj_to_ply(obj_surf_file, display_rgb[:n_hemi_vx[0],:]) # lh
                 ply_str, rgb_str = dag_srf_to_ply(srf_surf_file, display_rgb[:n_hemi_vx[0],:], hemi=ih, values=data, incl_rgb=False) # lh
             else:
-                # ply_str = obj_to_ply(obj_surf_file, display_rgb[n_hemi_vx[0]:,:]) # rh
                 ply_str, rgb_str = dag_srf_to_ply(srf_surf_file, display_rgb[n_hemi_vx[0]:,:],hemi=ih, values=data, incl_rgb=False) # rh
             # Now save the ply file
             ply_file_2write = open(ply_surf_file, "w")
@@ -294,7 +279,7 @@ def dag_fs_to_obj_and_rgb(sub, fs_dir,data=None, mesh_name='inflated', out_dir=N
             ply_file_2write.close()
 
             # Remove unwanted files & clean up:
-            for i_file in [asc_surf_file, srf_surf_file, obj_surf_file]:
+            for i_file in [asc_surf_file, srf_surf_file]:
                 if os.path.exists(i_file):
                     os.system(f'rm {i_file}')
             # Now save the rgb csv file

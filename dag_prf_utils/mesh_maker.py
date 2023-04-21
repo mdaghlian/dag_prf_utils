@@ -10,55 +10,13 @@ except ImportError:
     raise ImportError('Error importing nibabel... Not a problem unless you want to use FSMaker')
 from dag_prf_utils.utils import *
 
-'''
-Experimental way to view MRI surface data (without pycortex; e.g., to view retinotopic maps)
-> why do this? 
-Pycortex is very powerful, but also quite complex. The source code is difficult to follow, and when it doesn't work; it is difficult to find out why. The idea here is to have a simple script which allows you to plot data on the cortical surface quickly. It should also allow you to specify you're own custom color maps. It (hopefully) allows you to view you're surface in a 3D software package of your choice. Here I am using meshlab. 
-
-You can install Meshlab, and specify the path to run the function. 
-
-What it does: 
-[1] For a subject, take a freesurfer surface (e.g., pial, or inflated), convert it into a "mesh file" format which can be easily read by standard 3D rendering software (e.g.,".ply", using meshlab)
-
-[2] Render some anatomical properties of this data on the surface (e.g., the curvature, or sulcal depth) 
-
-[3] Plot arbitrary data on the surface (e.g., retinotopic stuff, like polar angle)
-> this can be any values (of a length which matches the number of vertices), specified by the user
-> you can specify any matplotlib colormap
-> and you can specify the alpha, allowing it to nicely blend with the anatomical data (e.g. the curvature)
-
-This is all saved in a .ply file, and can be viewed using meshlab
-> you can also click on individual vertices inside meshlab, to get there position, index, and values (of the data you specified)
-
-[1] Specify freesurfer directory, subject, and surface type
-> "/my_project/derivatives/freesurfer/"
-> "sub-01"
-> "pial" (or could be "inflated")
-This gives us the location of the freesurfer file which has the coordinates of every vertex in the mesh, as well as which vertices go together to form the face. This freesurfer file is currently in a binarised format - which takes lower memory, but cannot be read as text. 
-[2] Use freesurfer function "mris_convert
-
-
-# Experimental way to view surfaces (without pycortex)
-# Stages:
-# [1] Specify the mesh, created by freesurfer you want to use
-# -> e.g "pial", or "inflated" 
-# [2] Convert from freesurfer file to asc
-# -> mris_convert  asc 
-# -> rename .asc as .srf file
-# [3] Convert from .srf to .ply (using brainder scripts)
-# [4] Load the .ply file in meshlab
-'''
-
 
 
 # Programs files:
 prog_folder = os.environ.get('PATH_HOME')
-# Brainder script files, needed to convert from .srf to .obj
-brainder_script = opj(prog_folder, 'brainder_script') 
-srf2obj_path = opj(brainder_script,'srf2obj')
 
 mesh_lab_init = opj(prog_folder,'MeshLab2022.02-linux', 'usr', 'bin', 'meshlab')
-blender_init = opj(prog_folder,'blender-3.4.1-linux-x64', 'blender')
+print(f'If you want to use meshlab check - is this the path to it? {mesh_lab_init}')
 
 class FSMaker(object):
     '''Used to make a freesurfer file, and view a surface in freesurfer. 
@@ -341,7 +299,7 @@ def dag_fs_to_ply(sub, data, fs_dir, mesh_name='inflated', out_dir=None, under_s
         # *** EXTRA BITS... ****
         # ***> keeping the option because maybe some people like .obj files?
         # [*] Use brainder script to create .obj file    
-        os.system(f'{srf2obj_path} {srf_surf_file} > {obj_surf_file}')
+        # os.system(f'{srf2obj_path} {srf_surf_file} > {obj_surf_file}')
         # ^^^  ^^^
 
         # [4] Use my script to write a ply file...

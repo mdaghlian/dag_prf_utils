@@ -42,6 +42,8 @@ With this in mind here are a summary of some of the options.
 * You can load several colormaps at once, and flip between them 
 * If you are feeling adventurous, you can even create an animation over time, (e.g., plot timecourse info on the surface). This is a bit experimental, and may take up a lot of data and computing power. I haven't fully explored it. 
 
+For blender you can install using: https://www.blender.org/download/
+For meshlab you can install using: https://www.meshlab.net/#download
 ## In active development
 Stuff may well change. 
 

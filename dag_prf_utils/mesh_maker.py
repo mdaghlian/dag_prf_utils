@@ -146,6 +146,8 @@ class FSMaker(object):
         fs_cmd = f'''freeview -f lh.{mesh}:overlay={lh_surf_path}:{self.overlay_str[surf_name]} rh.{mesh}:overlay={rf_surf_path}:{self.overlay_str[surf_name]} --camera Azimuth {cam_azimuth} Zoom {cam_zoom} Elevation {cam_elevation} Roll {cam_roll} {col_bar_flag} {scr_shot_flag}'''
         return fs_cmd 
 
+
+
 def dag_mlab_open(ply_file_list):
     if not isinstance(ply_file_list, list):
         ply_file_list = [ply_file_list]
@@ -525,8 +527,35 @@ def dag_get_rgb_str(rgb_vals):
         rgb_str += f'{rgb_vals[v_idx][0]},{rgb_vals[v_idx][1]},{rgb_vals[v_idx][2]}\n'
     return rgb_str    
 
+import struct
+def dag_parse_surf(filename):
+    """
+    Copied from pycortex https://github.com/gallantlab/pycortex
+    """
+    with open(filename, 'rb') as fp:
+        #skip magic
+        fp.seek(3)
+        comment = fp.readline()
+        fp.readline()
+        print(comment)
+        verts, faces = struct.unpack('>2I', fp.read(8))
+        pts = np.fromstring(fp.read(4*3*verts), dtype='f4').byteswap()
+        polys = np.fromstring(fp.read(4*3*faces), dtype='i4').byteswap()
 
+        vx_coord = pts.reshape(-1, 3)
+        face_vx = polys.reshape(-1, 3)
+        return vx_coord, face_vx 
 
+from dag_prf_utils import *
+# def dag_get(sub, fs_dir, roi, ply_file=None):
+#     # [1] Get roi idx: 
+#     roi_idx = dag_load_roi(sub, roi, fs_dir)
+#     roi_idc = np.where(roi_idx)[0]
+#     dag_parse_surf(opj(fs_dir, sub, ))
+    
+#     bound_vx = []
+
+#     return vx_bound
 # def obj_to_ply(obj_file, rgb_vals):
 #     with open(obj_file) as f:
 #         obj_lines = f.readlines()

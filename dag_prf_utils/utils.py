@@ -30,12 +30,12 @@ class Prf1T1M(object):
         self.prf_params_np = prf_params
         #
         self.task = kwargs.get('task', None)
-        self.n_vox = self.prf_params.shape[0]
+        self.n_vox = self.prf_params_np.shape[0]
 
         self.params_dd = {}
         mod_labels = dag_print_p()[f'{model}'] 
         for key in mod_labels.keys():                    
-            self.params_dd[key] = self.params_np[:,mod_labels[key]]
+            self.params_dd[key] = self.prf_params_np[:,mod_labels[key]]
         
         # Calculate extra interesting stuff
         if self.model in ['gauss', 'norm', 'css', 'dog']:
@@ -93,6 +93,23 @@ class Prf1T1M(object):
 
         return vx_mask.to_numpy()
     
+    def return_th_param(self, param, vx_mask=None):
+        '''
+        return all the parameters listed, masked by vx_mask        
+        '''
+        if vx_mask is None:
+            vx_mask = np.ones(self.n_vox, dtype=bool)
+        if not isinstance(param, list):
+            param = [param]        
+        param_out = []
+        for i_param in param:
+            # this_task = i_param.split('-')[0]
+            # this_param = i_param.split('-')[1]
+            param_out.append(self.pd_params[i_param][vx_mask].to_numpy())
+
+        return param_out
+
+    
 
 class Prf2T1M(object):
     '''
@@ -128,7 +145,7 @@ class Prf2T1M(object):
             self.task2 : prf_params2,
         }
         # Get the number of voxels...
-        self.n_vox = self.prf_params[self.task1].shape[0]
+        self.n_vox = self.prf_params_np[self.task1].shape[0]
         
         # Now create dictionaries to turn into dataframes for easy retrieval of info...
         all_task_dict = {
@@ -165,9 +182,36 @@ class Prf2T1M(object):
         # Complete list of model labels
         self.model_labels_plus = list(all_task_dict[self.task1].keys())
         # Now get mean and diff of parameters...
-        for i_label in self.model_labels_plus:
-            all_task_dict['diff'][i_label] = (all_task_dict[self.task2][i_label] + all_task_dict[self.task1][i_label]) / 2
-            all_task_dict['mean'][i_label] = all_task_dict[self.task2][i_label] - all_task_dict[self.task1][i_label]
+        for i_label in self.model_labels:
+            # MEAN
+            all_task_dict['mean'][i_label] = (all_task_dict[self.task2][i_label] + all_task_dict[self.task1][i_label]) / 2
+            
+            # DIFFERENCE            
+            all_task_dict['diff'][i_label] = all_task_dict[self.task2][i_label] - all_task_dict[self.task1][i_label]
+                
+        # Recalculate the interesting stuff for mean and diff
+        for i_comp in ['mean', 'diff']:
+            # Now add other interesting stuff:
+            if self.model in ['gauss', 'norm', 'css', 'dog']:
+                # Ecc, pol
+                all_task_dict[i_comp]['ecc'], all_task_dict[i_comp]['pol'] = dag_coord_convert(
+                    all_task_dict[i_comp]['x'], all_task_dict[i_comp]['y'], 'cart2pol'
+                )
+            if self.model in ['norm', 'dog']:
+                # -> size ratio:
+                all_task_dict[i_comp]['size_ratio'] = all_task_dict[i_comp]['size_2'] / all_task_dict[i_comp]['size_1']
+                all_task_dict[i_comp]['amp_ratio']  = all_task_dict[i_comp]['amp_1']  / all_task_dict[i_comp]['amp_2']
+            if self.model=='norm':
+                all_task_dict[i_comp]['bd_ratio'] = all_task_dict[i_comp]['b_val'] / all_task_dict[i_comp]['d_val']
+            if self.model=='CSF':
+                all_task_dict[i_comp]['log10_sf0']  = np.log10(all_task_dict[i_comp]['sf0'])
+                all_task_dict[i_comp]['log10_maxC'] = np.log10(all_task_dict[i_comp]['maxC'])
+                all_task_dict[i_comp]['sfmax'] = np.nan_to_num(
+                    10**(np.sqrt(all_task_dict[i_comp]['log10_maxC'] / (all_task_dict[i_comp]['width_r']**2)) + \
+                                                all_task_dict[i_comp]['log10_sf0']))            
+                all_task_dict[i_comp]['sfmax'][all_task_dict[i_comp]['sfmax']>100] = 100 # MAX VALUE
+                all_task_dict[i_comp]['log10_sfmax'] = np.log10(all_task_dict[i_comp]['sfmax'])
+
         # Convert to PD
         self.pd_params = {}
         for i_task in all_task_dict.keys():
@@ -210,9 +254,23 @@ class Prf2T1M(object):
                 vx_mask &= self.pd_params[task][p].lt(th_val[1])
             else:
                 sys.exit()
+        if not isinstance(vx_mask, np.ndarray):
+            vx_mask = vx_mask.to_numpy()
+        return vx_mask
+    
+    def return_th_param(self, task, param, vx_mask=None):
+        '''
+        return all the parameters listed, masked by vx_mask        
+        '''
+        if vx_mask is None:
+            vx_mask = np.ones(self.n_vox, dtype=bool)
+        if not isinstance(param, list):
+            param = [param]        
+        param_out = []
+        for i_param in param:
+            param_out.append(self.pd_params[task][i_param][vx_mask].to_numpy())
 
-        return vx_mask.to_numpy()
-
+        return param_out
 
 
 def dag_qprint(print_str):

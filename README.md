@@ -11,16 +11,18 @@ In addition there are a couple of *prfpy specific tools*, i.e., Prf1T1M, etc., w
 Several functions useful for plotting PRF properties around the visual field. All focus on matplotlib
 
 ## surface plotting and meshes
-*Note that for many cases you will be better off using pycortex; this simply provides a couple of alternative methods, should you want to do that.*
+*Note that for many (almost all) cases you will be better off using pycortex; this simply provides a couple of alternative methods, should you want to do that.*
 
-I have created several tools for plotting data on the cortical surface. This will of course require that you have surface data (i.e., run freesurfer); and any data you want to plot will need to be in a vertex wise format. pycortex (https://github.com/gallantlab/pycortex) is a very powerful way of plotting information on the cortical surface and an excellent tool...but sometimes you just want to do simple stuff, and customize certain properties aspects (e.g., color maps etc.). Also it can be useful to have the cortical mesh in a generic format readable by any 3D rendering software (e.g., .ply), and in a way that you can send a single file anywhere, and it be instantly readable, with color and everything. 
+I have created several tools for plotting data on the cortical surface. This will of course require that you have surface data (i.e., run freesurfer); and any data you want to plot will need to be in a vertex wise format. pycortex (https://github.com/gallantlab/pycortex) is a very powerful way of plotting information on the cortical surface and an excellent tool. Many of the tools here are already developed in pycortex. But I have 'remade' them. The main reason for doing this is to improve my understanding of surface plotting generally, and also to improve my understanding of pycortex. 
+
+If you want to do some simple, quick and dirty stuff these tools might be useful. Also it can be useful to have the cortical mesh in a generic format readable by any 3D rendering software (e.g., .ply), and in a way that you can send a single file anywhere, and it be instantly readable, with color and everything. 
 
 To this end I have created a couple of different ways to visualize surface information. For all these methods it is important to think about:
 * mesh: what is the mesh being used (it will mainly be 'inflated' or 'pial'). What is the actual shape that you want to look at 
 * data: what do you want to plot on the mesh (e.g., polar angle, eccentricity. needs to be vertex wise). What colormap do you want to use. What mask do you want to use? (binary, only plot data for PRFs above a certain rsquared?; or do you want to weight the transparency of the data by a certain factor (again possibly rsquared),or some combination
 * 'under_surface': if you are masking some of the data, what do you want to be shown in the gaps? Maybe the curvature of the cortex? Depth?
 
-With this in mind here are a summary of some of the options. 
+#### With this in mind here are a summary of some of the options. 
 
 ### Freeview based surface plotting
 * requires freeview, and nibabel. 

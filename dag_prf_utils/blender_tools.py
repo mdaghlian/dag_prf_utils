@@ -11,7 +11,7 @@ from .mesh_maker import *
 prog_folder = os.environ.get('PATH_HOME')
 blender_init = opj(prog_folder,'blender-3.5.0-linux-x64', 'blender')
 print(f'If you want to use blender check - is this the path to it? {blender_init}')
-
+os.environ['FS_LICENSE'] = '/data1/projects/dumoulinlab/Lab_members/Marcus/programs/linescanning/misc/license.txt'
 class BlendMaker(object):
     '''Used to make a blender file for a single subject
 
@@ -23,6 +23,9 @@ class BlendMaker(object):
         self.fs_dir = fs_dir        # Where the freesurfer files are        
         self.sub_surf_dir = opj(fs_dir, sub, 'surf')
         self.out_dir = out_dir      # Where are we putting the files...
+        if not os.path.exists(self.out_dir):
+            print(f'Making {self.out_dir}')
+            os.mkdir(self.out_dir)
         self.blender_script = opj(out_dir, 'blender_script.py')
         self.under_surf_rgb = {
             'curv'      :[], 
@@ -38,6 +41,7 @@ class BlendMaker(object):
                 ply_surf_file = opj(self.out_dir,f'{i_hemi}.{i_mesh}.ply')
 
                 if os.path.exists(ply_surf_file):
+                    print(f'Already exists: {ply_surf_file}')
                     continue
                 # [*] Make asc file using freesurfer mris_convert command:
                 os.system(f'mris_convert {mesh_name_file} {asc_surf_file}')

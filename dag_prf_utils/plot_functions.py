@@ -257,7 +257,7 @@ def dag_plot_bin_line(axs, X,Y, bin_using, **kwargs):
     line_col = kwargs.get("line_col", "k")    
     line_label = kwargs.get("line_label", None)
     lw= kwargs.get("lw", 5)
-    n_bins = kwargs.get('n_bins', 20)
+    n_bins = kwargs.get('n_bins', 10)
     bins = kwargs.get('bins', None)
     if not isinstance(bins, (np.ndarray, list)):
         bins = n_bins    
@@ -299,17 +299,29 @@ def dag_arrow_plot(axs, old_x, old_y, new_x, new_y, **kwargs):
     Parameters
     ---------------
     axs :           matplotlib axes         where to plot
-    do_binning :    bool                    Bin the position (or not)
-    do_scatter :    bool                    Include scatters of the voxel positions (ALL, LE, RE)
-    /_old ""
-    /_new ""                   
-    do_arrows :     bool                    Include arrows
+    old_x,old_y     np.ndarray              Old x,y coord
+    new_x,new_y     np.ndarray              New x,y coord
+    
+    OPTIONAL
+    ---------------
+    do_binning      bool                    Bin the position (or not)
+    bin_weight      np.ndarray              Weighted mean in each bin, not just the average    
+    do_scatter      bool                    Include scatters of the voxel positions
+    do_scatter_old  ""
+    do_scatter_new  ""
+    do_arrows       bool                    Include arrows
     ecc_bounds      np.ndarays              If binning, how split the visual field
-    pol_/                               
+    pol_bounds                               
     old_col         any value for color     Gives color for points
     new_col        
     patch_col       any value for color     Color for the patch 
-
+    dot_alpha       single float or array   Alpha for each point (not split by old and new)
+    dot_size        single float or array   Size for each point (not split by old and new)
+    arrow_col       string                  Color for the arrows. Another option is "angle", where arrows will be coloured depending on there angle
+    arrow_kwargs    dict                    Another dict for arrow properties
+        scale       Always 1, exact pt to pt
+        width       Of shaft relative to plot
+        headwidth   relative to shaft width
     '''
     # Get arguments related to plotting:
     do_binning = kwargs.get("do_binning", False)
@@ -335,7 +347,7 @@ def dag_arrow_plot(axs, old_x, old_y, new_x, new_y, **kwargs):
     arrow_kwargs = {
         'scale'     : 1,                                    # ALWAYS 1 -> exact pt to exact pt 
         'width'     : kwargs.get('arrow_width', .01),       # of shaft (relative to plot )
-        'headwidth' : kwargs.get('arrow_headwidth', .5),    # relative to width
+        'headwidth' : kwargs.get('arrow_headwidth', 1.5),    # relative to width
 
     }    
     
@@ -368,11 +380,12 @@ def dag_arrow_plot(axs, old_x, old_y, new_x, new_y, **kwargs):
             _, angle = dag_coord_convert(dx, dy, 'cart2pol')
             q_cmap = mpl.cm.__dict__['hsv']
             q_norm = mpl.colors.Normalize()
-            q_norm.autoscale(angle)
+            q_norm.vmin = -3.14
+            q_norm.vmax = 3.14
             q_col = q_cmap(q_norm(angle))                
         else:
             q_col = arrow_col
-
+        print(old_bin_x.shape)
         axs.quiver(old_bin_x, old_bin_y, dx, dy, scale_units='xy', 
                     angles='xy', alpha=dot_alpha,color=q_col,  **arrow_kwargs)
         

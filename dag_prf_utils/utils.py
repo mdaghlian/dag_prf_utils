@@ -1,4 +1,5 @@
 import numpy as np
+import matplotlib.pyplot as plt
 import os
 import pandas as pd
 import sys
@@ -28,13 +29,16 @@ class Prf1T1M(object):
         self.model = model        
         self.model_labels = dag_print_p()[self.model] # Get names for different model parameters...
         self.prf_params_np = prf_params
+        self.fixed_hrf = kwargs.get('fixed_hrf', True)
         #
         self.task = kwargs.get('task', None)
         self.n_vox = self.prf_params_np.shape[0]
 
         self.params_dd = {}
         mod_labels = dag_print_p()[f'{model}'] 
-        for key in mod_labels.keys():                    
+        for key in mod_labels.keys():
+            if ('hrf' in key) and self.fixed_hrf:
+                continue                    
             self.params_dd[key] = self.prf_params_np[:,mod_labels[key]]
         
         # Calculate extra interesting stuff
@@ -108,6 +112,16 @@ class Prf1T1M(object):
             param_out.append(self.pd_params[i_param][vx_mask].to_numpy())
 
         return param_out
+    
+    def rapid_hist(self, params=None, th={'min-rsq':.1}):
+        vx_mask = self.return_vx_mask(th)        
+        if params is None:
+            params = list(self.model_labels.keys())
+        for p in params:
+            plt.figure()
+            plt.hist(self.pd_params[p][vx_mask])
+            plt.title(p)
+
 
     
 
@@ -136,6 +150,7 @@ class Prf2T1M(object):
         '''
         self.model = model
         self.model_labels = dag_print_p()[self.model] # Get names for different model parameters...
+        self.fixed_hrf = kwargs.get('fixed_hrf', True)
         # What are the task names?
         self.task1 = kwargs.get('task1', 'task1')        
         self.task2 = kwargs.get('task2', 'task2')        
@@ -156,6 +171,8 @@ class Prf2T1M(object):
         }
         for i_task in [self.task1, self.task2]:
             for i_label in self.model_labels.keys():
+                if ('hrf' in i_label) and self.fixed_hrf:
+                    continue
                 all_task_dict[i_task][i_label] = self.prf_params_np[i_task][:,self.model_labels[i_label]]
                         
             # Now add other interesting stuff:
@@ -366,6 +383,8 @@ def dag_print_p():
         'size_1'        :  2, # size
         'amp_1'         :  3, # beta
         'bold_baseline' :  4, # baseline 
+        'hrf_1'         :  5, # *hrf_1
+        'hrf_2'         :  6, # *hrf_2
         'rsq'           : -1, # ... 
     }    
     # [2] css. Note hrf_1, and hrf_2 are idx 6 and 7, if fit...
@@ -376,6 +395,8 @@ def dag_print_p():
         'amp_1'         :  3, # beta
         'bold_baseline' :  4, # baseline 
         'n_exp'         :  5, # n
+        'hrf_1'         :  6, # *hrf_1
+        'hrf_2'         :  7, # *hrf_2        
         'rsq'           : -1, # ... 
     }
 
@@ -388,6 +409,8 @@ def dag_print_p():
         'bold_baseline' :  4, # bold_baseline 
         'amp_2'         :  5, # srf_amplitude
         'size_2'        :  6, # srf_size
+        'hrf_1'         :  7, # *hrf_1
+        'hrf_2'         :  8, # *hrf_2        
         'rsq'           : -1, # ... 
     }
 
@@ -401,6 +424,8 @@ def dag_print_p():
         'size_2'        :  6, # srf_size
         'b_val'         :  7, # neural_baseline 
         'd_val'         :  8, # surround_baseline
+        'hrf_1'         :  9, # *hrf_1
+        'hrf_2'         : 10, # *hrf_2        
         'rsq'           : -1, # rsq
     }            
 
@@ -409,8 +434,10 @@ def dag_print_p():
         'sf0'           :  1,
         'maxC'          :  2,
         'width_l'       :  3,
-        'a_val'         :  4,
-        'baseline'      :  5,
+        'amp_1'         :  4,
+        'bold_baseline' :  5,
+        'hrf_1'         :  6, # *hrf_1
+        'hrf_2'         :  7, # *hrf_2        
         'rsq'           : -1,
     }
 

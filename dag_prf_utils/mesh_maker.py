@@ -203,7 +203,7 @@ def dag_fs_to_ply(sub, data, fs_dir, mesh_name='inflated', out_dir=None, under_s
         roll            float           camera angle(0-360) Default: 0
         ***
     '''
-    open_mlab = kwargs.get('open_mlab', True)
+    open_mlab = kwargs.get('open_mlab', False)
     return_ply_file = kwargs.get('return_ply_file', False)    
     # Get path to subjects surface file
     path_to_sub_surf = opj(fs_dir, sub, 'surf')
@@ -296,7 +296,7 @@ def dag_fs_to_ply(sub, data, fs_dir, mesh_name='inflated', out_dir=None, under_s
         # [1] Make asc file using freesurfer mris_convert command:
         os.system(f'mris_convert {mesh_name_file} {asc_surf_file}')
         # [2] Rename .asc as .srf file to avoid ambiguity (using "brainders" conversion tool)
-        os.system(f'cp {asc_surf_file} {srf_surf_file}')
+        os.system(f'mv {asc_surf_file} {srf_surf_file}')
         
         # *** EXTRA BITS... ****
         # ***> keeping the option because maybe some people like .obj files?

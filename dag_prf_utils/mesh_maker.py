@@ -10,14 +10,6 @@ except ImportError:
     raise ImportError('Error importing nibabel... Not a problem unless you want to use FSMaker')
 from dag_prf_utils.utils import *
 
-
-
-# Programs files:
-prog_folder = os.environ.get('PATH_HOME')
-
-mesh_lab_init = opj(prog_folder,'MeshLab2022.02-linux', 'usr', 'bin', 'meshlab')
-print(f'If you want to use meshlab check - is this the path to it? {mesh_lab_init}')
-
 class FSMaker(object):
     '''Used to make a freesurfer file, and view a surface in freesurfer. 
     One of many options for surface plotting. 
@@ -146,18 +138,6 @@ class FSMaker(object):
         fs_cmd = f'''freeview -f lh.{mesh}:overlay={lh_surf_path}:{self.overlay_str[surf_name]} rh.{mesh}:overlay={rf_surf_path}:{self.overlay_str[surf_name]} --camera Azimuth {cam_azimuth} Zoom {cam_zoom} Elevation {cam_elevation} Roll {cam_roll} {col_bar_flag} {scr_shot_flag}'''
         return fs_cmd 
 
-
-
-def dag_mlab_open(ply_file_list):
-    if not isinstance(ply_file_list, list):
-        ply_file_list = [ply_file_list]
-
-    mlab_cmd = f'{mesh_lab_init} '
-    for i in ply_file_list:
-        mlab_cmd += f'{i} '
-    
-    os.system(mlab_cmd)
-
 def dag_fs_to_ply(sub, data, fs_dir, mesh_name='inflated', out_dir=None, under_surf='curv', **kwargs):
     '''
     fs_to_ply:
@@ -188,22 +168,9 @@ def dag_fs_to_ply(sub, data, fs_dir, mesh_name='inflated', out_dir=None, under_s
         vmax            float           Max value for colormap
                                                             Default: 90th percentile in data
                                                                 
-        open_mlab       bool            Open meshlab at the end...
         return_ply_file bool            Return the ply files which have been made
-
         
-        TODO: open meshlab to a specific angle...
-        # ? possible
-        *** CAMERA
-        do_scrn_shot    bool            Take screenshots?   Default: True
-        do_col_bar      bool            Show color bar?                                             
-        azimuth         float           camera angle(0-360) Default: 0
-        zoom            float           camera zoom         Default: 1.00
-        elevation       float           camera angle(0-360) Default: 0
-        roll            float           camera angle(0-360) Default: 0
-        ***
     '''
-    open_mlab = kwargs.get('open_mlab', False)
     return_ply_file = kwargs.get('return_ply_file', False)    
     # Get path to subjects surface file
     path_to_sub_surf = opj(fs_dir, sub, 'surf')
@@ -321,11 +288,6 @@ def dag_fs_to_ply(sub, data, fs_dir, mesh_name='inflated', out_dir=None, under_s
         rgb_file_2write.write(rgb_str)
         rgb_file_2write.close()       
         
-    # Now use meshlab and "import mesh" to view the surfaces
-    if open_mlab:        
-        mlab_cmd = f'{mesh_lab_init} {ply_file_2open[0]} {ply_file_2open[1]}'
-        os.system(mlab_cmd)
-
     # Return list of .ply files to open...
     if return_ply_file:
         return ply_file_2open
@@ -546,7 +508,12 @@ def dag_parse_surf(filename):
         face_vx = polys.reshape(-1, 3)
         return vx_coord, face_vx 
 
-from dag_prf_utils import *
+# ***********************************************************************************************************************
+# ***********************************************************************************************************************
+# ***********************************************************************************************************************
+# ***********************************************************************************************************************
+
+# from dag_prf_utils import *
 # def dag_get(sub, fs_dir, roi, ply_file=None):
 #     # [1] Get roi idx: 
 #     roi_idx = dag_load_roi(sub, roi, fs_dir)

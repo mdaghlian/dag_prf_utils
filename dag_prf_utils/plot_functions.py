@@ -246,8 +246,10 @@ def dag_visual_field_scatter(axs, dot_x, dot_y, **kwargs):
     #     dot_sizes = np.ones_like(x_bin)*max_dot_size
     
     scat_col = axs.scatter(bin_x, bin_y, c=bin_col, s=bin_size, alpha=bin_alpha, cmap=dot_cmap, vmin=dot_vmin, vmax=dot_vmax)
-    fig = plt.gcf()
-    cb = fig.colorbar(scat_col, ax=axs)        
+    cb = None
+    if not isinstance(bin_col, str):
+        fig = plt.gcf()
+        cb = fig.colorbar(scat_col, ax=axs)        
     dag_add_ecc_pol_lines(axs, ecc_bounds=ecc_bounds, pol_bounds=pol_bounds)    
     dag_add_axs_basics(axs, **kwargs)    
     return axs, cb

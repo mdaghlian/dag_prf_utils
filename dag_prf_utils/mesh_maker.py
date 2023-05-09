@@ -4,10 +4,10 @@ import matplotlib as mpl
 from datetime import datetime
 import os
 opj = os.path.join
-try:
-    from nibabel.freesurfer.io import write_morph_data
-except ImportError:
-    raise ImportError('Error importing nibabel... Not a problem unless you want to use FSMaker')
+# try:
+#     from nibabel.freesurfer.io import write_morph_data
+# except ImportError:
+#     raise ImportError('Error importing nibabel... Not a problem unless you want to use FSMaker')
 from dag_prf_utils.utils import *
 
 class FSMaker(object):
@@ -56,8 +56,17 @@ class FSMaker(object):
         # now save results as a curve file
         print(f'Saving {surf_name} in {self.custom_surf_dir}')
 
-        write_morph_data(opj(self.custom_surf_dir, f'lh.{surf_name}'),lh_masked_param)
-        write_morph_data(opj(self.custom_surf_dir, f'rh.{surf_name}'),rh_masked_param)        
+        n_faces = dag_load_nfaces(self.sub, self.fs_dir)
+        dag_write_curv(
+            fn=opj(self.custom_surf_dir, f'lh.{surf_name}'), 
+            curv=lh_masked_param, 
+            fnum=n_faces[0])
+        dag_write_curv(
+            fn=opj(self.custom_surf_dir, f'rh.{surf_name}'), 
+            curv=rh_masked_param, 
+            fnum=n_faces[1])        
+        # write_morph_data(opj(self.custom_surf_dir, f'lh.{surf_name}'),lh_masked_param)
+        # write_morph_data(opj(self.custom_surf_dir, f'rh.{surf_name}'),rh_masked_param)        
         
         # Make custom overlay:
         # value - rgb triple...
@@ -137,6 +146,38 @@ class FSMaker(object):
 
         fs_cmd = f'''freeview -f lh.{mesh}:overlay={lh_surf_path}:{self.overlay_str[surf_name]} rh.{mesh}:overlay={rf_surf_path}:{self.overlay_str[surf_name]} --camera Azimuth {cam_azimuth} Zoom {cam_zoom} Elevation {cam_elevation} Roll {cam_roll} {col_bar_flag} {scr_shot_flag}'''
         return fs_cmd 
+
+def dag_write_curv(fn, curv, fnum):
+    ''' Adapted from https://github.com/simnibs/simnibs
+    
+    Writes a freesurfer .curv file
+
+    Parameters
+    ------------
+    fn: str
+        File name to be written
+    curv: ndaray
+        Data array to be written
+    fnum: int
+        Number of faces in the mesh
+    '''
+    def write_3byte_integer(f, n):
+        b1 = struct.pack('B', (n >> 16) & 255)
+        b2 = struct.pack('B', (n >> 8) & 255)
+        b3 = struct.pack('B', (n & 255))
+        f.write(b1)
+        f.write(b2)
+        f.write(b3)
+
+
+    NEW_VERSION_MAGIC_NUMBER = 16777215
+    vnum = len(curv)
+    with open(fn, 'wb') as f:
+        write_3byte_integer(f, NEW_VERSION_MAGIC_NUMBER)
+        f.write(struct.pack(">i", int(vnum)))
+        f.write(struct.pack('>i', int(fnum)))
+        f.write(struct.pack('>i', 1))
+        f.write(curv.astype('>f').tobytes())
 
 def dag_fs_to_ply(sub, data, fs_dir, mesh_name='inflated', out_dir=None, under_surf='curv', **kwargs):
     '''
@@ -489,24 +530,6 @@ def dag_get_rgb_str(rgb_vals):
         rgb_str += f'{rgb_vals[v_idx][0]},{rgb_vals[v_idx][1]},{rgb_vals[v_idx][2]}\n'
     return rgb_str    
 
-import struct
-def dag_parse_surf(filename):
-    """
-    Copied from pycortex https://github.com/gallantlab/pycortex
-    """
-    with open(filename, 'rb') as fp:
-        #skip magic
-        fp.seek(3)
-        comment = fp.readline()
-        fp.readline()
-        print(comment)
-        verts, faces = struct.unpack('>2I', fp.read(8))
-        pts = np.fromstring(fp.read(4*3*verts), dtype='f4').byteswap()
-        polys = np.fromstring(fp.read(4*3*faces), dtype='i4').byteswap()
-
-        vx_coord = pts.reshape(-1, 3)
-        face_vx = polys.reshape(-1, 3)
-        return vx_coord, face_vx 
 
 # ***********************************************************************************************************************
 # ***********************************************************************************************************************

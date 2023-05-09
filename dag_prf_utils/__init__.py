@@ -17,11 +17,11 @@ else:
     print('Could not find FS_LICENSE')
     print('Uncomment line below and specify path to FS_LICENSE')
 
-# [2] Nibabel
-try:
-    from nibabel.freesurfer.io import write_morph_data        
-except ImportError:
-    print('Error importing nibabel... Not a problem unless you want to use FSMaker')
+# # [2] Nibabel
+# try:
+#     from nibabel.freesurfer.io import write_morph_data        
+# except ImportError:
+#     print('Error importing nibabel... Not a problem unless you want to use FSMaker')
 
 # [3] pycortex
 try: 

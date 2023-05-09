@@ -25,7 +25,7 @@ To this end I have created a couple of different ways to visualize surface infor
 #### With this in mind here are a summary of some of the options. 
 
 ### Freeview based surface plotting
-* requires freeview, and nibabel. 
+* requires freeview 
 * Specify the data, the mesh, and the mask (you can only use binary masking, the option for varying the transparency is not available here). 
 * scripts will create a custom surf file, and the command (which contains the colormap info) to open it in freeview
 * The colormap can be anything from matplotlib. Just specify the min and max values. 

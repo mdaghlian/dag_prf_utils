@@ -3,6 +3,7 @@ import matplotlib.pyplot as plt
 import os
 import pandas as pd
 import sys
+import struct
 opj = os.path.join
 
 
@@ -22,6 +23,28 @@ def dag_load_nverts(sub, fs_dir):
         verts = int(contents[-1].split(' ')[0]) + 1
         n_verts.append(verts)
     return n_verts
+
+def dag_load_nfaces(sub, fs_dir):
+    """
+    Adapted from pycortex https://github.com/gallantlab/pycortex
+    """    
+    n_faces = []
+    for i in ['lh', 'rh']:
+        # surf = opj(fs_dir, sub, 'surf', f'{i}.white')
+        # verts = nb.freesurfer.io.read_geometry(surf)[0].shape[0]
+        # Alternative to nibabel method...
+        # The first number on the last line +1 is the number of vertices...         
+        surf = opj(fs_dir, sub, 'surf', f'{i}.inflated')
+        with open(surf, 'rb') as fp:
+            #skip magic
+            fp.seek(3)
+            comment = fp.readline()
+            fp.readline()
+            i_verts, i_faces = struct.unpack('>2I', fp.read(8))
+            # print(verts)        
+            n_faces.append(i_faces)
+    return n_faces
+
 
 def dag_load_roi(sub, roi, fs_dir):
     '''

@@ -81,11 +81,17 @@ def print_p():
     }
 
     return p_order
-
-def mask_time_series(ts, mask, ts_axis = 0, zero_pad = True):    
+def set_tc_shape (tc_in, n_timepts = 225):
+    # *** ALWAYS n_units * n_time
+    if tc_in.shape[0] == n_timepts:
+        tc_out = tc_in.T
+    else:
+        tc_out = tc_in
+    return tc_out
+def mask_time_series(ts, mask, ts_axis = 1, zero_pad = True):    
     '''
     Mask certain voxel time series for later fitting. 
-    ts          np.ndarray          time series, default is time x nvx 
+    ts          np.ndarray          time series, default is nvx x time 
     mask        np.ndarray, bool    which vx to include (=True)
     ts_axis     int                 which axis is time
     zero_pad    bool                return the masked vx as flat time series    
@@ -276,6 +282,11 @@ class Prf1T1M(object):
         vx_mask = np.ones(self.n_vox, dtype=bool)
         for th_key in th.keys():
             th_key_str = str(th_key) # convert to string... 
+            if 'roi' in th_key_str:
+                # Input roi specification...
+                vx_mask &= th[th_key]
+                continue # now next item in key
+
             comp, p = th_key_str.split('-')
             th_val = th[th_key]
             if comp=='min':
@@ -458,6 +469,11 @@ class Prf2T1M(object):
         vx_mask = np.ones(self.n_vox, dtype=bool)
         for th_key in th.keys():
             th_key_str = str(th_key) # convert to string... 
+            if 'roi' in th_key_str:
+                # Input roi specification...
+                vx_mask &= th[th_key]
+                continue # now next item in key
+
             task, comp, p = th_key_str.split('-')
             th_val = th[th_key]
             if task=='all':
@@ -503,11 +519,13 @@ class Prf2T1M(object):
         ax.set_title(f'{task}-{param}')
         dag_add_axs_basics(axs=ax, **kwargs)
 
-    def rapid_arrow(self, th={'all-min-rsq':.1, 'all-max-ecc':5}, **kwargs):
+    def rapid_arrow(self, axs=None, th={'all-min-rsq':.1, 'all-max-ecc':5}, **kwargs):
+        if axs==None:
+            axs = plt.gca()
         vx_mask = self.return_vx_mask(th)        
         plt.figure()        
         dag_arrow_plot(
-            plt.gca(), 
+            axs, 
             old_x=self.pd_params[self.task1]['x'][vx_mask], 
             old_y=self.pd_params[self.task1]['y'][vx_mask], 
             new_x=self.pd_params[self.task2]['x'][vx_mask], 

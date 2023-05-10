@@ -10,40 +10,38 @@ opj = os.path.join
 def dag_qprint(print_str):
     print(print_str, flush=True)
 
-def dag_load_nverts(sub, fs_dir):
-    n_verts = []
-    for i in ['lh', 'rh']:
-        # surf = opj(fs_dir, sub, 'surf', f'{i}.white')
-        # verts = nb.freesurfer.io.read_geometry(surf)[0].shape[0]
-        # Alternative to nibabel method...
-        # The first number on the last line +1 is the number of vertices...         
-        surf = opj(fs_dir, sub, 'label', f'{i}.cortex.label')
-        with open(surf) as f:
-            contents = f.readlines()
-        verts = int(contents[-1].split(' ')[0]) + 1
-        n_verts.append(verts)
+def dag_load_nverts(sub, fs_dir):    
+    '''
+    nverts (points) in a given mesh
+    '''
+    n_verts, n_faces = dag_load_nfaces_nverts(sub, fs_dir)
     return n_verts
 
 def dag_load_nfaces(sub, fs_dir):
+    '''
+    nfaces (triangular) in a given mesh
+    '''
+    n_verts, n_faces = dag_load_nfaces_nverts(sub, fs_dir)
+    return n_faces
+
+def dag_load_nfaces_nverts(sub, fs_dir):
     """
     Adapted from pycortex https://github.com/gallantlab/pycortex
+    Load the number of vertices and faces in a given mesh
     """    
     n_faces = []
+    n_verts = []
     for i in ['lh', 'rh']:
-        # surf = opj(fs_dir, sub, 'surf', f'{i}.white')
-        # verts = nb.freesurfer.io.read_geometry(surf)[0].shape[0]
-        # Alternative to nibabel method...
-        # The first number on the last line +1 is the number of vertices...         
         surf = opj(fs_dir, sub, 'surf', f'{i}.inflated')
         with open(surf, 'rb') as fp:
             #skip magic
             fp.seek(3)
-            comment = fp.readline()
             fp.readline()
+            comment = fp.readline()            
             i_verts, i_faces = struct.unpack('>2I', fp.read(8))
-            # print(verts)        
-            n_faces.append(i_faces)
-    return n_faces
+            n_verts.append(i_verts)    
+            n_faces.append(i_faces)    
+    return n_verts, n_faces
 
 
 def dag_load_roi(sub, roi, fs_dir):
@@ -103,6 +101,21 @@ def dag_load_roi(sub, roi, fs_dir):
     return roi_idx
 
 def dag_hyphen_parse(str_prefix, str_in):
+    '''dag_hyphen_parse
+    checks whether a string has a prefix attached.
+    Useful for many BIDS format stuff, and when passing arguments on a lot 
+    (sometimes it is not clear whether the prefix will be present or not...)
+
+    E.g., I want to make sure that string "task_name" has the format "task-A" 
+    part_task_name = "A"
+    full_task_name = "task-A"
+    
+    dag_hyphen_parse("task", part_task_name)
+    dag_hyphen_parse("task", full_task_name)
+
+    Both output -> "task-A"
+    
+    '''
     if str_prefix in str_in:
         str_out = str_in
     else: 
@@ -110,6 +123,10 @@ def dag_hyphen_parse(str_prefix, str_in):
     return str_out
     
 def dag_rescale_bw(data_in, old_min=None, old_max=None, new_min=0, new_max=1):
+    '''dag_rescale_bw
+
+    
+    '''
     data_out = np.copy(data_in)
     if old_min is not None:
         data_out[data_in<old_min] = old_min
@@ -125,6 +142,10 @@ def dag_rescale_bw(data_in, old_min=None, old_max=None, new_min=0, new_max=1):
     return data_out
 
 def dag_get_rsq(tc_target, tc_fit):
+    '''dag_get_rsq
+    Calculate the rsq (R squared)
+    Of a fit time course (tc_fit), on a target (tc_target)    
+    '''
     ss_res = np.sum((tc_target-tc_fit)**2, axis=-1)
     ss_tot = np.sum(
         (tc_target-tc_target.mean(axis=-1)[...,np.newaxis])**2, 
@@ -196,15 +217,6 @@ def dag_find_file_in_folder(filt, path, return_msg='error', exclude=None):
     FileNotFoundError
         If no files usingn the specified filters could be found
 
-    Example
-    ----------
-    >>> get_file_from_substring("R2", "/path/to/prf")
-    '/path/to/prf/r2.npy'
-    >>> get_file_from_substring(['gauss', 'best_vertices'], "path/to/pycortex/sub-xxx")
-    '/path/to/pycortex/sub-xxx/sub-xxx_model-gauss_desc-best_vertices.csv'
-    >>> get_file_from_substring(['best_vertices'], "path/to/pycortex/sub-xxx")
-    ['/path/to/pycortex/sub-xxx/sub-xxx_model-gauss_desc-best_vertices.csv',
-    '/path/to/pycortex/sub-xxx/sub-xxx_model-norm_desc-best_vertices.csv']    
     """
 
     input_is_list = False

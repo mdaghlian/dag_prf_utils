@@ -44,7 +44,7 @@ def dag_load_nfaces_nverts(sub, fs_dir):
     return n_verts, n_faces
 
 
-def dag_load_roi(sub, roi, fs_dir):
+def dag_load_roi(sub, roi, fs_dir, split_LR=False):
     '''
     Return a boolean array of voxels included in the specified roi
     array is vector with each entry corresponding to a point on the subjects cortical surface
@@ -70,6 +70,7 @@ def dag_load_roi(sub, roi, fs_dir):
         roi = [roi]    
     
     roi_idx = []
+    roi_idx_split = {'lh':[], 'rh':[]}
     for this_roi in roi:    
         # Find the corresponding files
         if 'not' in this_roi:
@@ -78,10 +79,10 @@ def dag_load_roi(sub, roi, fs_dir):
         else:
             do_not = False
         roi_file = {}
-        roi_file['L'] = dag_find_file_in_folder([this_roi, '.thresh', '.label', 'lh'], roi_dir)    
-        roi_file['R'] = dag_find_file_in_folder([this_roi, '.thresh', '.label', 'rh'], roi_dir)    
+        roi_file['lh'] = dag_find_file_in_folder([this_roi, '.thresh', '.label', 'lh'], roi_dir)    
+        roi_file['rh'] = dag_find_file_in_folder([this_roi, '.thresh', '.label', 'rh'], roi_dir)    
         LR_bool = []
-        for i,hemi in enumerate(['L', 'R']):
+        for i,hemi in enumerate(['lh', 'rh']):
             with open(roi_file[hemi]) as f:
                 contents = f.readlines()            
             idx_str = [contents[i].split(' ')[0] for i in range(2,len(contents))]
@@ -94,11 +95,21 @@ def dag_load_roi(sub, roi, fs_dir):
             LR_bool.append(this_bool)
         this_roi_mask = np.concatenate(LR_bool)
         roi_idx.append(this_roi_mask)
-    
+        roi_idx_split['lh'].append(LR_bool[0]) 
+        roi_idx_split['rh'].append(LR_bool[1])
+
     roi_idx = np.vstack(roi_idx)
     roi_idx = roi_idx.any(0)
 
-    return roi_idx
+    roi_idx_split['lh'] = np.vstack(roi_idx_split['lh'])
+    roi_idx_split['lh'] = roi_idx_split['lh'].any(0)
+    roi_idx_split['rh'] = np.vstack(roi_idx_split['rh'])
+    roi_idx_split['rh'] = roi_idx_split['rh'].any(0)
+
+    if split_LR:
+        return roi_idx_split
+    else:
+        return roi_idx
 
 def dag_hyphen_parse(str_prefix, str_in):
     '''dag_hyphen_parse
@@ -155,6 +166,12 @@ def dag_get_rsq(tc_target, tc_fit):
 
     return rsq
 
+def dag_get_corr(a, b):
+    '''dag_get_corr
+    '''
+    corr = np.corrcoef(a,b)[0,1]
+    return corr
+
 def dag_coord_convert(a,b,old2new):
     ''' 
     Convert cartesian to polar and vice versa
@@ -187,7 +204,7 @@ def dag_str2file(filename, txt):
     file2write.write(txt)
     file2write.close()
 
-def dag_find_file_in_folder(filt, path, return_msg='error', exclude=None):
+def dag_find_file_in_folder_OLD(filt, path, return_msg='error', exclude=None):
     """get_file_from_substring
     Essentially copied from Jurjen's linescanning toolbox. except with the option for multiple exclusion criteria
 
@@ -279,3 +296,120 @@ def dag_find_file_in_folder(filt, path, return_msg='error', exclude=None):
             match_list = match_list[0]
         
         return match_list
+    
+
+def dag_find_file_in_folder(filt, path, return_msg='error', exclude=None, recursive=False, file_limit=300):
+    """get_file_from_substring
+    Setup to be compatible with JH linescanning toolbox function (linescanning.utils.get_file_from_substring)
+    
+
+    This function returns the file given a path and a substring. Avoids annoying stuff with glob. Now also allows multiple filters 
+    to be applied to the list of files in the directory. The idea here is to construct a binary matrix of shape (files_in_directory, nr_of_filters), and test for each filter if it exists in the filename. If all filters are present in a file, then the entire row should be 1. This is what we'll be looking for. If multiple files are found in this manner, a list of paths is returned. If only 1 file was found, the string representing the filepath will be returned. 
+
+    Parameters
+    ----------
+    filt: str, list
+        tag for files we need to select
+    path: str
+        path to the folder we are searching directory 
+        OR a list of strings (files), which will be searched
+    return_msg: str, optional
+        whether to raise an error (*return_msg='error') or return None (*return_msg=None*). Default = 'error'.
+    exclude: str, list, optional:
+        Specify string/s to exclude from options. 
+
+    Returns
+    ----------
+    str
+        path to the files containing `string`. If no files could be found, `None` is returned
+
+    list
+        list of paths if multiple files were found
+
+    Raises
+    ----------
+    FileNotFoundError
+        If no files usingn the specified filters could be found
+
+    """
+    # [1] Setup filters (should be lists): 
+    filt_incl = filt
+    if isinstance(filt_incl, str):
+        filt_incl = [filt_incl]
+    filt_excl = exclude
+    if (filt_excl!=None) and isinstance(filt_excl, str):
+        filt_excl = [filt_excl]
+
+    # [2] List & sort files in directory
+    if isinstance(path, str):
+        input_is_list = False
+        folder_path = path
+    elif isinstance(path, list):        
+        # The list of files is specified...
+        input_is_list = True
+        files = path.copy()
+    else:
+        raise ValueError("Unknown input type; should be string to path or list of files")
+
+    matching_files = []
+    files_searched = 0
+    
+    if input_is_list:   # *** Prespecified list of files ***
+        for file_name in files:
+            # Check if the file name contains all strings in filt_incl
+            if all(string in file_name for string in filt_incl):                
+                # Check if the file name contains any strings in filt_excl, if provided
+                if filt_excl is not None and any(string in file_name for string in filt_excl):
+                    continue
+                
+                matching_files.append(file_name)
+    
+    else:               # *** Walk through folders ***
+        for root, dirs, files in os.walk(folder_path):
+            if not recursive and root != folder_path:
+                break        
+            
+            for file_name in files:
+                files_searched += 1
+                file_path = os.path.join(root, file_name)
+
+                # Check the inclusion & exclusion criteria
+                file_match = dag_file_name_check(file_name, filt_incl, filt_excl)
+                if file_match:
+                    matching_files.append(file_path)
+
+                # Check if the limit has been reached
+                if files_searched >= file_limit:
+                    sys.exit()
+
+    # Sort the matching files
+    match_list = sorted(matching_files)
+    
+    # Are there any matching files? -> error option
+    no_matches = len(match_list)==0
+    if no_matches:
+        if return_msg == "error":
+            raise FileNotFoundError(f"Could not find file with incl {filt_incl}, excluding: {filt_excl}, in {path}")        
+        else:
+            return None        
+    
+    # Don't return a list if there is only one element
+    if isinstance(match_list, list) & (len(match_list)==1):
+        match_list = match_list[0]
+
+
+    return match_list
+
+
+def dag_file_name_check(file_name, filt_incl, filt_excl):
+    file_match = False
+    # Check if the file name contains all strings in filt_incl
+    if all(string in file_name for string in filt_incl):
+        file_match = True
+    
+    # Check if the file name contains any strings in filt_excl
+    if filt_excl is not None and any(string in file_name for string in filt_excl):
+        file_match = False
+    return file_match
+
+

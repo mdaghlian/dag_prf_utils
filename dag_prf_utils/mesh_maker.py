@@ -9,6 +9,7 @@ opj = os.path.join
 # except ImportError:
 #     raise ImportError('Error importing nibabel... Not a problem unless you want to use FSMaker')
 from dag_prf_utils.utils import *
+from dag_prf_utils.plot_functions import *
 
 class FSMaker(object):
     '''Used to make a freesurfer file, and view a surface in freesurfer. 
@@ -72,7 +73,8 @@ class FSMaker(object):
         # value - rgb triple...
         fv_param_steps = np.linspace(vmin, vmax, cmap_nsteps)
         fv_color_steps = np.linspace(0,1, cmap_nsteps)
-        fv_cmap = mpl.cm.__dict__[cmap]
+        fv_cmap = dag_get_cmap(cmap)
+        # fv_cmap = mpl.cm.__dict__[cmap]
         
         ## make colorbar - uncomment to save a png of the color bar...
         # cb_cmap = mpl.cm.__dict__[cmap] 
@@ -265,7 +267,8 @@ def dag_fs_to_ply(sub, data, fs_dir, mesh_name='inflated', out_dir=None, under_s
 
 
     # Create rgb values mapping from data to cmap
-    data_cmap = mpl.cm.__dict__[cmap] 
+    data_cmap = dag_get_cmap(cmap)
+    # data_cmap = mpl.cm.__dict__[cmap] 
     data_norm = mpl.colors.Normalize()
     data_norm.vmin = vmin
     data_norm.vmax = vmax
@@ -503,11 +506,13 @@ def dag_calculate_rgb_vals(data, **kwargs):
     vmax = kwargs.get('vmax', np.percentile(data[data_mask], 90))
     
     # Create rgb values mapping from data to cmap
-    data_cmap = mpl.cm.__dict__[cmap] 
+    data_cmap = dag_get_cmap(cmap)
+    # data_cmap = mpl.cm.__dict__[cmap] 
     data_norm = mpl.colors.Normalize()
     data_norm.vmin = vmin
     data_norm.vmax = vmax
     data_col = data_cmap(data_norm(data))
+
     # Create a color bar...
     plt.close('all')
     plt.colorbar(mpl.cm.ScalarMappable(norm=data_norm, cmap=data_cmap))

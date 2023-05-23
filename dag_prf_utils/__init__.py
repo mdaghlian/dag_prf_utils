@@ -32,7 +32,7 @@ except ImportError:
 
 
 # ************************** SPECIFY BLENDER PATH HERE **************************
-os.environ['BLENDER'] = '/data1/projects/dumoulinlab/Lab_members/Marcus/programs/blender-3.5.0-linux-x64/blender'
+os.environ['BLENDER'] = '/data1/projects/dumoulinlab/Lab_members/Marcus/programs/blender-3.5.1-linux-x64/blender'
 if not 'BLENDER' in os.environ.keys():
     # Check for command:
     blender_cmd = subprocess.getstatusoutput(f"command -v blender")[1]

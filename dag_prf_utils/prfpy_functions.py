@@ -81,6 +81,7 @@ def print_p():
     }
 
     return p_order
+
 def set_tc_shape (tc_in, n_timepts = 225):
     # *** ALWAYS n_units * n_time
     if tc_in.shape[0] == n_timepts:
@@ -88,6 +89,7 @@ def set_tc_shape (tc_in, n_timepts = 225):
     else:
         tc_out = tc_in
     return tc_out
+
 def mask_time_series(ts, mask, ts_axis = 1, zero_pad = True):    
     '''
     Mask certain voxel time series for later fitting. 
@@ -201,7 +203,6 @@ def load_params_generic(params_file, load_all=False, load_var=[]):
         raise ValueError(f"Unrecognized input type for '{params_file}'")
 
     return params
-
 
 class Prf1T1M(object):
     '''
@@ -318,25 +319,79 @@ class Prf1T1M(object):
         return param_out
     
     def rapid_hist(self, param, th={'min-rsq':.1}, ax=None, **kwargs):
+        alpha = kwargs.get('alpha', None)
         if ax==None:
             ax = plt.axes()
         vx_mask = self.return_vx_mask(th)        
         hist_col = kwargs.get('hist_col', None)
-        ax.hist(self.pd_params[param][vx_mask].to_numpy(), color=hist_col)
+        ax.hist(self.pd_params[param][vx_mask].to_numpy(), color=hist_col, alpha=alpha)
         ax.set_title(param)
-        dag_add_axs_basics(axs=ax, **kwargs)
+        # dag_add_ax_basics(ax=ax, **kwargs)
 
-    def rapid_scatter(self, th={'min-rsq':.1}, ax=None, dot_col='k', **kwargs):
+    def rapid_scatter(self, th={'min-rsq':.1, 'max-ecc':5}, ax=None, dot_col='k', **kwargs):
         if ax==None:
             ax = plt.axes()
-        vx_mask = self.return_vx_mask(th)        
+        vx_mask = self.return_vx_mask(th)
+        if isinstance(dot_col,str):
+            if dot_col in self.pd_params.keys():
+                dot_col = self.pd_params[dot_col][vx_mask].to_numpy()
+
         dag_visual_field_scatter(
-            axs=ax, 
+            ax=ax, 
             dot_x=self.pd_params['x'][vx_mask],
             dot_y=self.pd_params['y'][vx_mask],
             dot_col = dot_col,
             **kwargs
         )        
+
+    def rapid_p_corr(self, px, py, th={'min-rsq':.1}, ax=None, **kwargs):
+        dot_col = kwargs.get('dot_col', 'k')
+        dot_alpha = kwargs.get('dot_alpha', None)
+        if ax==None:
+            ax = plt.axes()
+        vx_mask = self.return_vx_mask(th)
+        ax.scatter(
+            self.pd_params[px][vx_mask],
+            self.pd_params[py][vx_mask],
+            c = dot_col,
+            alpha=dot_alpha,
+        )
+        corr_xy = np.corrcoef(
+            self.pd_params[px][vx_mask],
+            self.pd_params[py][vx_mask],
+            )[0,1]
+        
+        ax.set_title(f'corr {px}, {py} = {corr_xy:.3f}')
+        ax.set_xlabel(px)        
+        ax.set_ylabel(py)        
+        # dag_add_ax_basics(ax=plt.gca(), **kwargs)        
+    
+    def plot_ts(self, ts, idx, ax=None, **kwargs):
+        if ax==None:
+            ax = plt.axes()
+        ax.plot(ts[idx,:], **kwargs)
+        prf_str = self.make_prf_str(idx)
+        ax.set_title(prf_str)
+
+    def make_prf_str(self, idx, add_context='False'):
+        if add_context:
+            prf_str = f'{self.task}, {self.model},'
+        else:
+            prf_str = ''
+        prf_str += f'vx id = {idx}\n'
+        param_count = 0
+        if self.model is 'norm':
+            param_keys = ['x', 'y', 'a_sigma', 'n_sigma', 'a_val', 'c_val', 'b_val', 'd_val', 'rsq', 'hrf_deriv']
+        else:
+            param_keys = ['x', 'y', 'a_sigma', 'a_val', 'rsq', 'hrf_deriv']
+        for param_key in param_keys:
+            if param_key in self.pd_params.keys():
+                param_count += 1
+                prf_str += f'{param_key}= {self.pd_params[param_key][idx]:.2f}; '
+            if param_count > 3:
+                prf_str += '\n'
+                param_count = 0
+        return prf_str
 
     
 
@@ -517,15 +572,15 @@ class Prf2T1M(object):
         vx_mask = self.return_vx_mask(th)        
         ax.hist(self.pd_params[task][param][vx_mask].to_numpy())
         ax.set_title(f'{task}-{param}')
-        dag_add_axs_basics(axs=ax, **kwargs)
+        dag_add_ax_basics(ax=ax, **kwargs)
 
-    def rapid_arrow(self, axs=None, th={'all-min-rsq':.1, 'all-max-ecc':5}, **kwargs):
-        if axs==None:
-            axs = plt.gca()
+    def rapid_arrow(self, ax=None, th={'all-min-rsq':.1, 'all-max-ecc':5}, **kwargs):
+        if ax==None:
+            ax = plt.gca()
         vx_mask = self.return_vx_mask(th)        
         plt.figure()        
         dag_arrow_plot(
-            axs, 
+            ax, 
             old_x=self.pd_params[self.task1]['x'][vx_mask], 
             old_y=self.pd_params[self.task1]['y'][vx_mask], 
             new_x=self.pd_params[self.task2]['x'][vx_mask], 
@@ -533,3 +588,173 @@ class Prf2T1M(object):
             arrow_col='angle', 
             **kwargs
             )
+    
+
+
+class Prf1T1Mx2(object):
+    def __init__(self,prf_obj1, prf_obj2, **kwargs):
+        self.task1 = prf_obj1.task
+        self.task2 = prf_obj2.task
+        self.model1 = prf_obj1.model
+        self.model2 = prf_obj2.model
+        self.model_labels1 = list(prf_obj1.pd_params.keys())
+        self.model_labels2 = list(prf_obj2.pd_params.keys())
+        self.id1 = kwargs.get('id1', f'{self.task1}_{self.model1}')
+        self.id2 = kwargs.get('id2', f'{self.task2}_{self.model2}')
+        self.n_vox = prf_obj1.n_vox 
+        self.pd_params = {}
+        self.pd_params[self.id1] = prf_obj1.pd_params
+        self.pd_params[self.id2] = prf_obj2.pd_params
+        
+        # Make mean and difference:
+        comp_dict = {'mean':{}, 'diff':{}}
+        for i_label in self.model_labels1:
+            if i_label not in self.model_labels2:
+                continue
+            comp_dict['mean'][i_label] = (self.pd_params[self.id1][i_label] +  self.pd_params[self.id2][i_label]) / 2
+            comp_dict['diff'][i_label] = self.pd_params[self.id2][i_label] -  self.pd_params[self.id1][i_label]
+        # some stuff needs to be recalculated: (because they don't scale linearly... e.g. polar angle)
+        # -> check which models...
+        xy_model_list = ['gauss', 'norm', 'css', 'dog']
+        both_with_xy =  (self.model1 in xy_model_list) & (self.model2 in xy_model_list)
+        both_norm = (self.model1=='norm') & (self.model2=='norm')
+        both_dog = (self.model1=='dog') & (self.model2=='dog')
+        both_csf = (self.model1=='CSF') & (self.model2=='CSF')
+        for i_comp in ['mean', 'diff']:
+            # Now add other interesting stuff:
+            if both_with_xy:
+                # Ecc, pol
+                comp_dict[i_comp]['ecc'], comp_dict[i_comp]['pol'] = dag_coord_convert(
+                    comp_dict[i_comp]['x'], comp_dict[i_comp]['y'], 'cart2pol'
+                )
+            if both_norm or both_dog:
+                # -> size ratio:
+                comp_dict[i_comp]['size_ratio'] = comp_dict[i_comp]['size_2'] / comp_dict[i_comp]['size_1']
+                comp_dict[i_comp]['amp_ratio']  = comp_dict[i_comp]['amp_1']  / comp_dict[i_comp]['amp_2']
+            if both_norm:
+                comp_dict[i_comp]['bd_ratio'] = comp_dict[i_comp]['b_val'] / comp_dict[i_comp]['d_val']
+            if both_csf:
+                comp_dict[i_comp]['log10_sf0']  = np.log10(comp_dict[i_comp]['sf0'])
+                comp_dict[i_comp]['log10_maxC'] = np.log10(comp_dict[i_comp]['maxC'])
+                comp_dict[i_comp]['sfmax'] = np.nan_to_num(
+                    10**(np.sqrt(comp_dict[i_comp]['log10_maxC'] / (comp_dict[i_comp]['width_r']**2)) + \
+                                                comp_dict[i_comp]['log10_sf0']))            
+                comp_dict[i_comp]['sfmax'][comp_dict[i_comp]['sfmax']>100] = 100 # MAX VALUE
+                comp_dict[i_comp]['log10_sfmax'] = np.log10(comp_dict[i_comp]['sfmax'])            
+        # Enter into pd data frame
+        self.pd_params['mean'] = pd.DataFrame(comp_dict['mean'])
+        self.pd_params['diff'] = pd.DataFrame(comp_dict['diff'])
+    
+    def return_vx_mask(self, th={}):
+        '''
+        return_vx_mask: returns a mask (boolean array) for voxels, specified by the user        
+        th keys must be split into 3 parts
+        'task-comparison-param' : value
+        e.g.: to exclude gauss fits with rsq less than 0.1
+        th = {'AS0_gauss-min-rsq': 0.1 } 
+        task        -> task1, task2, diff, mean, all. (all means apply the threshold to both task1, and task2)
+        comparison  -> min, max, bound
+        param       -> any of... (model dependent e.g., 'x', 'y', 'ecc'...)
+        
+
+        '''        
+
+        # Start with EVRYTHING        
+        vx_mask = np.ones(self.n_vox, dtype=bool)
+        for th_key in th.keys():
+            th_key_str = str(th_key) # convert to string... 
+            if 'roi' in th_key_str:
+                # Input roi specification...
+                vx_mask &= th[th_key]
+                continue # now next item in key
+
+            id, comp, p = th_key_str.split('-')
+            th_val = th[th_key]
+            if id=='all':
+                # Apply to both task1 and task2:
+                if p in self.model_labels1:
+                    vx_mask &= self.return_vx_mask({
+                        f'{self.id1}-{comp}-{p}': th_val
+                    })
+                
+                if p in self.model_labels2:
+                    vx_mask &= self.return_vx_mask({
+                        f'{self.id2}-{comp}-{p}': th_val
+                    })
+
+                continue # now next item in th_key...
+            
+            if comp=='min':
+                vx_mask &= self.pd_params[id][p].gt(th_val)
+            elif comp=='max':
+                vx_mask &= self.pd_params[id][p].lt(th_val)
+            elif comp=='bound':
+                vx_mask &= self.pd_params[id][p].gt(th_val[0])
+                vx_mask &= self.pd_params[id][p].lt(th_val[1])
+            else:
+                sys.exit()
+        if not isinstance(vx_mask, np.ndarray):
+            vx_mask = vx_mask.to_numpy()
+        return vx_mask
+    
+    def rapid_hist(self, id, param, th={'all-min-rsq':.1}, ax=None, **kwargs):
+        if ax==None:
+            ax = plt.axes()
+        vx_mask = self.return_vx_mask(th)        
+        label = kwargs.get('label', f'{id}-{param}')
+        kwargs['label'] = label
+        ax.hist(self.pd_params[id][param][vx_mask].to_numpy(), **kwargs)
+        ax.set_title(f'{id}-{param}')
+        dag_add_ax_basics(ax=ax, **kwargs)
+
+    def rapid_arrow(self, ax=None, th={'all-min-rsq':.1, 'all-max-ecc':5}, **kwargs):
+        if ax==None:
+            ax = plt.gca()
+        vx_mask = self.return_vx_mask(th)        
+        kwargs['title'] = kwargs.get('title', f'{self.id1}-{self.id2}')
+        plt.figure()        
+        dag_arrow_plot(
+            ax, 
+            old_x=self.pd_params[self.id1]['x'][vx_mask], 
+            old_y=self.pd_params[self.id1]['y'][vx_mask], 
+            new_x=self.pd_params[self.id2]['x'][vx_mask], 
+            new_y=self.pd_params[self.id2]['y'][vx_mask], 
+            # arrow_col='angle', 
+            **kwargs
+            )
+    def rapid_p_corr(self, px, py, th={'all-min-rsq':.1}, ax=None, **kwargs):
+        dot_col = kwargs.get('dot_col', 'k')
+        dot_alpha = kwargs.get('dot_alpha', None)
+        if ax==None:
+            ax = plt.axes()
+        vx_mask = self.return_vx_mask(th)
+        px_id, px_p = px.split('-')
+        py_id, py_p = py.split('-')
+        ax.scatter(
+            self.pd_params[px_id][px_p][vx_mask],
+            self.pd_params[py_id][py_p][vx_mask],
+            c = dot_col,
+            alpha=dot_alpha,
+        )
+        corr_xy = np.corrcoef(
+            self.pd_params[px_id][px_p][vx_mask],
+            self.pd_params[py_id][py_p][vx_mask],
+            )[0,1]
+        
+        ax.set_title(f'corr {px}, {py} = {corr_xy:.3f}')
+        ax.set_xlabel(px)        
+        ax.set_ylabel(py)        
+        # dag_add_ax_basics(ax=plt.gca(), **kwargs)                
+
+    # def rapid_scatter(self, th={'all-min-rsq':.1}, ax=None, dot_col='k', **kwargs):
+    #     if ax==None:
+    #         ax = plt.axes()
+    #     vx_mask = self.return_vx_mask(th)
+                
+    #     dag_visual_field_scatter(
+    #         ax=ax, 
+    #         dot_x=self.pd_params['x'][vx_mask],
+    #         dot_y=self.pd_params['y'][vx_mask],
+    #         dot_col = dot_col,
+    #         **kwargs
+    #     )                          

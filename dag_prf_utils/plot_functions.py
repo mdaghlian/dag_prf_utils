@@ -262,6 +262,7 @@ def dag_plot_bin_line(ax, X,Y, bin_using, **kwargs):
     lw= kwargs.get("lw", 5)
     n_bins = kwargs.get('n_bins', 10)
     bins = kwargs.get('bins', None)
+    do_basics = kwargs.get('do_basics', False)
     if not isinstance(bins, (np.ndarray, list)):
         bins = n_bins    
     xerr = kwargs.get("xerr", False)
@@ -291,8 +292,9 @@ def dag_plot_bin_line(ax, X,Y, bin_using, **kwargs):
             label=line_label,
             lw=lw,
             )        
-    ax.legend()    
-    dag_add_ax_basics(ax, **kwargs)
+    ax.legend()
+    if do_basics:    
+        dag_add_ax_basics(ax, **kwargs)
 
 def dag_arrow_plot(ax, old_x, old_y, new_x, new_y, **kwargs):
     ''' 
@@ -430,6 +432,16 @@ def dag_make_custom_cmap(col_list, col_steps=None, cmap_name=''):
     for i_col,v_col in enumerate(col_list):
         if not isinstance(v_col, tuple):
             col_list[i_col] = conv2rgb(v_col)
+    # Check whether it is in 255 format (should be b/w 0 and 1)
+    is_255 = False
+    for i_col, v_col in enumerate(col_list):
+        for i_rgb, v_rgb in enumerate(v_col):
+            if v_rgb > 1:
+                is_255 = True
+    if is_255:
+        for i_col, v_col in enumerate(col_list):
+            col_list[i_col] = dag_rgb(*col_list[i_col]) 
+
     
     custom_cmap = mcolors.LinearSegmentedColormap.from_list(cmap_name,list(zip(col_val, col_list)))
 
@@ -467,10 +479,22 @@ def dag_get_cmap(cmap_name, **kwargs):
         
     return this_cmap
 
-def dag_rapid_corr(ax, x,y, **kwargs):
-    ax.scatter(x,y, **kwargs)
-    corr_xy = dag_get_corr(x,y)
-    kwargs['title'] = f'corr={corr_xy:.3f}'
+def dag_rapid_corr(ax, X,Y, **kwargs):
+    do_ow = kwargs.get('ow', False)
+    do_scatter = kwargs.get('do_scatter', True)
+    do_line = kwargs.get('do_line', False)
+    dot_col = kwargs.get('dot_col', None)
+    dot_alpha = kwargs.get('dot_alpha', None)    
+    if do_scatter:
+        ax.scatter(X,Y, c=dot_col, alpha=dot_alpha)
+    if do_line:
+        dag_plot_bin_line(ax=ax, X=X,Y=Y, bin_using=X, **kwargs)
+    corr_xy = dag_get_corr(X,Y)
+    corr_str = f'corr={corr_xy:.3f}'
+    if not do_ow:
+        corr_str = ax.get_title() + corr_str
+
+    kwargs['title'] = kwargs.get('title', '') + corr_str
     
     dag_add_ax_basics(ax=ax, **kwargs)
 

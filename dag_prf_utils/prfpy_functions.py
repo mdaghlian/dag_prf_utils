@@ -345,40 +345,52 @@ class Prf1T1M(object):
         )        
 
     def rapid_p_corr(self, px, py, th={'min-rsq':.1}, ax=None, **kwargs):
-        dot_col = kwargs.get('dot_col', 'k')
-        dot_alpha = kwargs.get('dot_alpha', None)
+        # dot_col = kwargs.get('dot_col', 'k')
+        # dot_alpha = kwargs.get('dot_alpha', None)
         if ax==None:
             ax = plt.axes()
         vx_mask = self.return_vx_mask(th)
-        ax.scatter(
-            self.pd_params[px][vx_mask],
-            self.pd_params[py][vx_mask],
-            c = dot_col,
-            alpha=dot_alpha,
-        )
-        corr_xy = np.corrcoef(
-            self.pd_params[px][vx_mask],
-            self.pd_params[py][vx_mask],
-            )[0,1]
+        # ax.scatter(
+        #     self.pd_params[px][vx_mask],
+        #     self.pd_params[py][vx_mask],
+        #     c = dot_col,
+        #     alpha=dot_alpha,
+        # )
+        # corr_xy = np.corrcoef(
+        #     self.pd_params[px][vx_mask],
+        #     self.pd_params[py][vx_mask],
+        #     )[0,1]
         
-        ax.set_title(f'corr {px}, {py} = {corr_xy:.3f}')
-        ax.set_xlabel(px)        
-        ax.set_ylabel(py)        
-        # dag_add_ax_basics(ax=plt.gca(), **kwargs)        
+        # ax.set_title(f'corr {px}, {py} = {corr_xy:.3f}')
+        # ax.set_xlabel(px)        
+        # ax.set_ylabel(py)        
+        # # dag_add_ax_basics(ax=plt.gca(), **kwargs)
+        dag_rapid_corr(
+            ax=ax,
+            X=self.pd_params[px][vx_mask],
+            Y=self.pd_params[py][vx_mask],
+            **kwargs
+        )        
     
     def plot_ts(self, ts, idx, ax=None, **kwargs):
         if ax==None:
             ax = plt.axes()
-        ax.plot(ts[idx,:], **kwargs)
+        context_str = self.make_context_str(idx)
         prf_str = self.make_prf_str(idx)
+
+        kwargs['label'] = kwargs.get('label', context_str)
+        ax.plot(ts[idx,:], **kwargs)
+        ow = kwargs.get('ow', False)
+        if not ow:
+            old_str = ax.get_title()
+            if old_str!='':
+                prf_str = old_str + '\n' + prf_str
         ax.set_title(prf_str)
 
-    def make_prf_str(self, idx, add_context='False'):
+    def make_prf_str(self, idx, add_context=True):
+        prf_str = ''
         if add_context:
-            prf_str = f'{self.task}, {self.model},'
-        else:
-            prf_str = ''
-        prf_str += f'vx id = {idx}\n'
+            prf_str += self.make_context_str(idx=idx)
         param_count = 0
         if self.model is 'norm':
             param_keys = ['x', 'y', 'a_sigma', 'n_sigma', 'a_val', 'c_val', 'b_val', 'd_val', 'rsq', 'hrf_deriv']
@@ -392,7 +404,14 @@ class Prf1T1M(object):
                 prf_str += '\n'
                 param_count = 0
         return prf_str
+    def make_context_str(self, idx):
+        if self.task is None:
+            ctxt_task = ''
+        else:
+            ctxt_task = self.task        
 
+        context_str = f'{ctxt_task}, {self.model},vx={idx}\n'
+        return context_str
     
 
 class Prf2T1M(object):
@@ -613,34 +632,38 @@ class Prf1T1Mx2(object):
                 continue
             comp_dict['mean'][i_label] = (self.pd_params[self.id1][i_label] +  self.pd_params[self.id2][i_label]) / 2
             comp_dict['diff'][i_label] = self.pd_params[self.id2][i_label] -  self.pd_params[self.id1][i_label]
-        # some stuff needs to be recalculated: (because they don't scale linearly... e.g. polar angle)
-        # -> check which models...
-        xy_model_list = ['gauss', 'norm', 'css', 'dog']
-        both_with_xy =  (self.model1 in xy_model_list) & (self.model2 in xy_model_list)
-        both_norm = (self.model1=='norm') & (self.model2=='norm')
-        both_dog = (self.model1=='dog') & (self.model2=='dog')
-        both_csf = (self.model1=='CSF') & (self.model2=='CSF')
-        for i_comp in ['mean', 'diff']:
-            # Now add other interesting stuff:
-            if both_with_xy:
-                # Ecc, pol
-                comp_dict[i_comp]['ecc'], comp_dict[i_comp]['pol'] = dag_coord_convert(
-                    comp_dict[i_comp]['x'], comp_dict[i_comp]['y'], 'cart2pol'
-                )
-            if both_norm or both_dog:
-                # -> size ratio:
-                comp_dict[i_comp]['size_ratio'] = comp_dict[i_comp]['size_2'] / comp_dict[i_comp]['size_1']
-                comp_dict[i_comp]['amp_ratio']  = comp_dict[i_comp]['amp_1']  / comp_dict[i_comp]['amp_2']
-            if both_norm:
-                comp_dict[i_comp]['bd_ratio'] = comp_dict[i_comp]['b_val'] / comp_dict[i_comp]['d_val']
-            if both_csf:
-                comp_dict[i_comp]['log10_sf0']  = np.log10(comp_dict[i_comp]['sf0'])
-                comp_dict[i_comp]['log10_maxC'] = np.log10(comp_dict[i_comp]['maxC'])
-                comp_dict[i_comp]['sfmax'] = np.nan_to_num(
-                    10**(np.sqrt(comp_dict[i_comp]['log10_maxC'] / (comp_dict[i_comp]['width_r']**2)) + \
-                                                comp_dict[i_comp]['log10_sf0']))            
-                comp_dict[i_comp]['sfmax'][comp_dict[i_comp]['sfmax']>100] = 100 # MAX VALUE
-                comp_dict[i_comp]['log10_sfmax'] = np.log10(comp_dict[i_comp]['sfmax'])            
+        # For the position shift, find the direction and magnitude:
+        comp_dict['diff']['shift_mag'], comp_dict['diff']['shift_dir'] = dag_coord_convert(
+            comp_dict['diff']['x'], comp_dict['diff']['y'], 'cart2pol'
+        )        
+        # # some stuff needs to be recalculated: (because they don't scale linearly... e.g. polar angle)
+        # # -> check which models...
+        # xy_model_list = ['gauss', 'norm', 'css', 'dog']
+        # both_with_xy =  (self.model1 in xy_model_list) & (self.model2 in xy_model_list)
+        # both_norm = (self.model1=='norm') & (self.model2=='norm')
+        # both_dog = (self.model1=='dog') & (self.model2=='dog')
+        # both_csf = (self.model1=='CSF') & (self.model2=='CSF')
+        # for i_comp in ['mean', 'diff']:
+        #     # Now add other interesting stuff:
+        #     if both_with_xy:
+        #         # Ecc, pol
+        #         comp_dict[i_comp]['ecc'], comp_dict[i_comp]['pol'] = dag_coord_convert(
+        #             comp_dict[i_comp]['x'], comp_dict[i_comp]['y'], 'cart2pol'
+        #         )
+        #     if both_norm or both_dog:
+        #         # -> size ratio:
+        #         comp_dict[i_comp]['size_ratio'] = comp_dict[i_comp]['size_2'] / comp_dict[i_comp]['size_1']
+        #         comp_dict[i_comp]['amp_ratio']  = comp_dict[i_comp]['amp_1']  / comp_dict[i_comp]['amp_2']
+        #     if both_norm:
+        #         comp_dict[i_comp]['bd_ratio'] = comp_dict[i_comp]['b_val'] / comp_dict[i_comp]['d_val']
+        #     if both_csf:
+        #         comp_dict[i_comp]['log10_sf0']  = np.log10(comp_dict[i_comp]['sf0'])
+        #         comp_dict[i_comp]['log10_maxC'] = np.log10(comp_dict[i_comp]['maxC'])
+        #         comp_dict[i_comp]['sfmax'] = np.nan_to_num(
+        #             10**(np.sqrt(comp_dict[i_comp]['log10_maxC'] / (comp_dict[i_comp]['width_r']**2)) + \
+        #                                         comp_dict[i_comp]['log10_sf0']))            
+        #         comp_dict[i_comp]['sfmax'][comp_dict[i_comp]['sfmax']>100] = 100 # MAX VALUE
+        #         comp_dict[i_comp]['log10_sfmax'] = np.log10(comp_dict[i_comp]['sfmax'])            
         # Enter into pd data frame
         self.pd_params['mean'] = pd.DataFrame(comp_dict['mean'])
         self.pd_params['diff'] = pd.DataFrame(comp_dict['diff'])
@@ -712,7 +735,17 @@ class Prf1T1Mx2(object):
             ax = plt.gca()
         vx_mask = self.return_vx_mask(th)        
         kwargs['title'] = kwargs.get('title', f'{self.id1}-{self.id2}')
-        plt.figure()        
+
+        # arrow_col = kwargs.get('arrow_col', None)
+        # if isinstance(arrow_col:
+        #     # [1] Get change in d2 scotoma 
+        #     q_cmap = mpl.cm.__dict__['bwr_r']
+        #     q_norm = mpl.colors.Normalize()
+        #     q_norm.vmin = -1
+        #     q_norm.vmax = 1
+        #     arrow_col = q_cmap(q_norm(self.pd_params['diff'][f'd2s_{d2_task}']))
+        #     kwargs['arrow_col'] = arrow_col[vx_mask,:]
+
         dag_arrow_plot(
             ax, 
             old_x=self.pd_params[self.id1]['x'][vx_mask], 
@@ -723,28 +756,34 @@ class Prf1T1Mx2(object):
             **kwargs
             )
     def rapid_p_corr(self, px, py, th={'all-min-rsq':.1}, ax=None, **kwargs):
-        dot_col = kwargs.get('dot_col', 'k')
-        dot_alpha = kwargs.get('dot_alpha', None)
+        # dot_col = kwargs.get('dot_col', 'k')
+        # dot_alpha = kwargs.get('dot_alpha', None)
         if ax==None:
             ax = plt.axes()
         vx_mask = self.return_vx_mask(th)
         px_id, px_p = px.split('-')
         py_id, py_p = py.split('-')
-        ax.scatter(
-            self.pd_params[px_id][px_p][vx_mask],
-            self.pd_params[py_id][py_p][vx_mask],
-            c = dot_col,
-            alpha=dot_alpha,
-        )
-        corr_xy = np.corrcoef(
-            self.pd_params[px_id][px_p][vx_mask],
-            self.pd_params[py_id][py_p][vx_mask],
-            )[0,1]
+        # ax.scatter(
+        #     self.pd_params[px_id][px_p][vx_mask],
+        #     self.pd_params[py_id][py_p][vx_mask],
+        #     c = dot_col,
+        #     alpha=dot_alpha,
+        # )
+        # corr_xy = np.corrcoef(
+        #     self.pd_params[px_id][px_p][vx_mask],
+        #     self.pd_params[py_id][py_p][vx_mask],
+        #     )[0,1]
         
-        ax.set_title(f'corr {px}, {py} = {corr_xy:.3f}')
+        # ax.set_title(f'corr {px}, {py} = {corr_xy:.3f}')
+        dag_rapid_corr(
+            ax=ax,
+            X=self.pd_params[px_id][px_p][vx_mask],
+            Y=self.pd_params[py_id][py_p][vx_mask],
+            **kwargs
+        )                
         ax.set_xlabel(px)        
-        ax.set_ylabel(py)        
-        # dag_add_ax_basics(ax=plt.gca(), **kwargs)                
+        ax.set_ylabel(py)
+
 
     # def rapid_scatter(self, th={'all-min-rsq':.1}, ax=None, dot_col='k', **kwargs):
     #     if ax==None:

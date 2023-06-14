@@ -63,6 +63,14 @@ def dag_load_roi(sub, roi, fs_dir, split_LR=False):
     if roi=='all':
         roi_idx = np.ones(total_num_vx, dtype=bool)
         return roi_idx    
+    elif roi=='occ':
+        roi_idx = dag_id_occ_ctx(sub=sub, fs_dir=fs_dir, split_LR=split_LR)
+        return roi_idx
+    elif roi=='demo':
+        roi_idx = np.zeros(total_num_vx, dtype=bool)
+        roi_idx[:100] = True
+        return roi_idx
+
     
     # Else look for rois in subs freesurfer label folder
     roi_dir = opj(fs_dir, sub, 'label')    
@@ -79,8 +87,13 @@ def dag_load_roi(sub, roi, fs_dir, split_LR=False):
         else:
             do_not = False
         roi_file = {}
-        roi_file['lh'] = dag_find_file_in_folder([this_roi, '.thresh', '.label', 'lh'], roi_dir)    
-        roi_file['rh'] = dag_find_file_in_folder([this_roi, '.thresh', '.label', 'rh'], roi_dir)    
+        try:
+            roi_file['lh'] = dag_find_file_in_folder([this_roi, '.thresh', '.label', 'lh'], roi_dir)    
+            roi_file['rh'] = dag_find_file_in_folder([this_roi, '.thresh', '.label', 'rh'], roi_dir)    
+        except:
+            roi_file['lh'] = dag_find_file_in_folder([this_roi, '.label', 'lh'], roi_dir,exclude='._')    
+            roi_file['rh'] = dag_find_file_in_folder([this_roi, '.label', 'rh'], roi_dir,exclude='._')    
+
         LR_bool = []
         for i,hemi in enumerate(['lh', 'rh']):
             with open(roi_file[hemi]) as f:
@@ -110,6 +123,25 @@ def dag_load_roi(sub, roi, fs_dir, split_LR=False):
         return roi_idx_split
     else:
         return roi_idx
+
+def dag_id_occ_ctx(sub, fs_dir, split_LR=False, max_y=-35):
+    '''
+    Return the rough coordinates for the occipital cortex
+    '''
+    occ_idx = []
+    occ_idx_split = {}
+    for i_hemi in ['lh', 'rh']:
+        surf = opj(fs_dir, sub, 'surf', f'{i_hemi}.inflated')
+        mesh_info = dag_read_fs_mesh(surf)
+        occ_idx.append(mesh_info['coords'][:,1]<=max_y)        
+        occ_idx_split[i_hemi] = mesh_info['coords'][:,1]<=max_y
+    
+    occ_idx = np.concatenate(occ_idx)
+
+    if split_LR:
+        return occ_idx_split
+    else:
+        return occ_idx    
 
 def dag_hyphen_parse(str_prefix, str_in):
     '''dag_hyphen_parse
@@ -166,6 +198,17 @@ def dag_get_rsq(tc_target, tc_fit):
 
     return rsq
 
+def dag_filter_for_nans(array):
+    """
+    filter out NaNs from an array
+    Copied from JH linescanning toolbox
+    """
+
+    if np.isnan(array).any():
+        return np.nan_to_num(array)
+    else:
+        return array
+    
 def dag_get_corr(a, b):
     '''dag_get_corr
     '''
@@ -413,3 +456,61 @@ def dag_file_name_check(file_name, filt_incl, filt_excl):
     return file_match
 
 
+# ***********************************************************************************************************************
+# STUFF COPIED FROM NIBABEL
+# ***********************************************************************************************************************
+def dag_fread3(fobj):
+    """Read a 3-byte int from an open binary file object
+
+    Parameters
+    ----------
+    fobj : file
+        File descriptor
+
+    Returns
+    -------
+    n : int
+        A 3 byte int
+    """
+    b1, b2, b3 = np.fromfile(fobj, '>u1', 3)
+    return (b1 << 16) + (b2 << 8) + b3
+
+
+def dag_read_fs_mesh(filepath):
+    """Adapted from https://github.com/nipy/nibabel/blob/master/nibabel/freesurfer/io.py
+    ...
+    Read a triangular format Freesurfer surface mesh.
+
+    Parameters
+    ----------
+    filepath : str
+        Path to surface file.
+
+    Returns
+    -------
+    coords : numpy array
+        nvtx x 3 array of vertex (x, y, z) coordinates.
+    faces : numpy array
+        nfaces x 3 array of defining mesh triangles.
+    """
+
+    TRIANGLE_MAGIC = 16777214
+    with open(filepath, 'rb') as fobj:
+
+        magic = dag_fread3(fobj)
+        create_stamp = fobj.readline().rstrip(b'\n').decode('utf-8')
+        fobj.readline()
+        vnum = np.fromfile(fobj, '>i4', 1)[0]
+        fnum = np.fromfile(fobj, '>i4', 1)[0]
+        coords = np.fromfile(fobj, '>f4', vnum * 3).reshape(vnum, 3)
+        faces = np.fromfile(fobj, '>i4', fnum * 3).reshape(fnum, 3)
+
+    coords = coords.astype(np.float64)  # XXX: due to mayavi bug on mac 32bits
+
+    mesh_info = {
+        'vnum' : vnum,
+        'fnum' : fnum,
+        'coords' : coords,
+        'faces' : faces,        
+    }
+    return mesh_info

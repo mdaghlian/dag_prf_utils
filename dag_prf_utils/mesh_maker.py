@@ -22,6 +22,7 @@ class FSMaker(object):
         self.sub = sub        
         self.fs_dir = fs_dir        # Where the freesurfer files are        
         self.sub_surf_dir = opj(fs_dir, sub, 'surf')
+        self.sub_label_dir = opj(fs_dir, sub, 'label')
         self.custom_surf_dir = opj(self.sub_surf_dir, 'custom')
         if not os.path.exists(self.custom_surf_dir):
             os.mkdir(self.custom_surf_dir)        
@@ -29,6 +30,7 @@ class FSMaker(object):
         self.n_vx = {'lh':n_vx[0], 'rh':n_vx[1]}
         self.overlay_str = {}
         self.open_surf_cmds = {}
+        self.surf_list = []
 
     def add_surface(self, data, surf_name, **kwargs):
         '''
@@ -73,7 +75,7 @@ class FSMaker(object):
         # value - rgb triple...
         fv_param_steps = np.linspace(vmin, vmax, cmap_nsteps)
         fv_color_steps = np.linspace(0,1, cmap_nsteps)
-        fv_cmap = dag_get_cmap(cmap)
+        fv_cmap = dag_get_cmap(cmap, **kwargs)
         # fv_cmap = mpl.cm.__dict__[cmap]
         
         ## make colorbar - uncomment to save a png of the color bar...
@@ -87,35 +89,64 @@ class FSMaker(object):
         # col_bar.savefig(opj(self.sub_surf_dir, f'lh.{surf_name}_colorbar.png'))
 
         overlay_custom_str = 'overlay_custom='
+        overlay_to_save = '['
+        # '''
+        # Takes the form 
+        # [
+        #     {
+        #         "r" : 128,
+        #         "g" : 0,
+        #         "b" : 128.
+        #         "val" : -10
+        #     },
+        #     {
+        #         ...
+        #     }
+        # ]
+        # '''
         for i, fv_param in enumerate(fv_param_steps):
             this_col_triple = fv_cmap(fv_color_steps[i])
             this_str = f'{float(fv_param):.2f},{int(this_col_triple[0]*255)},{int(this_col_triple[1]*255)},{int(this_col_triple[2]*255)},'
-
-            # print(this_str)
             overlay_custom_str += this_str    
-        
-        print('Custom overlay string saved here: (self.overlay_str[surf_name])')
+
+            #
+            overlay_to_save += '\n\t{'
+            overlay_to_save += f'\n\t\t"r":{int(this_col_triple[0]*255)},'
+            overlay_to_save += f'\n\t\t"g":{int(this_col_triple[1]*255)},'
+            overlay_to_save += f'\n\t\t"b":{int(this_col_triple[2]*255)},'
+            overlay_to_save += f'\n\t\t"val":{float(fv_param):.2f}'
+            overlay_to_save += '\n\t}'
+            if fv_param!=fv_param_steps[-1]:
+                overlay_to_save += ','
+        overlay_to_save += '\n]'
+        dag_str2file(filename=opj(self.custom_surf_dir, f'{surf_name}_overlay'),txt=overlay_to_save)
         self.overlay_str[surf_name] = overlay_custom_str
-    
+        self.surf_list.append(surf_name)
     def open_fs_surface(self, surf_name, **kwargs):
         # surf name - which surface to load...
         
         os.chdir(self.sub_surf_dir) # move to freeview dir        
         fs_cmd = self.write_fs_cmd(surf_name=surf_name, **kwargs)
+        self.save_fs_cmd(surf_name, **kwargs)
         os.system(fs_cmd)        
 
     def save_fs_cmd(self, surf_name, **kwargs):
         cmd_name = kwargs.get('cmd_name', f'{surf_name}_cmd.txt')
+        print(f'Custom overlay string saved here: ({opj(self.custom_surf_dir, cmd_name)})')
         fs_cmd = self.write_fs_cmd(surf_name=surf_name, **kwargs)
         dag_str2file(filename=opj(self.custom_surf_dir, cmd_name),txt=fs_cmd)
         
-    def write_fs_cmd(self, surf_name, **kwargs):
+    def write_fs_cmd(self, surf_name=None, **kwargs):
         '''
         Write the bash command to open the specific surface with the overlay
 
-        surf_name       which surface to open (of the custom ones you have made)
         **kwargs 
-        mesh            which mesh to plot the surface info on (e.g., inflated, pial...)
+        surf_name       which surface(s) to open (of the custom ones you have made)
+        mesh_list       which mesh(es) to plot the surface info on (e.g., inflated, pial...)
+        hemi_list       which hemispheres to load
+        roi_list        which roi outlines to load
+        roi_mask        mask by roi?
+
         -> Screen shot stuff
         do_scrn_shot    bool            take a screenshot of the surface when it is loaded?
         azimuth         float           camera angle(0-360) Default: 0
@@ -123,7 +154,20 @@ class FSMaker(object):
         elevation       float           camera angle(0-360) Default: 0
         roll            float           camera angle(0-360) Default: 0        
         '''
-        mesh = kwargs.get('mesh', 'inflated')
+        mesh_list = kwargs.get('mesh_list', ['inflated'])
+        hemi_list = kwargs.get('hemi_list', ['lh', 'rh'])
+        roi_list = kwargs.get('roi_list',None)
+        roi_mask = kwargs.get('roi_mask', None)
+
+        if not isinstance(mesh_list, list):
+            mesh_list = [mesh_list]
+        if not isinstance(hemi_list, list):
+            hemi_list = [hemi_list]
+        if (surf_name is not None) and (not isinstance(surf_name, list)):
+            surf_name = [surf_name]
+        if (roi_list is not None) and (not isinstance(roi_list, list)):
+            roi_list = [roi_list]
+
         cam_azimuth     = kwargs.get('azimuth', 0)
         cam_zoom        = kwargs.get('zoom', 1)
         cam_elevation   = kwargs.get('elevation', 0)
@@ -143,12 +187,59 @@ class FSMaker(object):
         else:
             col_bar_flag = ''
 
-        lh_surf_path = opj(self.custom_surf_dir, f'lh.{surf_name}')
-        rf_surf_path = opj(self.custom_surf_dir, f'rh.{surf_name}')
-
-        fs_cmd = f'''freeview -f lh.{mesh}:overlay={lh_surf_path}:{self.overlay_str[surf_name]} rh.{mesh}:overlay={rf_surf_path}:{self.overlay_str[surf_name]} --camera Azimuth {cam_azimuth} Zoom {cam_zoom} Elevation {cam_elevation} Roll {cam_roll} {col_bar_flag} {scr_shot_flag}'''
+        fs_cmd = f'freeview -f '
+        for mesh in mesh_list:
+            for this_hemi in hemi_list:
+                fs_cmd += f' {this_hemi}.{mesh}'
+                if roi_list is not None:
+                    for roi in roi_list:
+                        this_roi_path = self.get_roi_file(f'{this_hemi}.{roi}')
+                        fs_cmd += f':label={this_roi_path}:label_outline=True:label_visible=True'
+                if surf_name is not None:
+                    for this_surf_name in surf_name:
+                        this_surf_path = opj(self.custom_surf_dir, f'{this_hemi}.{this_surf_name}')                
+                        this_overlay_str = self.get_overlay_str(this_surf_name)
+                        fs_cmd += f':overlay={this_surf_path}:{this_overlay_str}'                        
+                        if roi_mask is not None:
+                            this_roi_path = self.get_roi_file(f'{this_hemi}.{roi_mask}')
+                            fs_cmd += f':overlay_mask={this_roi_path}'
+        fs_cmd +=  f' --camera Azimuth {cam_azimuth} Zoom {cam_zoom} Elevation {cam_elevation} Roll {cam_roll} '
+        fs_cmd += f'{col_bar_flag} {scr_shot_flag}'
         return fs_cmd 
 
+    def get_roi_file(self, roi_name):
+        roi = dag_find_file_in_folder(
+            filt=roi_name,
+            path=self.sub_label_dir,
+            recursive=True,
+            exclude=['._', '.thresh']
+            )        
+        if isinstance(roi, list):
+            roi = roi[0]
+        roi_path = opj(self.sub_label_dir, roi)
+        return roi_path
+    
+    def get_overlay_str(self, surf_name):
+        if surf_name in self.overlay_str.keys():
+            overlay_str = self.overlay_str[surf_name]
+        else:
+            # Not found in struct: check the custom surf dir...
+            print(f'{surf_name} not in dict')
+            print(f'Checking custom surf dir')
+            overlay_str = dag_find_file_in_folder(
+                filt=[surf_name, 'overlay'],
+                path=self.custom_surf_dir,
+                recursive=True,
+                return_msg=None,
+            )
+
+        if overlay_str is None:
+            overlay_str = 'heat'
+        elif isinstance(overlay_str, list):
+            overlay_str = overlay_str[0]
+        
+        return overlay_str
+    
 def dag_write_curv(fn, curv, fnum):
     ''' Adapted from https://github.com/simnibs/simnibs
     
@@ -536,8 +627,10 @@ def dag_get_rgb_str(rgb_vals):
     return rgb_str    
 
 
-# ***********************************************************************************************************************
-# ***********************************************************************************************************************
+
+
+
+
 # ***********************************************************************************************************************
 # ***********************************************************************************************************************
 

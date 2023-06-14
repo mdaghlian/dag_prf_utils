@@ -4,9 +4,17 @@ import matplotlib as mpl
 from matplotlib import patches
 from scipy.stats import binned_statistic
 from .utils import *
-
+import json
+import os
+opj = os.path.join
 default_ecc_bounds =  np.linspace(0, 5, 7)
 default_pol_bounds = np.linspace(-np.pi, np.pi, 13)
+
+# Load custom color maps
+path_to_utils = os.path.abspath(os.path.dirname(__file__))
+custom_col_path = opj(path_to_utils, 'cmaps.json')
+with open(custom_col_path, 'r') as fp:
+    custom_col_dict = json.load(fp)
 
 def dag_add_ecc_pol_lines(ax, **kwargs):
     '''
@@ -421,17 +429,17 @@ def dag_make_custom_cmap(col_list, col_steps=None, cmap_name=''):
     ------
 
     """
-    if col_steps==None:
+    if col_steps is None:
         col_val = np.linspace(0,1, len(col_list))
-    elif isinstance(col_steps, list):
+    elif isinstance(col_steps, list) or isinstance(col_steps, np.ndarray):
         col_val = np.array(col_steps)
-    # print(col_val)
+
     col_val = dag_rescale_bw(col_val) # recale to b/w 0 and 1
     # Change any values to rgb tuple
     conv2rgb = mcolors.ColorConverter().to_rgb
     for i_col,v_col in enumerate(col_list):
-        if not isinstance(v_col, tuple):
-            col_list[i_col] = conv2rgb(v_col)
+        if (not isinstance(v_col, tuple)) and (not isinstance(v_col, list)):
+            col_list[i_col] = conv2rgb(v_col) 
     # Check whether it is in 255 format (should be b/w 0 and 1)
     is_255 = False
     for i_col, v_col in enumerate(col_list):
@@ -458,7 +466,7 @@ def dag_make_diverge_cmap(low, high, mid='white'):
     return custom_cmap
 
 def dag_get_cmap(cmap_name, **kwargs):
-    
+    do_reverse = kwargs.get('reverse', False)
     if isinstance(cmap_name, dict):
         cdict_copy = cmap_name
         cmap_name = cdict_copy.get('cmap_name', '')
@@ -467,19 +475,50 @@ def dag_get_cmap(cmap_name, **kwargs):
     else:
         col_list = kwargs.get('col_list', None)
         col_steps = kwargs.get('col_steps', None)
-
+    
+    cc_dict = dag_load_custom_col_dict()
     if col_list is not None:
         this_cmap = dag_make_custom_cmap(col_list=col_list, col_steps=col_steps, cmap_name=cmap_name)
-    elif cmap_name in custom_col_dict.keys():
-        col_list = custom_col_dict[cmap_name]['col_list']
-        col_steps = custom_col_dict[cmap_name]['col_steps']
+    elif cmap_name in cc_dict.keys():
+        col_list = cc_dict[cmap_name]['col_list']
+        col_steps = cc_dict[cmap_name]['col_steps']
         this_cmap = dag_make_custom_cmap(col_list=col_list, col_steps=col_steps, cmap_name=cmap_name)
     elif cmap_name in mpl.cm.__dict__.keys():
         this_cmap = mpl.cm.__dict__[cmap_name]
-        
+    if do_reverse:
+        this_cmap = this_cmap.reversed()
     return this_cmap
 
+def dag_save_cmap(cmap_name, col_list, col_steps=None, ow=False):
+    if col_steps is None:
+        col_steps = np.linspace(0,1, len(col_list))
+    cc_dict = dag_load_custom_col_dict()
+    while (cmap_name in custom_col_dict.keys()) and (not ow):
+        print(f'{cmap_name} already exists, overwrite? (y/n)')
+        overwrite = input()
+        if overwrite=='y':
+            break            
+        print('Enter name for cmap')
+        cmap_name = input()            
+    print(f'saving cmap {cmap_name}')
+    print(f'col_list={col_list}')    
+    print(f'col_steps={col_steps}')    
+    cc_dict[cmap_name] = {}
+    cc_dict[cmap_name]['col_list'] = list(col_list)
+    cc_dict[cmap_name]['col_steps'] = list(col_steps)    
+    # Make a backup...
+    os.system(f'cp {custom_col_path} {custom_col_path}.bu')    
+    with open(custom_col_path, 'w') as fp:
+        json.dump(cc_dict, fp,sort_keys=True, indent=4)
+    return
+
+def dag_load_custom_col_dict():
+    with open(custom_col_path, 'r') as fp:
+        cc_dict = json.load(fp)        
+    return cc_dict
+
 def dag_rapid_corr(ax, X,Y, **kwargs):
+    do_id_line = kwargs.get('do_id_line', False)
     do_ow = kwargs.get('ow', False)
     do_scatter = kwargs.get('do_scatter', True)
     do_line = kwargs.get('do_line', False)
@@ -496,6 +535,14 @@ def dag_rapid_corr(ax, X,Y, **kwargs):
 
     kwargs['title'] = kwargs.get('title', '') + corr_str
     
+    if do_id_line:
+        xlim = ax.get_xlim()
+        ylim = ax.get_ylim()
+        min_v = np.min([xlim[0], ylim[0]])
+        max_v = np.max([xlim[1], ylim[1]])
+        ax.plot((min_v,max_v), (min_v,max_v), 'k')
+        ax.set_xlim(min_v,max_v)
+        ax.set_ylim(min_v,max_v)
     dag_add_ax_basics(ax=ax, **kwargs)
 
 
@@ -503,44 +550,44 @@ def dag_rapid_corr(ax, X,Y, **kwargs):
 def dag_rgb(r,g,b):
     return [r/255,g/255,b/255]
 
-ecc_custom_col_list = [
-    dag_rgb(128, 0, 0),
-    dag_rgb(255, 0, 0),
-    dag_rgb(255, 255, 0),
-    dag_rgb(0, 255, 0),
-    dag_rgb(0, 128, 0),
-    dag_rgb(0, 128, 128),
-    dag_rgb(0, 0, 255),
-    dag_rgb(0, 0, 128),
-    dag_rgb(128, 0, 128)
-    ]
-ecc_custom_col_steps = [0, 0.1, 0.25, 0.5, 1, 2, 3, 4, 5]
-ecc_custom_dict = {
-    'col_list' : ecc_custom_col_list,
-    'col_steps' :  ecc_custom_col_steps
-}
-pol_custom_col_list = [
-    dag_rgb(255, 0, 0),
-    dag_rgb(255, 255, 0),
-    dag_rgb(0, 128, 0),
-    dag_rgb(0, 255, 255),
-    dag_rgb(0, 0, 255),
-    dag_rgb(238, 130, 238),
-    dag_rgb(255, 0, 0),
-    dag_rgb(255, 255, 0),
-    dag_rgb(0, 128, 0),
-    dag_rgb(0, 255, 255),
-    dag_rgb(0, 0, 255),
-    dag_rgb(238, 130, 238),
-    dag_rgb(255, 0, 0), 
-    ]
+# ecc_custom_col_list = [
+#     dag_rgb(128, 0, 0),
+#     dag_rgb(255, 0, 0),
+#     dag_rgb(255, 255, 0),
+#     dag_rgb(0, 255, 0),
+#     dag_rgb(0, 128, 0),
+#     dag_rgb(0, 128, 128),
+#     dag_rgb(0, 0, 255),
+#     dag_rgb(0, 0, 128),
+#     dag_rgb(128, 0, 128)
+#     ]
+# ecc_custom_col_steps = [0, 0.1, 0.25, 0.5, 1, 2, 3, 4, 5]
+# ecc_custom_dict = {
+#     'col_list' : ecc_custom_col_list,
+#     'col_steps' :  ecc_custom_col_steps
+# }
+# pol_custom_col_list = [
+#     dag_rgb(255, 0, 0),
+#     dag_rgb(255, 255, 0),
+#     dag_rgb(0, 128, 0),
+#     dag_rgb(0, 255, 255),
+#     dag_rgb(0, 0, 255),
+#     dag_rgb(238, 130, 238),
+#     dag_rgb(255, 0, 0),
+#     dag_rgb(255, 255, 0),
+#     dag_rgb(0, 128, 0),
+#     dag_rgb(0, 255, 255),
+#     dag_rgb(0, 0, 255),
+#     dag_rgb(238, 130, 238),
+#     dag_rgb(255, 0, 0), 
+#     ]
 
-pol_custom_col_steps = [-3.14, -2.65, -2.09, -1.75, -1.05, -0.5, 0, 0.5, 1.05, 1.57, 2.09, 2.65, 3.14]
-pol_custom_dict = {
-    'col_list' : pol_custom_col_list,
-    'col_steps' : pol_custom_col_steps
-}
-custom_col_dict = {
-    'pol' : pol_custom_dict,
-    'ecc' : ecc_custom_dict,
-}
+# pol_custom_col_steps = [-3.14, -2.65, -2.09, -1.75, -1.05, -0.5, 0, 0.5, 1.05, 1.57, 2.09, 2.65, 3.14]
+# pol_custom_dict = {
+#     'col_list' : pol_custom_col_list,
+#     'col_steps' : pol_custom_col_steps
+# }
+# custom_col_dict = {
+#     'pol' : pol_custom_dict,
+#     'ecc' : ecc_custom_dict,
+# }

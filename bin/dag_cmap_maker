@@ -1,0 +1,229 @@
+#!/usr/bin/env python
+#$ -j Y
+#$ -cwd
+#$ -V
+import sys
+import getopt
+
+import matplotlib.pyplot as plt
+import numpy as np
+
+from dag_prf_utils.plot_functions import *
+import dag_prf_utils as dpu
+# Load custom color maps
+# path_to_utils = os.path.abspath(os.path.dirname(dpu.__file__))
+# custom_col_path = opj(path_to_utils, 'cmaps.json')
+# with open(custom_col_path, 'r') as fp:
+#     custom_col_dict = json.load(fp)
+cc_dict = dag_load_custom_col_dict()
+
+def main(argv):
+    """
+    ---------------------------------------------------------------------------------------------------
+    Create a custom colormap
+
+    Args (optional):
+        --vmin      min color value
+        --vmax      max color value
+        --n_steps   number of points in the cmap...
+        --init      starting point for the cmap (i.e., use an old cmap)
+    Example:
+    ---------------------------------------------------------------------------------------------------
+    """
+    vmin = 0
+    vmax = 10
+    n_steps = 3
+    init = None
+
+    try:
+        opts = getopt.getopt(argv,"h:",["vmin=", "vmax=","n_steps=", "init="])[0]
+    except getopt.GetoptError:
+        print(main.__doc__)
+        sys.exit(2)
+
+    for opt, arg in opts:
+        if opt == '-q':
+            print(main.__doc__)
+            sys.exit()
+
+        elif opt=="--vmin":
+            vmin = float(arg)
+        elif opt=="--vmax":
+            vmax = float(arg)
+        elif opt=="--n_steps":
+            n_steps = int(arg)
+        elif opt=="--init":
+            init = arg            
+    
+    # Define the callback function for clicking on points
+    class RGB_Control():
+        def __init__(self, vmin, vmax, n_steps, init):            
+            self.vmin = vmin
+            self.vmax = vmax
+            self.n_steps = n_steps
+            self.x_vals = np.around(np.linspace(self.vmin,self.vmax,self.n_steps), 3)
+            #
+            vmin = None
+            vmax = None
+            n_steps = None
+            #
+            print(init)
+            print(self.n_steps)
+            if init is not None:
+                if init in custom_col_dict.keys():
+                    print('overwriting steps...')
+                    self.vmin = custom_col_dict[init]['col_steps'][0]
+                    self.vmax = custom_col_dict[init]['col_steps'][-1]
+                    self.x_vals = custom_col_dict[init]['col_steps']
+                    self.n_steps = len(custom_col_dict[init]['col_steps'])
+
+                init_cmap = dag_get_cmap(init)
+                init_norm = mpl.colors.Normalize()
+                init_norm.vmin = self.vmin
+                init_norm.vmax = self.vmax
+                rgb_cols = init_cmap(init_norm(self.x_vals))
+                y1 = np.array([rgb_cols[i,0] for i in range(self.n_steps)])
+                y2 = np.array([rgb_cols[i,1] for i in range(self.n_steps)])
+                y3 = np.array([rgb_cols[i,2] for i in range(self.n_steps)])
+            else:
+                # Initialize the data
+                y1 = np.random.rand(self.n_steps)
+                y2 = np.random.rand(self.n_steps)
+                y3 = np.random.rand(self.n_steps)
+
+            #
+            self.selected_line = None
+            self.selected_index = None
+            self.this_col_list = None
+
+            # Create a figure and axes
+            self.fig, ax = plt.subplots(2,1)
+            self.fig.set_size_inches(5,10)
+            self.ax1 = ax[0] # for rgb lines
+            self.ax2 = ax[1] # for cmap 
+            #
+            self.line1, = self.ax1.plot(self.x_vals, y1, marker='o', linestyle='-', color='red', label='r')
+            self.line2, = self.ax1.plot(self.x_vals, y2, marker='o', linestyle='-', color='green', label='g')
+            self.line3, = self.ax1.plot(self.x_vals, y3, marker='o', linestyle='-', color='blue', label='b')
+            ym = (y1+y2+y3)/2
+            self.line4, = self.ax1.plot(self.x_vals, ym, linestyle='-', color='k', alpha=.25, linewidth=10)
+            self.ax1.set_xlim(self.vmin,self.vmax)
+            self.ax1.set_ylim(0,1)
+            self.ax1.set_xticks(self.x_vals)    
+            self.ax1.grid('all')
+            self.ax1.legend()
+            # Stuff for cmap
+            self.dv = self.vmax - self.vmin
+            n_pix = 255            
+            self.demo_mat = np.ones((25,n_pix)) * np.linspace(self.vmin,self.vmax,n_pix)
+            self.add_cmap()
+
+
+        def on_click(self, event):
+            if event.button == 1:  # Left mouse button
+                if event.inaxes == self.ax1:
+                    if self.selected_line is not None:
+                        # Release previously selected point
+                        self.selected_line.set_linewidth(1)  # Reset the line width
+                        self.selected_line = None
+                        self.selected_index = None
+                    else:
+                        # Select a new point
+                        if self.line1.contains(event)[0]:
+                            self.selected_line = self.line1
+                            self.selected_index = self.line1.contains(event)[1]['ind'][0]
+                        elif self.line2.contains(event)[0]:
+                            self.selected_line = self.line2
+                            self.selected_index = self.line2.contains(event)[1]['ind'][0]
+                        elif self.line3.contains(event)[0]:
+                            self.selected_line = self.line3
+                            self.selected_index = self.line3.contains(event)[1]['ind'][0]
+
+                        if self.selected_line is not None:
+                            # Increase the line width to indicate selection
+                            self.selected_line.set_linewidth(3)
+                            self.fig.canvas.draw()
+        def on_motion(self, event):
+            # Define the callback function for dragging points
+            if event.button == 1 and self.selected_line is not None:  # Left mouse button
+                if event.inaxes == self.ax1:
+                    this_ydata = self.selected_line.get_ydata()
+                    this_ydata[self.selected_index] = event.ydata
+                    self.selected_line.set_ydata(this_ydata)
+                    self.fig.canvas.draw()
+        
+        def on_release(self, event):
+
+            if event.button == 1:  # Left mouse button
+                if self.selected_line is not None:
+                    # Release the selected point
+                    self.selected_line.set_linewidth(1)  # Reset the line width
+                    self.selected_line = None
+                    self.selected_index = None
+                    self.fig.canvas.draw()
+                    # add cmap
+                    self.add_cmap()
+                    self.fig.canvas.draw_idle()
+        def add_cmap(self):
+            # Add colormap
+            r_data = self.line1.get_ydata()
+            g_data = self.line2.get_ydata()
+            b_data = self.line3.get_ydata()
+            m_data = (r_data + g_data + b_data) / 3
+            self.line4.set_ydata(m_data)
+            col_list = [
+                (np.around(r_data[i],3), np.around(g_data[i],3), np.around(b_data[i],3)) for i in range(self.n_steps)
+            ]
+            print('')
+            print(f'col_list={col_list}')
+            print(f'col_steps={self.x_vals}')
+            self.this_col_list = col_list.copy()
+            widg_cmap = dag_get_cmap('widg_cmap', col_list=col_list, col_steps=self.x_vals)
+            self.ax2.imshow(
+                self.demo_mat,
+                cmap=widg_cmap, vmin=self.vmin, vmax=self.vmax, interpolation='none',
+                extent=[self.vmin, self.vmax, self.dv, 0])
+            self.ax2.set_aspect(.2)
+            self.ax2.set_yticks([])        
+            self.ax2.set_xticks(self.x_vals)                
+    rgb_control = RGB_Control(vmin=vmin, vmax=vmax, n_steps=n_steps, init=init)
+
+    # Connect the event handlers
+    rgb_control.fig.canvas.mpl_connect('button_press_event', rgb_control.on_click)
+    rgb_control.fig.canvas.mpl_connect('motion_notify_event', rgb_control.on_motion)
+    rgb_control.fig.canvas.mpl_connect('button_release_event', rgb_control.on_release)
+
+    # show the plot
+    plt.show()
+
+    print('Save the colormap? (y/n)')
+    save_cmap = input()
+    if save_cmap=='y':
+        print('Enter name for cmap')
+        # Check is the 
+        cmap_name = input()
+        dag_save_cmap(
+            cmap_name, 
+            col_list=rgb_control.this_col_list, 
+            col_steps=rgb_control.x_vals, ow=False)
+        # ow = False
+        # while (cmap_name in custom_col_dict.keys()) and (not ow):
+        #     print(f'{cmap_name} already exists, overwrite? (y/n)')
+        #     overwrite = input()
+        #     if overwrite=='y':
+        #         break            
+        #     print('Enter name for cmap')
+        #     cmap_name = input()            
+        # print(f'saving cmap {cmap_name}')
+        # print(rgb_control.this_col_list)
+        # custom_col_dict[cmap_name] = {}
+        # custom_col_dict[cmap_name]['col_list'] = list(rgb_control.this_col_list)
+        # custom_col_dict[cmap_name]['col_steps'] = list(rgb_control.x_vals)
+        # # Make a backup...
+        # os.system(f'cp {custom_col_path} {custom_col_path}.bu')
+        # with open(custom_col_path, '+w') as fp:
+        #     json.dump(custom_col_dict, fp,sort_keys=True, indent=4)
+
+
+if __name__ == "__main__":
+    main(sys.argv[1:])

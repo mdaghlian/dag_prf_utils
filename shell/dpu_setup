@@ -1,0 +1,56 @@
+# #!/usr/bin/env bash
+
+# specify your folder here!
+export DAG_UTILS="/data1/projects/dumoulinlab/Lab_members/Marcus/programs/dag_prf_utils"
+
+DPU_SETUP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+DPU_SETUP_FILE="${DPU_SETUP_DIR}/dpu_setup"
+DPU_REPO_DIR=$(dirname ${DPU_SETUP_DIR})
+
+if [[ $1 == "setup" ]]; then
+    echo "==================================================================================================="
+    echo "                            SETUP SCRIPT FOR DAG PRF UTILS                                         "
+    echo "==================================================================================================="
+    echo "Setting up ~/.bash_profile"
+    # ignore permission changes in git
+    git config core.fileMode false 2>/dev/null
+
+    # make scripts executable
+    chmod -R 775 ${DPU_REPO_DIR}/bin
+    chmod -R 775 ${DPU_REPO_DIR}/shell
+
+    if [ -f ~/.bash_profile ]; then
+        search_for="source ${DPU_SETUP_FILE}"
+        case `grep -Fx "${search_for}" ~/.bash_profile >/dev/null; echo $?` in
+            0)
+                # code if found
+                echo "DPU already present"
+                ;;
+            1)
+                # code if not found
+                (
+                echo 
+                echo "# Inserted via the DAG UTILS-repository"
+                echo "source ${DPU_SETUP_FILE}"
+                ) >> ~/.bash_profile
+                ;;
+            *)
+                # code if an error occurred
+                echo "ERROR: Could not complete setup.."
+                ;;
+        esac
+    else
+        (
+        echo "# .bash_profile"
+        echo "# Inserted via the linescanning-repository"
+        echo "source ${DPU_SETUP_FILE}"
+        ) >> ~/.bash_profile
+    fi
+    
+    # install repo
+    python $DPU_REPO_DIR/setup.py develop    
+fi
+
+# Make executables available in environment
+export PATH=${PATH}:${DAG_UTILS}/bin
+export PATH=${PATH}:${DAG_UTILS}/shell

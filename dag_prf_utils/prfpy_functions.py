@@ -90,7 +90,7 @@ def set_tc_shape (tc_in, n_timepts = 225):
         tc_out = tc_in
     return tc_out
 
-def mask_time_series(ts, mask, ts_axis = 1, zero_pad = True):    
+def mask_time_series(ts, mask, ts_axis = 1, zero_pad = False):    
     '''
     Mask certain voxel time series for later fitting. 
     ts          np.ndarray          time series, default is nvx x time 
@@ -124,6 +124,27 @@ def mask_time_series(ts, mask, ts_axis = 1, zero_pad = True):
             sys.exit()
     
     return ts_out
+
+def process_prfpy_out(prfpy_out, mask=None):    
+    '''
+    Fit parameters can come out with nans, and are in the wrong shape
+    If we masked certain timeseries, we want to go back and put in empty values for fitted parameters. 
+    This is so that the shape of the vector is nice... (i.e., fits on the surface)
+    '''
+    if mask is None:
+        mask = np.ones(prfpy_out.shape[0], dtype=bool)
+    total_n_vx = mask.shape[0]
+    n_vx_fit = prfpy_out.shape[0]
+    n_pars = prfpy_out.shape[1]
+    n_vx_in_mask = mask.sum()
+    assert n_vx_fit==n_vx_in_mask
+    
+    filled_pars = np.zeros((total_n_vx, n_pars))
+
+    filled_pars[mask,:] = dag_filter_for_nans(prfpy_out)
+
+    return filled_pars
+
 
 def make_vx_wise_bounds(n_vx, bounds_in, **kwargs):
     '''
@@ -229,6 +250,7 @@ class Prf1T1M(object):
         self.model_labels = print_p()[self.model] # Get names for different model parameters...
         self.prf_params_np = prf_params
         self.fixed_hrf = kwargs.get('fixed_hrf', False)
+        self.incl_rsq = kwargs.get('incl_rsq', True)
         #
         self.task = kwargs.get('task', None)
         self.n_vox = self.prf_params_np.shape[0]
@@ -237,6 +259,8 @@ class Prf1T1M(object):
         mod_labels = print_p()[f'{model}'] 
         for key in mod_labels.keys():
             if ('hrf' in key) and self.fixed_hrf:
+                continue
+            if ('rsq' in key) and not self.incl_rsq:
                 continue                    
             self.params_dd[key] = self.prf_params_np[:,mod_labels[key]]
         
@@ -326,7 +350,7 @@ class Prf1T1M(object):
         hist_col = kwargs.get('hist_col', None)
         ax.hist(self.pd_params[param][vx_mask].to_numpy(), color=hist_col, alpha=alpha)
         ax.set_title(param)
-        # dag_add_ax_basics(ax=ax, **kwargs)
+        dag_add_ax_basics(ax=ax, **kwargs)
 
     def rapid_scatter(self, th={'min-rsq':.1, 'max-ecc':5}, ax=None, dot_col='k', **kwargs):
         if ax==None:

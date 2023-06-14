@@ -127,7 +127,7 @@ class FSMaker(object):
         
         os.chdir(self.sub_surf_dir) # move to freeview dir        
         fs_cmd = self.write_fs_cmd(surf_name=surf_name, **kwargs)
-        self.save_fs_cmd(surf_name, **kwargs)
+        # self.save_fs_cmd(surf_name, **kwargs)
         os.system(fs_cmd)        
 
     def save_fs_cmd(self, surf_name, **kwargs):

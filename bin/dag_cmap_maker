@@ -30,10 +30,10 @@ def main(argv):
     Example:
     ---------------------------------------------------------------------------------------------------
     """
-    vmin = 0
-    vmax = 10
-    n_steps = 3
-    init = None
+    vmin = None
+    vmax = None
+    n_steps = None
+    init = 'hsv'
 
     try:
         opts = getopt.getopt(argv,"h:",["vmin=", "vmax=","n_steps=", "init="])[0]
@@ -61,7 +61,6 @@ def main(argv):
             self.vmin = vmin
             self.vmax = vmax
             self.n_steps = n_steps
-            self.x_vals = np.around(np.linspace(self.vmin,self.vmax,self.n_steps), 3)
             #
             vmin = None
             vmax = None
@@ -69,14 +68,28 @@ def main(argv):
             #
             print(init)
             print(self.n_steps)
-            if init is not None:
-                if init in custom_col_dict.keys():
-                    print('overwriting steps...')
+            if init in custom_col_dict.keys():                    
+                # If init is a custom color map (i.e., in our json file)
+                # & vmin, vmax, or n_steps are not specified; we take them from the json file ...
+                if self.vmin is None:
                     self.vmin = custom_col_dict[init]['col_steps'][0]
-                    self.vmax = custom_col_dict[init]['col_steps'][-1]
-                    self.x_vals = custom_col_dict[init]['col_steps']
-                    self.n_steps = len(custom_col_dict[init]['col_steps'])
+                    self.vmax = custom_col_dict[init]['col_steps'][-1]                    
+                if self.n_steps is None:
+                    self.n_steps = len(custom_col_dict[init]['col_steps'])            
+            else: 
+                # If init is a matplotlib colormap. 
+                # & vmin, vmax, or n_steps are not specified; we use defaults
+                if self.vmin is None:
+                    self.vmin = 0
+                    self.vmax = 10
+                if self.n_steps is None:
+                    self.n_steps = 5
 
+            # x values for cmap (range)        
+            self.x_vals = np.around(np.linspace(self.vmin,self.vmax,self.n_steps), 3)
+            # Now find the 'y' values for the cmap... 
+            # If not specifying a starting point, random...
+            if init is not None:
                 init_cmap = dag_get_cmap(init)
                 init_norm = mpl.colors.Normalize()
                 init_norm.vmin = self.vmin

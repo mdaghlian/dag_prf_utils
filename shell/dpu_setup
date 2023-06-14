@@ -42,7 +42,7 @@ if [[ $1 == "setup" ]]; then
     else
         (
         echo "# .bash_profile"
-        echo "# Inserted via the linescanning-repository"
+        echo "# Inserted via the dag_prf_utils repository"
         echo "source ${DPU_SETUP_FILE}"
         ) >> ~/.bash_profile
     fi

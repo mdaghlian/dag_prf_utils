@@ -111,10 +111,10 @@ class FSMaker(object):
 
             #
             overlay_to_save += '\n\t{'
-            overlay_to_save += f'\n\t\t"r":{int(this_col_triple[0]*255)},'
-            overlay_to_save += f'\n\t\t"g":{int(this_col_triple[1]*255)},'
-            overlay_to_save += f'\n\t\t"b":{int(this_col_triple[2]*255)},'
-            overlay_to_save += f'\n\t\t"val":{float(fv_param):.2f}'
+            overlay_to_save += f'\n\t\t"b": {int(this_col_triple[2]*255)},'
+            overlay_to_save += f'\n\t\t"g": {int(this_col_triple[1]*255)},'
+            overlay_to_save += f'\n\t\t"r": {int(this_col_triple[0]*255)},'
+            overlay_to_save += f'\n\t\t"val": {float(fv_param):.2f}'
             overlay_to_save += '\n\t}'
             if fv_param!=fv_param_steps[-1]:
                 overlay_to_save += ','
@@ -122,7 +122,7 @@ class FSMaker(object):
         dag_str2file(filename=opj(self.custom_surf_dir, f'{surf_name}_overlay'),txt=overlay_to_save)
         self.overlay_str[surf_name] = overlay_custom_str
         self.surf_list.append(surf_name)
-    def open_fs_surface(self, surf_name, **kwargs):
+    def open_fs_surface(self, surf_name='curv', **kwargs):
         # surf name - which surface to load...
         
         os.chdir(self.sub_surf_dir) # move to freeview dir        
@@ -130,13 +130,13 @@ class FSMaker(object):
         # self.save_fs_cmd(surf_name, **kwargs)
         os.system(fs_cmd)        
 
-    def save_fs_cmd(self, surf_name, **kwargs):
+    def save_fs_cmd(self, surf_name='curv', **kwargs):
         cmd_name = kwargs.get('cmd_name', f'{surf_name}_cmd.txt')
         print(f'Custom overlay string saved here: ({opj(self.custom_surf_dir, cmd_name)})')
         fs_cmd = self.write_fs_cmd(surf_name=surf_name, **kwargs)
         dag_str2file(filename=opj(self.custom_surf_dir, cmd_name),txt=fs_cmd)
         
-    def write_fs_cmd(self, surf_name=None, **kwargs):
+    def write_fs_cmd(self, surf_name='curv', **kwargs):
         '''
         Write the bash command to open the specific surface with the overlay
 
@@ -163,8 +163,8 @@ class FSMaker(object):
             mesh_list = [mesh_list]
         if not isinstance(hemi_list, list):
             hemi_list = [hemi_list]
-        if (surf_name is not None) and (not isinstance(surf_name, list)):
-            surf_name = [surf_name]
+        if not isinstance(surf_name, list):
+            surf_name = [surf_name]        
         if (roi_list is not None) and (not isinstance(roi_list, list)):
             roi_list = [roi_list]
 
@@ -172,15 +172,21 @@ class FSMaker(object):
         cam_zoom        = kwargs.get('zoom', 1)
         cam_elevation   = kwargs.get('elevation', 0)
         cam_roll        = kwargs.get('roll', 0)
-        do_scrn_shot = kwargs.get('do_scrn_shot', False)
-        scr_shot_file = kwargs.get('scr_shot_file', None)
-        if do_scrn_shot:
-            if scr_shot_file==None:
-                scr_shot_file = opj(self.custom_surf_dir, f'{surf_name}_az{cam_azimuth}_z{cam_zoom}_e{cam_elevation}_r{cam_roll}')
-            scr_shot_flag = f"--ss {scr_shot_file}"
+        do_scrn_shot    = kwargs.get('do_scrn_shot', False)
+        scr_shot_file   = kwargs.get('scr_shot_file', None)
+        if do_scrn_shot:         
+            if scr_shot_file is None:
+                # Not specified -save in custom surf dir
+                scr_shot_file = opj(self.custom_surf_dir, f'{surf_name[0]}_az{cam_azimuth}_z{cam_zoom}_e{cam_elevation}_r{cam_roll}')
+            if os.path.isdir(scr_shot_file):
+                # Folder specified, add the name...
+                scr_shot_flag = f"--ss {opj(scr_shot_file, surf_name[0])}"
+            else:
+                # Specific file specified
+                scr_shot_flag = f"--ss {scr_shot_file}"
         else:
             scr_shot_flag = ""
-        
+
         do_col_bar  = kwargs.get('do_col_bar', True)
         if do_col_bar:
             col_bar_flag = '--colorscale'
@@ -195,14 +201,15 @@ class FSMaker(object):
                     for roi in roi_list:
                         this_roi_path = self.get_roi_file(f'{this_hemi}.{roi}')
                         fs_cmd += f':label={this_roi_path}:label_outline=True:label_visible=True'
-                if surf_name is not None:
-                    for this_surf_name in surf_name:
-                        this_surf_path = opj(self.custom_surf_dir, f'{this_hemi}.{this_surf_name}')                
-                        this_overlay_str = self.get_overlay_str(this_surf_name)
-                        fs_cmd += f':overlay={this_surf_path}:{this_overlay_str}'                        
-                        if roi_mask is not None:
-                            this_roi_path = self.get_roi_file(f'{this_hemi}.{roi_mask}')
-                            fs_cmd += f':overlay_mask={this_roi_path}'
+                # if surf_name is not None:
+                for this_surf_name in surf_name:
+                    # this_surf_path = opj(self.custom_surf_dir, f'{this_hemi}.{this_surf_name}')                
+                    this_surf_path = self.get_surf_path(this_hemi=this_hemi, this_surf_name=this_surf_name)
+                    this_overlay_str = self.get_overlay_str(this_surf_name)
+                    fs_cmd += f':overlay={this_surf_path}:{this_overlay_str}'                        
+                    if roi_mask is not None:
+                        this_roi_path = self.get_roi_file(f'{this_hemi}.{roi_mask}')
+                        fs_cmd += f':overlay_mask={this_roi_path}'
         fs_cmd +=  f' --camera Azimuth {cam_azimuth} Zoom {cam_zoom} Elevation {cam_elevation} Roll {cam_roll} '
         fs_cmd += f'{col_bar_flag} {scr_shot_flag}'
         return fs_cmd 
@@ -218,6 +225,22 @@ class FSMaker(object):
             roi = roi[0]
         roi_path = opj(self.sub_label_dir, roi)
         return roi_path
+    def get_surf_path(self, this_hemi, this_surf_name):
+        # [1] Check if it exists in the custom surf dir
+        this_surf_path = opj(self.custom_surf_dir, f'{this_hemi}.{this_surf_name}')
+        if os.path.exists(this_surf_path):
+            pass
+        else: 
+            # Now we need to look a bit deeper
+            this_surf_path = dag_find_file_in_folder(
+                filt=[this_hemi, f'.{this_surf_name}'],
+                exclude=['pial'],
+                path=self.sub_surf_dir,
+                recursive=True,
+                return_msg=None,
+            )
+
+        return this_surf_path
     
     def get_overlay_str(self, surf_name):
         if surf_name in self.overlay_str.keys():
@@ -226,18 +249,19 @@ class FSMaker(object):
             # Not found in struct: check the custom surf dir...
             print(f'{surf_name} not in dict')
             print(f'Checking custom surf dir')
-            overlay_str = dag_find_file_in_folder(
+            overlay_str = ':overlay_custom='
+            overlay_str += dag_find_file_in_folder(
                 filt=[surf_name, 'overlay'],
-                path=self.custom_surf_dir,
+                path=self.sub_surf_dir,
                 recursive=True,
                 return_msg=None,
             )
 
         if overlay_str is None:
-            overlay_str = 'heat'
+            overlay_str = ''#'greyscale :colormap=grayscale' #  grayscale/lut/heat/jet/gecolor/nih/pet/binary
         elif isinstance(overlay_str, list):
             overlay_str = overlay_str[0]
-        
+
         return overlay_str
     
 def dag_write_curv(fn, curv, fnum):

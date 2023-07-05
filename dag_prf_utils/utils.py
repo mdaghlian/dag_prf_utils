@@ -4,6 +4,9 @@ import os
 import pandas as pd
 import sys
 import struct
+import string
+import random
+
 opj = os.path.join
 
 
@@ -44,7 +47,7 @@ def dag_load_nfaces_nverts(sub, fs_dir):
     return n_verts, n_faces
 
 
-def dag_load_roi(sub, roi, fs_dir, split_LR=False):
+def dag_load_roi(sub, roi, fs_dir, split_LR=False, do_bool=True):
     '''
     Return a boolean array of voxels included in the specified roi
     array is vector with each entry corresponding to a point on the subjects cortical surface
@@ -59,24 +62,26 @@ def dag_load_roi(sub, roi, fs_dir, split_LR=False):
     n_verts = dag_load_nverts(sub=sub, fs_dir=fs_dir)
     total_num_vx = np.sum(n_verts)
     
-    # If *ALL* voxels to be included
     if roi=='all':
         roi_idx = np.ones(total_num_vx, dtype=bool)
         return roi_idx    
     elif roi=='occ':
         roi_idx = dag_id_occ_ctx(sub=sub, fs_dir=fs_dir, split_LR=split_LR)
         return roi_idx
-    elif roi=='demo':
+    elif 'demo' in roi:
+        if '-' in roi:
+            n_demo = int(roi.split('-')[-1])
+        else:
+            n_demo = 100
         roi_idx = np.zeros(total_num_vx, dtype=bool)
-        roi_idx[:100] = True
+        roi_idx[:n_demo] = True
         return roi_idx
 
-    
     # Else look for rois in subs freesurfer label folder
     roi_dir = opj(fs_dir, sub, 'label')    
     if not isinstance(roi, list): # roi can be a list 
         roi = [roi]    
-    
+
     roi_idx = []
     roi_idx_split = {'lh':[], 'rh':[]}
     for this_roi in roi:    
@@ -100,9 +105,15 @@ def dag_load_roi(sub, roi, fs_dir, split_LR=False):
                 contents = f.readlines()            
             idx_str = [contents[i].split(' ')[0] for i in range(2,len(contents))]
             idx_int = [int(idx_str[i]) for i in range(len(idx_str))]
-            this_bool = np.zeros(n_verts[i], dtype=bool)
-            this_bool[idx_int] = True
-            if do_not:
+            val_str = [contents[i].split(' ')[-1].split('\n')[0] for i in range(2,len(contents))]
+            val_int = [int(float(val_str[i])) for i in range(len(val_str))]
+            if do_bool:
+                this_bool = np.zeros(n_verts[i], dtype=int)
+                this_bool[idx_int] = True
+            else:
+                this_bool = np.zeros(n_verts[i], dtype=bool)
+                this_bool[idx_int] = val_int
+            if do_not:            
                 this_bool = ~this_bool
 
             LR_bool.append(this_bool)
@@ -112,12 +123,16 @@ def dag_load_roi(sub, roi, fs_dir, split_LR=False):
         roi_idx_split['rh'].append(LR_bool[1])
 
     roi_idx = np.vstack(roi_idx)
-    roi_idx = roi_idx.any(0)
-
     roi_idx_split['lh'] = np.vstack(roi_idx_split['lh'])
-    roi_idx_split['lh'] = roi_idx_split['lh'].any(0)
     roi_idx_split['rh'] = np.vstack(roi_idx_split['rh'])
-    roi_idx_split['rh'] = roi_idx_split['rh'].any(0)
+    if do_bool:
+        roi_idx = roi_idx.any(0)
+        roi_idx_split['lh'] = roi_idx_split['lh'].any(0)
+        roi_idx_split['rh'] = roi_idx_split['rh'].any(0)    
+    else:
+        roi_idx = np.squeeze(roi_idx)
+        roi_idx_split['lh'] = np.squeeze(roi_idx_split['lh'])
+        roi_idx_split['rh'] = np.squeeze(roi_idx_split['rh'])
 
     if split_LR:
         return roi_idx_split
@@ -215,6 +230,12 @@ def dag_get_corr(a, b):
     corr = np.corrcoef(a,b)[0,1]
     return corr
 
+def dag_random_string(length):
+    # choose from all lowercase letter
+    letters = string.ascii_lowercase
+    result_str = ''.join(random.choice(letters) for i in range(length))    
+    return result_str
+
 def dag_coord_convert(a,b,old2new):
     ''' 
     Convert cartesian to polar and vice versa
@@ -233,8 +254,23 @@ def dag_coord_convert(a,b,old2new):
         pol = np.arctan2( b, a ) # Polar angle
         new_a = ecc
         new_b = pol
-                            
-    return new_a, new_b    
+        
+    return new_a, new_b
+
+def dag_pol_to_clock(pol):
+    # Convert angles to the range [0, 2*pi)
+    # rotate by 90
+    pol = pol + np.pi/2
+    pol = np.mod(pol, 2 * np.pi)
+
+    # Convert angles to the range [0, 12)
+    clock_values = (pol / (2 * np.pi)) * 12
+    return clock_values
+
+def dag_weighted_mean(w,x):
+    w_mean = np.sum(w * x) / np.sum(w)
+    return w_mean
+
 
 def dag_get_pos_change(old_x, old_y, new_x, new_y):
     dx = new_x - old_x
@@ -341,7 +377,7 @@ def dag_find_file_in_folder_OLD(filt, path, return_msg='error', exclude=None):
         return match_list
     
 
-def dag_find_file_in_folder(filt, path, return_msg='error', exclude=None, recursive=False, file_limit=300):
+def dag_find_file_in_folder(filt, path, return_msg='error', exclude=None, recursive=False, file_limit=9999):
     """get_file_from_substring
     Setup to be compatible with JH linescanning toolbox function (linescanning.utils.get_file_from_substring)
     

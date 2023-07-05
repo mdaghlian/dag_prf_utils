@@ -87,27 +87,44 @@ def dag_update_fig_fontsize(fig, new_font_size):
         elif isinstance(i_kid, mpl.text.Text):
             i_kid.set_fontsize(new_font_size)
 
-def dag_update_ax_fontsize(ax, new_font_size):
-    for item in ([ax.title, ax.xaxis.label, ax.yaxis.label] +
-                ax.get_xticklabels() + ax.get_yticklabels()):
-        item.set_fontsize(new_font_size)        
-    for item in ax.get_children():
-        if isinstance(item, mpl.legend.Legend):
-            texts = item.get_texts()
-            if not isinstance(texts, list):
-                texts = [texts]
-            for i_txt in texts:
-                i_txt.set_fontsize(new_font_size)
-        elif isinstance(item, mpl.text.Text):
-            item.set_fontsize(new_font_size)                
+def dag_update_ax_fontsize(ax, new_font_size, include=None, do_extra_search=True):
+    if include is None:        
+        include = ['title', 'xlabel', 'ylabel', 'xticks','yticks']
+    if not isinstance(include, list):
+        include = [include]
+    incl_list = []
+    for i in include:
+        if i=='title':
+            incl_list += [ax.title]
+        elif i=='xlabel':
+            incl_list += [ax.xaxis.label]
+        elif i=='ylabel':
+            incl_list += [ax.yaxis.label]
+        elif i=='xticks':
+            incl_list += ax.get_xticklabels()
+        elif i=='yticks':
+            incl_list += ax.get_yticklabels()
 
-def dag_update_fig_fontsize(fig, new_font_size):
+    for item in (incl_list):
+        item.set_fontsize(new_font_size)        
+    if do_extra_search:
+        for item in ax.get_children():
+            if isinstance(item, mpl.legend.Legend):
+                texts = item.get_texts()
+                if not isinstance(texts, list):
+                    texts = [texts]
+                for i_txt in texts:
+                    i_txt.set_fontsize(new_font_size)
+            elif isinstance(item, mpl.text.Text):
+                item.set_fontsize(new_font_size)                
+
+def dag_update_fig_fontsize(fig, new_font_size, **kwargs):
     fig_kids = fig.get_children()
     for i_kid in fig_kids:
         if isinstance(i_kid, mpl.axes.Axes):
-            dag_update_ax_fontsize(i_kid, new_font_size)
+            dag_update_ax_fontsize(i_kid, new_font_size, **kwargs)
         elif isinstance(i_kid, mpl.figure.SubFigure):
-            dag_update_fig_fontsize(i_kid, new_font_size)
+            dag_update_fig_fontsize(i_kid, new_font_size, **kwargs)
         elif isinstance(i_kid, mpl.text.Text):
             i_kid.set_fontsize(new_font_size)
 
@@ -149,7 +166,7 @@ def dag_return_ecc_pol_bin(params2bin, ecc4bin, pol4bin, bin_weight=None, **kwar
     if not isinstance(params2bin, list):
         params2bin = [params2bin]
         n_params_gt_1 = True
-    
+
     total_n_bins = (len(ecc_bounds)-1) * (len(pol_bounds)-1)
     params_binned = []
     for i_param in range(len(params2bin)):
@@ -189,7 +206,7 @@ def dag_visual_field_scatter(ax, dot_x, dot_y, **kwargs):
     '''
     do_binning = kwargs.get("do_binning", False)
     ecc_bounds = kwargs.get("ecc_bounds", np.linspace(0, 5, 7) )
-    pol_bounds = kwargs.get("pol_bounds", np.linspace(0, 2*np.pi, 13))            
+    pol_bounds = kwargs.get("pol_bounds", np.linspace(-np.pi, np.pi, 13))            
     dot_alpha = kwargs.get("alpha", 0.5)
     dot_size = kwargs.get("dot_size",200)
     # -> add option for dot size scaling... ( & alpha scaling) ??
@@ -210,15 +227,18 @@ def dag_visual_field_scatter(ax, dot_x, dot_y, **kwargs):
                             pol4bin=dot_pol, 
                             bin_weight=bin_weight,
                             ecc_bounds=ecc_bounds, pol_bounds=pol_bounds)
-        if isinstance(dot_col, np.ndarray):
+
+        # if isinstance(dot_col, np.ndarray):
+        if not isinstance(dot_col, str):
             bin_col = dag_return_ecc_pol_bin(params2bin=dot_col, 
                                 ecc4bin=dot_ecc, 
                                 pol4bin=dot_pol, 
                                 bin_weight=bin_weight,
-                                ecc_bounds=ecc_bounds, pol_bounds=pol_bounds)            
+                                ecc_bounds=ecc_bounds, pol_bounds=pol_bounds)   
         else:
             bin_col = dot_col
-        if isinstance(dot_size, np.ndarray):
+        # if isinstance(dot_size, np.ndarray):
+        if hasattr(dot_size, 'len'):
             bin_size = dag_return_ecc_pol_bin(params2bin=dot_size, 
                                 ecc4bin=dot_ecc, 
                                 pol4bin=dot_pol, 
@@ -226,7 +246,8 @@ def dag_visual_field_scatter(ax, dot_x, dot_y, **kwargs):
                                 ecc_bounds=ecc_bounds, pol_bounds=pol_bounds)            
         else:
             bin_size = dot_size
-        if isinstance(dot_alpha, np.ndarray):
+        # if isinstance(dot_alpha, np.ndarray):
+        if hasattr(dot_size, 'len'):            
             bin_alpha = dag_return_ecc_pol_bin(params2bin=dot_alpha, 
                                 ecc4bin=dot_ecc, 
                                 pol4bin=dot_pol, 
@@ -274,32 +295,41 @@ def dag_plot_bin_line(ax, X,Y, bin_using, **kwargs):
     if not isinstance(bins, (np.ndarray, list)):
         bins = n_bins    
     xerr = kwargs.get("xerr", False)
+    do_bars = kwargs.get("do_bars", True)
     # Do the binning
     X_mean = binned_statistic(bin_using, X, bins=bins, statistic='mean')[0]
     X_std = binned_statistic(bin_using, X, bins=bins, statistic='std')[0]
     count = binned_statistic(bin_using, X, bins=bins, statistic='count')[0]
     Y_mean = binned_statistic(bin_using, Y, bins=bins, statistic='mean')[0]                
     Y_std = binned_statistic(bin_using, Y, bins=bins, statistic='std')[0]  #/ np.sqrt(bin_data['bin_X']['count'])              
-    if xerr:
-        ax.errorbar(
-            X_mean,
-            Y_mean,
-            yerr=Y_std,
-            xerr=X_std,
-            color=line_col,
-            label=line_label, 
-            lw=lw,
-            )
+    if do_bars:
+        if xerr:
+            ax.errorbar(
+                X_mean,
+                Y_mean,
+                yerr=Y_std,
+                xerr=X_std,
+                color=line_col,
+                label=line_label, 
+                lw=lw,
+                )
+        else:
+            ax.errorbar(
+                X_mean,
+                Y_mean,
+                yerr=Y_std,
+                xerr=X_std,
+                color=line_col,
+                label=line_label,
+                lw=lw,
+                )        
     else:
-        ax.errorbar(
+        ax.plot(
             X_mean,
             Y_mean,
-            yerr=Y_std,
-            xerr=X_std,
             color=line_col,
             label=line_label,
-            lw=lw,
-            )        
+            lw=lw,)
     ax.legend()
     if do_basics:    
         dag_add_ax_basics(ax, **kwargs)
@@ -348,6 +378,9 @@ def dag_arrow_plot(ax, old_x, old_y, new_x, new_y, **kwargs):
     do_arrows = kwargs.get("do_arrows", True)
     ecc_bounds = kwargs.get("ecc_bounds", default_ecc_bounds)
     pol_bounds = kwargs.get("pol_bounds", default_pol_bounds)
+    kwargs['ecc_bounds'] = ecc_bounds    
+    kwargs['pol_bounds'] = pol_bounds
+
     old_col = kwargs.get("old_col", 'k')
     new_col = kwargs.get("new_col", 'g')
     # -> for now only 1 alpha, size per dot
@@ -357,6 +390,7 @@ def dag_arrow_plot(ax, old_x, old_y, new_x, new_y, **kwargs):
     # aperture_rad = kwargs.get("aperture_rad", None)
     # patch_col = kwargs.get("patch_col", "k")
     arrow_col = kwargs.get("arrow_col", 'b')
+    arrow_cmap = kwargs.get("arrow_cmap", 'magma_magmarev')
     arrow_kwargs = {
         'scale'     : 1,                                    # ALWAYS 1 -> exact pt to exact pt 
         'width'     : kwargs.get('arrow_width', .01),       # of shaft (relative to plot )
@@ -391,7 +425,7 @@ def dag_arrow_plot(ax, old_x, old_y, new_x, new_y, **kwargs):
         if arrow_col=='angle':
             # Get the angles for the arrows
             _, angle = dag_coord_convert(dx, dy, 'cart2pol')
-            q_cmap = mpl.cm.__dict__['hsv']
+            q_cmap = dag_get_cmap(arrow_cmap)#mpl.cm.__dict__['hsv']
             q_norm = mpl.colors.Normalize()
             q_norm.vmin = -3.14
             q_norm.vmax = 3.14
@@ -411,14 +445,63 @@ def dag_arrow_plot(ax, old_x, old_y, new_x, new_y, **kwargs):
         #     cb = fig.colorbar(scat_col, ax=ax)        
         #     cb.set_label(kwargs['dot_col'])
 
-    dag_add_ecc_pol_lines(ax, ecc_bounds=ecc_bounds, pol_bounds=pol_bounds, **kwargs)        
+    dag_add_ecc_pol_lines(ax, **kwargs)        
     dag_add_ax_basics(ax, **kwargs)    
     # END FUNCTION 
 
+# def dag_2d_density(X,Y, ax=None, **kwargs):
+#     '''
+#     https://towardsdatascience.com/simple-example-of-2d-density-plots-in-python-83b83b934f67
+#     '''
+#     if ax is None:
+#         ax = plt.gca()
+
+#     deltaX = (np.max(X) - np.min(X)) 
+
+#     return
 
 import matplotlib.colors as mcolors
+def dag_get_col_vals(col_vals, cmap, vmin=None, vmax=None):
+    # cmap = dag_get_cmap(cmap)
+    cmap = mpl.cm.__dict__[cmap]
+    cnorm = mpl.colors.Normalize()
+    if vmin is not None:
+        cnorm.vmin = vmin
+        cnorm.vmax = vmax
+    col_out = cmap(cnorm(col_vals))
+    return col_out
 
-def dag_make_custom_cmap(col_list, col_steps=None, cmap_name=''):
+def dag_stack_cmaps(cmap_list, save_cmap=False, new_cmap_name=None):
+    n_steps_per_cmap = 20
+    n_cmaps = len(cmap_list)
+    # Now list of col vals
+    col_list = []
+    for i_cmap in cmap_list:
+        this_cmap = dag_get_cmap(i_cmap)
+        c_norm = mpl.colors.Normalize()
+        c_norm.vmin = 0
+        c_norm.vmax = 1
+        this_rgb_cols = c_norm(this_cmap(np.linspace(0,1,n_steps_per_cmap)))
+        this_r = np.around(this_rgb_cols[:,0],3)
+        this_g = np.around(this_rgb_cols[:,1],3)
+        this_b = np.around(this_rgb_cols[:,2],3)
+        col_list += [
+            (this_r[i], this_g[i], this_b[i]) for i in range(this_r.shape[0])
+        ]
+
+    col_steps = np.linspace(0,1,n_steps_per_cmap*n_cmaps)
+    if new_cmap_name is None:
+        new_cmap_name = '_'.join(cmap_list)
+        new_cmap_name = str.replace(new_cmap_name, '_r', 'rev')
+    new_cmap = dag_make_custom_cmap(
+        col_list=col_list, 
+        col_steps=col_steps, 
+        cmap_name=new_cmap_name, 
+        save_cmap=save_cmap)    
+
+    return new_cmap    
+
+def dag_make_custom_cmap(col_list, col_steps=None, cmap_name='', save_cmap=False):
     """Return a LinearSegmentedColormap
     col_list        list of colors (can be rgb tuples or something which can be converted to rgb tuples by mcolors.ColorConverter().to_rgb)
     col_steps
@@ -452,7 +535,17 @@ def dag_make_custom_cmap(col_list, col_steps=None, cmap_name=''):
 
     
     custom_cmap = mcolors.LinearSegmentedColormap.from_list(cmap_name,list(zip(col_val, col_list)))
+    if save_cmap:
+        if cmap_name=='':
+            print('specify name!')
+            return
+        dag_save_cmap(
+            cmap_name=cmap_name,
+            col_steps=col_val,
+            col_list=col_list
+        )
 
+        
     return custom_cmap
 
 def dag_make_diverge_cmap(low, high, mid='white'):
@@ -465,16 +558,21 @@ def dag_make_diverge_cmap(low, high, mid='white'):
     custom_cmap = dag_make_custom_cmap([low, mid, high])
     return custom_cmap
 
-def dag_get_cmap(cmap_name, **kwargs):
-    do_reverse = kwargs.get('reverse', False)
+def dag_get_cmap(cmap_name, **kwargs):    
+    do_reverse = kwargs.get('reverse', False)    
     if isinstance(cmap_name, dict):
         cdict_copy = cmap_name
-        cmap_name = cdict_copy.get('cmap_name', '')
+        cmap_name = cdict_copy.get('cmap_name', '')        
         col_list = cdict_copy.get('col_list', None)
         col_steps = cdict_copy.get('col_steps', None)    
     else:
         col_list = kwargs.get('col_list', None)
         col_steps = kwargs.get('col_steps', None)
+    
+    # Check for '_r' in cmap name
+    if '_r' in cmap_name:
+        do_reverse = True
+        cmap_name = cmap_name.split('_r')[0]
     
     cc_dict = dag_load_custom_col_dict()
     if col_list is not None:
@@ -488,7 +586,26 @@ def dag_get_cmap(cmap_name, **kwargs):
     if do_reverse:
         this_cmap = this_cmap.reversed()
     return this_cmap
+def dag_delete_cmap(cmap_name):
+    cc_dict = dag_load_custom_col_dict()
+    if cmap_name in cc_dict.keys():
+        print(f'Are you sure you want to delete {cmap_name}? (y/n)')
+        delete_yn = input()
+        if delete_yn!='y':
+            return
+    else:
+        print(f'Cannot find {cmap_name}')
+        return
 
+    new_cc_dict = {}
+    for i_cmap in cc_dict.keys():
+        if i_cmap!=cmap_name:
+            new_cc_dict[i_cmap] = cc_dict[i_cmap]
+    print('deleting cmap...')
+    with open(custom_col_path, 'w') as fp:
+        json.dump(new_cc_dict, fp,sort_keys=True, indent=4)
+    return    
+    
 def dag_save_cmap(cmap_name, col_list, col_steps=None, ow=False):
     if col_steps is None:
         col_steps = np.linspace(0,1, len(col_list))
@@ -517,15 +634,18 @@ def dag_load_custom_col_dict():
         cc_dict = json.load(fp)        
     return cc_dict
 
-def dag_rapid_corr(ax, X,Y, **kwargs):
+def dag_rapid_corr(X,Y,ax=None, **kwargs):
+    if ax is None:
+        ax = plt.gca()
     do_id_line = kwargs.get('do_id_line', False)
     do_ow = kwargs.get('ow', False)
     do_scatter = kwargs.get('do_scatter', True)
     do_line = kwargs.get('do_line', False)
     dot_col = kwargs.get('dot_col', None)
     dot_alpha = kwargs.get('dot_alpha', None)    
+    dot_label=kwargs.get('dot_label')
     if do_scatter:
-        ax.scatter(X,Y, c=dot_col, alpha=dot_alpha)
+        ax.scatter(X,Y, c=dot_col, alpha=dot_alpha, label=dot_label)
     if do_line:
         dag_plot_bin_line(ax=ax, X=X,Y=Y, bin_using=X, **kwargs)
     corr_xy = dag_get_corr(X,Y)
@@ -536,8 +656,8 @@ def dag_rapid_corr(ax, X,Y, **kwargs):
     kwargs['title'] = kwargs.get('title', '') + corr_str
     
     if do_id_line:
-        xlim = ax.get_xlim()
-        ylim = ax.get_ylim()
+        xlim = kwargs.get('x_lim', ax.get_xlim())
+        ylim = kwargs.get('y_lim', ax.get_ylim())
         min_v = np.min([xlim[0], ylim[0]])
         max_v = np.max([xlim[1], ylim[1]])
         ax.plot((min_v,max_v), (min_v,max_v), 'k')
@@ -566,27 +686,27 @@ def dag_rgb(r,g,b):
 #     'col_list' : ecc_custom_col_list,
 #     'col_steps' :  ecc_custom_col_steps
 # }
-# pol_custom_col_list = [
-#     dag_rgb(255, 0, 0),
-#     dag_rgb(255, 255, 0),
-#     dag_rgb(0, 128, 0),
-#     dag_rgb(0, 255, 255),
-#     dag_rgb(0, 0, 255),
-#     dag_rgb(238, 130, 238),
-#     dag_rgb(255, 0, 0),
-#     dag_rgb(255, 255, 0),
-#     dag_rgb(0, 128, 0),
-#     dag_rgb(0, 255, 255),
-#     dag_rgb(0, 0, 255),
-#     dag_rgb(238, 130, 238),
-#     dag_rgb(255, 0, 0), 
-#     ]
+pol_custom_col_list = [
+    dag_rgb(255, 0, 0),
+    dag_rgb(255, 255, 0),
+    dag_rgb(0, 128, 0),
+    dag_rgb(0, 255, 255),
+    dag_rgb(0, 0, 255),
+    dag_rgb(238, 130, 238),
+    dag_rgb(255, 0, 0),
+    dag_rgb(255, 255, 0),
+    dag_rgb(0, 128, 0),
+    dag_rgb(0, 255, 255),
+    dag_rgb(0, 0, 255),
+    dag_rgb(238, 130, 238),
+    dag_rgb(255, 0, 0), 
+    ]
 
-# pol_custom_col_steps = [-3.14, -2.65, -2.09, -1.75, -1.05, -0.5, 0, 0.5, 1.05, 1.57, 2.09, 2.65, 3.14]
-# pol_custom_dict = {
-#     'col_list' : pol_custom_col_list,
-#     'col_steps' : pol_custom_col_steps
-# }
+pol_custom_col_steps = [-3.14, -2.65, -2.09, -1.75, -1.05, -0.5, 0, 0.5, 1.05, 1.57, 2.09, 2.65, 3.14]
+pol_custom_dict = {
+    'col_list' : pol_custom_col_list,
+    'col_steps' : pol_custom_col_steps
+}
 # custom_col_dict = {
 #     'pol' : pol_custom_dict,
 #     'ecc' : ecc_custom_dict,

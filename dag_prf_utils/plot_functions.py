@@ -1,6 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib as mpl
+import seaborn as sns
 from matplotlib import patches
 from scipy.stats import binned_statistic
 from .utils import *
@@ -13,6 +14,7 @@ default_pol_bounds = np.linspace(-np.pi, np.pi, 13)
 # Load custom color maps
 path_to_utils = os.path.abspath(os.path.dirname(__file__))
 custom_col_path = opj(path_to_utils, 'cmaps.json')
+
 with open(custom_col_path, 'r') as fp:
     custom_col_dict = json.load(fp)
 
@@ -637,6 +639,7 @@ def dag_load_custom_col_dict():
 def dag_rapid_corr(X,Y,ax=None, **kwargs):
     if ax is None:
         ax = plt.gca()
+    do_kde = kwargs.get('do_kde', False)    
     do_id_line = kwargs.get('do_id_line', False)
     do_ow = kwargs.get('ow', False)
     do_scatter = kwargs.get('do_scatter', True)
@@ -654,7 +657,8 @@ def dag_rapid_corr(X,Y,ax=None, **kwargs):
         corr_str = ax.get_title() + corr_str
 
     kwargs['title'] = kwargs.get('title', '') + corr_str
-    
+    if do_kde:
+        sns.kdeplot(X,Y, color=dot_col)
     if do_id_line:
         xlim = kwargs.get('x_lim', ax.get_xlim())
         ylim = kwargs.get('y_lim', ax.get_ylim())
@@ -665,6 +669,46 @@ def dag_rapid_corr(X,Y,ax=None, **kwargs):
         ax.set_ylim(min_v,max_v)
     dag_add_ax_basics(ax=ax, **kwargs)
 
+
+def dag_multi_scatter(data_in, **kwargs):
+    '''
+    Many parameters to correlate do x,y... etc    
+    '''
+    if not isinstance(data_in, dict):
+        n_pdim = data_in.shape[-1]
+        p_labels = kwargs.get('p_labels', np.arange(n_pdim))
+        data_dict = {}
+        for i,p in enumerate(p_labels):
+            data_dict[p] = data_in[:,i]
+    else:
+        data_dict = data_in
+        p_labels = kwargs.get('p_labels', data_dict.keys())
+        n_pdim = len(p_labels)
+
+    fig = kwargs.get('fig', plt.figure())
+    rows = n_pdim
+    cols = n_pdim
+    plot_i = 1
+    for i1,y_param in enumerate(p_labels):
+        for i2,x_param in enumerate(p_labels):
+            ax = fig.add_subplot(rows,cols,plot_i)
+            if i1>i2:
+                ax.axis('off')
+            else:
+                ax.set_xlabel(x_param)
+                if i1==i2:
+                    ax.hist(data_dict[x_param])
+                else:
+                    ax.set_ylabel(y_param)
+                    ax.scatter(
+                        data_dict[x_param],
+                        data_dict[y_param],
+                    )        
+                    ax.set_title(
+                        f'corr={np.corrcoef(data_dict[x_param],data_dict[y_param])[0,1]:.3f}')
+            plot_i += 1
+        fig.set_tight_layout('tight')
+    return fig
 
 # ************ SAVED COLOR STUFF *************************
 def dag_rgb(r,g,b):

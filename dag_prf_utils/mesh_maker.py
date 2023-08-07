@@ -11,6 +11,9 @@ opj = os.path.join
 from dag_prf_utils.utils import *
 from dag_prf_utils.plot_functions import *
 
+
+path_to_utils = os.path.abspath(os.path.dirname(__file__))
+
 class FSMaker(object):
     '''Used to make a freesurfer file, and view a surface in freesurfer. 
     One of many options for surface plotting. 
@@ -42,11 +45,10 @@ class FSMaker(object):
 
         data_mask = kwargs.get('data_mask', np.ones_like(data, dtype=bool))
         # Load colormap properties: (cmap, vmin, vmax)
-        cmap = kwargs.get('cmap', 'viridis')    
         vmin = kwargs.get('vmin', np.percentile(data[data_mask], 10))
-        vmax = kwargs.get('vmax', np.percentile(data[data_mask], 90))
-        cmap_nsteps = kwargs.get('cmap_nsteps', 10)
-
+        # Get the overlay custom str and overlay to save...
+        overlay_custom_str, overlay_to_save = dag_make_overlay_str(masked_data=data[data_mask], **kwargs)
+        
         data_masked = np.zeros_like(data, dtype=float)
         data_masked[data_mask] = data[data_mask]
         exclude_min_val = vmin - 1
@@ -71,54 +73,6 @@ class FSMaker(object):
         # write_morph_data(opj(self.custom_surf_dir, f'lh.{surf_name}'),lh_masked_param)
         # write_morph_data(opj(self.custom_surf_dir, f'rh.{surf_name}'),rh_masked_param)        
         
-        # Make custom overlay:
-        # value - rgb triple...
-        fv_param_steps = np.linspace(vmin, vmax, cmap_nsteps)
-        fv_color_steps = np.linspace(0,1, cmap_nsteps)
-        fv_cmap = dag_get_cmap(cmap, **kwargs)
-        # fv_cmap = mpl.cm.__dict__[cmap]
-        
-        ## make colorbar - uncomment to save a png of the color bar...
-        # cb_cmap = mpl.cm.__dict__[cmap] 
-        # cb_norm = mpl.colors.Normalize()
-        # cb_norm.vmin = vmin
-        # cb_norm.vmax = vmax
-        # plt.close('all')
-        # plt.colorbar(mpl.cm.ScalarMappable(norm=cb_norm, cmap=cb_cmap))
-        # col_bar = plt.gcf()
-        # col_bar.savefig(opj(self.sub_surf_dir, f'lh.{surf_name}_colorbar.png'))
-
-        overlay_custom_str = 'overlay_custom='
-        overlay_to_save = '['
-        # '''
-        # Takes the form 
-        # [
-        #     {
-        #         "r" : 128,
-        #         "g" : 0,
-        #         "b" : 128.
-        #         "val" : -10
-        #     },
-        #     {
-        #         ...
-        #     }
-        # ]
-        # '''
-        for i, fv_param in enumerate(fv_param_steps):
-            this_col_triple = fv_cmap(fv_color_steps[i])
-            this_str = f'{float(fv_param):.2f},{int(this_col_triple[0]*255)},{int(this_col_triple[1]*255)},{int(this_col_triple[2]*255)},'
-            overlay_custom_str += this_str    
-
-            #
-            overlay_to_save += '\n\t{'
-            overlay_to_save += f'\n\t\t"b": {int(this_col_triple[2]*255)},'
-            overlay_to_save += f'\n\t\t"g": {int(this_col_triple[1]*255)},'
-            overlay_to_save += f'\n\t\t"r": {int(this_col_triple[0]*255)},'
-            overlay_to_save += f'\n\t\t"val": {float(fv_param):.2f}'
-            overlay_to_save += '\n\t}'
-            if fv_param!=fv_param_steps[-1]:
-                overlay_to_save += ','
-        overlay_to_save += '\n]'
         dag_str2file(filename=opj(self.custom_surf_dir, f'{surf_name}_overlay'),txt=overlay_to_save)
         self.overlay_str[surf_name] = overlay_custom_str
         self.surf_list.append(surf_name)
@@ -158,6 +112,15 @@ class FSMaker(object):
         hemi_list = kwargs.get('hemi_list', ['lh', 'rh'])
         roi_list = kwargs.get('roi_list',None)
         roi_mask = kwargs.get('roi_mask', None)
+        # *** CAMERA ANGLE ***
+        cam_azimuth     = kwargs.get('azimuth', 0)
+        cam_zoom        = kwargs.get('zoom', 1)
+        cam_elevation   = kwargs.get('elevation', 0)
+        cam_roll        = kwargs.get('roll', 0)
+        do_scrn_shot    = kwargs.get('do_scrn_shot', False)
+        scr_shot_file   = kwargs.get('scr_shot_file', None)
+        # *** COLOR BAR ***
+        do_col_bar  = kwargs.get('do_col_bar', True)
 
         if not isinstance(mesh_list, list):
             mesh_list = [mesh_list]
@@ -168,12 +131,6 @@ class FSMaker(object):
         if (roi_list is not None) and (not isinstance(roi_list, list)):
             roi_list = [roi_list]
 
-        cam_azimuth     = kwargs.get('azimuth', 0)
-        cam_zoom        = kwargs.get('zoom', 1)
-        cam_elevation   = kwargs.get('elevation', 0)
-        cam_roll        = kwargs.get('roll', 0)
-        do_scrn_shot    = kwargs.get('do_scrn_shot', False)
-        scr_shot_file   = kwargs.get('scr_shot_file', None)
         if do_scrn_shot:         
             if scr_shot_file is None:
                 # Not specified -save in custom surf dir
@@ -187,7 +144,7 @@ class FSMaker(object):
         else:
             scr_shot_flag = ""
 
-        do_col_bar  = kwargs.get('do_col_bar', True)
+
         if do_col_bar:
             col_bar_flag = '--colorscale'
         else:
@@ -198,29 +155,31 @@ class FSMaker(object):
             for this_hemi in hemi_list:
                 fs_cmd += f' {this_hemi}.{mesh}'
                 if roi_list is not None:
-                    for roi in roi_list:
-                        this_roi_path = self.get_roi_file(f'{this_hemi}.{roi}')
-                        fs_cmd += f':label={this_roi_path}:label_outline=True:label_visible=True'
+                    for i_roi, roi in enumerate(roi_list):
+                        roi_col = dag_get_col_vals(i_roi, 'jet', 0, len(roi_list))
+                        roi_col = f'{int(roi_col[0]*255)},{int(roi_col[1]*255)},{int(roi_col[2]*255)}'
+                        this_roi_path = self.get_roi_file(roi, this_hemi)
+                        fs_cmd += f':label={this_roi_path}:label_outline=True:label_visible=True:label_color={roi_col}' # false...
                 # if surf_name is not None:
                 for this_surf_name in surf_name:
                     # this_surf_path = opj(self.custom_surf_dir, f'{this_hemi}.{this_surf_name}')                
                     this_surf_path = self.get_surf_path(this_hemi=this_hemi, this_surf_name=this_surf_name)
-                    this_overlay_str = self.get_overlay_str(this_surf_name)
+                    this_overlay_str = self.get_overlay_str(this_surf_name, **kwargs)
                     fs_cmd += f':overlay={this_surf_path}:{this_overlay_str}'                        
                     if roi_mask is not None:
-                        this_roi_path = self.get_roi_file(f'{this_hemi}.{roi_mask}')
+                        this_roi_path = self.get_roi_file(roi, this_hemi)
                         fs_cmd += f':overlay_mask={this_roi_path}'
         fs_cmd +=  f' --camera Azimuth {cam_azimuth} Zoom {cam_zoom} Elevation {cam_elevation} Roll {cam_roll} '
         fs_cmd += f'{col_bar_flag} {scr_shot_flag}'
         return fs_cmd 
 
-    def get_roi_file(self, roi_name):
+    def get_roi_file(self, roi_name, hemi):
         roi = dag_find_file_in_folder(
-            filt=roi_name,
+            filt=[roi_name, hemi],
             path=self.sub_label_dir,
             recursive=True,
             exclude=['._', '.thresh']
-            )        
+            )
         if isinstance(roi, list):
             roi = roi[0]
         roi_path = opj(self.sub_label_dir, roi)
@@ -242,7 +201,10 @@ class FSMaker(object):
 
         return this_surf_path
     
-    def get_overlay_str(self, surf_name):
+    def get_overlay_str(self, surf_name, overlay_cmap=None, **kwargs):
+        if overlay_cmap is not None:
+            overlay_str, _ = dag_make_overlay_str(cmap=overlay_cmap, **kwargs)
+            return overlay_str
         if surf_name in self.overlay_str.keys():
             overlay_str = self.overlay_str[surf_name]
         else:
@@ -651,71 +613,64 @@ def dag_get_rgb_str(rgb_vals):
     return rgb_str    
 
 
+def dag_make_overlay_str(**kwargs):        
+    masked_data = kwargs.get('masked_data', None)
+    cmap = kwargs.get('cmap', 'viridis')    
+    if masked_data is not None:
+        vmin = kwargs.get('vmin', np.percentile(masked_data, 10))
+        vmax = kwargs.get('vmax', np.percentile(masked_data, 90))
+    else:
+        vmin = kwargs.get('vmin', 0)
+        vmax = kwargs.get('vmax', 1)
 
-
-
-
-# ***********************************************************************************************************************
-# ***********************************************************************************************************************
-
-# from dag_prf_utils import *
-# def dag_get(sub, fs_dir, roi, ply_file=None):
-#     # [1] Get roi idx: 
-#     roi_idx = dag_load_roi(sub, roi, fs_dir)
-#     roi_idc = np.where(roi_idx)[0]
-#     dag_parse_surf(opj(fs_dir, sub, ))
+    cmap_nsteps = kwargs.get('cmap_nsteps', 20)
     
-#     bound_vx = []
+    # Make custom overlay:
+    # value - rgb triple...
+    fv_param_steps = np.linspace(vmin, vmax, cmap_nsteps)
+    fv_color_steps = np.linspace(0,1, cmap_nsteps)
+    fv_cmap = dag_get_cmap(cmap, **kwargs)
+    # fv_cmap = mpl.cm.__dict__[cmap]
+    
+    ## make colorbar - uncomment to save a png of the color bar...
+    # cb_cmap = mpl.cm.__dict__[cmap] 
+    # cb_norm = mpl.colors.Normalize()
+    # cb_norm.vmin = vmin
+    # cb_norm.vmax = vmax
+    # plt.close('all')
+    # plt.colorbar(mpl.cm.ScalarMappable(norm=cb_norm, cmap=cb_cmap))
+    # col_bar = plt.gcf()
+    # col_bar.savefig(opj(self.sub_surf_dir, f'lh.{surf_name}_colorbar.png'))
 
-#     return vx_bound
-# def obj_to_ply(obj_file, rgb_vals):
-#     with open(obj_file) as f:
-#         obj_lines = f.readlines()
-#     with open(obj_file) as f:    
-#         obj_str = f.read()
-#     n_vx = obj_str.count('v') # Number of vertices
-#     n_f = obj_str.count('f')  # Number of faces 
-#     # Create the ply string -> following this format
-#     ply_str  = f'ply\n'
-#     ply_str += f'format ascii 1.0\n'
-#     ply_str += f'element vertex {n_vx}\n'
-#     ply_str += f'property float x\n'
-#     ply_str += f'property float y\n'
-#     ply_str += f'property float z\n'
-#     ply_str += f'property uchar red\n'
-#     ply_str += f'property uchar green\n'
-#     ply_str += f'property uchar blue\n'
-#     ply_str += f'element face {n_f}\n'
-#     ply_str += f'property list uchar int vertex_index\n'
-#     ply_str += f'end_header\n'
-
-
-#     # Cycle through the lines of the obj file and add vx + coords + rgb
-#     v_idx = 0 # Keep count of vertices     
-#     for i in range(len(obj_lines)):
-#         if obj_lines[i][0]=='v':
-#             split_coord = obj_lines[i][2:-1].split(' ')
-#             # for some reason in .ply files the first coordinates valence is flipped (-1 to 1) 
-#             # also the order is 0,2,1 from obj...
-#             ply_str += f'{float(split_coord[0]*-1):.6f} '  # *-1
-#             ply_str += f'{float(split_coord[2]):.6f} '
-#             ply_str += f'{float(split_coord[1]):.6f} '
-#             # Now add the rgb values. as integers between 0 and 255
-#             ply_str += f' {int(rgb_vals[v_idx][0]*255)} {int(rgb_vals[v_idx][1]*255)} {int(rgb_vals[v_idx][2]*255)}\n'
-            
-#             v_idx += 1 # next vertex
-        
-#         elif obj_lines[i][0]=='f':
-#             # After we finished all the vertices, we need to define the faces
-#             # -> these are triangles (hence 3 at the beginning of each line)
-#             # -> the index of the three vx is given
-#             # For some reason the index is 1 less in .ply files vs .obj files
-#             # ... i guess like the difference between matlab and python
-#             ply_str += '3 ' 
-#             split_idx = obj_lines[i][2::].split(' ')
-#             ply_str += f'{int(split_idx[0])-1} '
-#             ply_str += f'{int(split_idx[1])-1} '
-#             ply_str += f'{int(split_idx[2])-1} '
-#             ply_str += '\n'
-#     return ply_str
-
+    overlay_custom_str = 'overlay_custom='
+    overlay_to_save = '['
+    # '''
+    # Takes the form 
+    # [
+    #     {
+    #         "r" : 128,
+    #         "g" : 0,
+    #         "b" : 128.
+    #         "val" : -10
+    #     },
+    #     {
+    #         ...
+    #     }
+    # ]
+    # '''
+    for i, fv_param in enumerate(fv_param_steps):
+        this_col_triple = fv_cmap(fv_color_steps[i])
+        this_str = f'{float(fv_param):.2f},{int(this_col_triple[0]*255)},{int(this_col_triple[1]*255)},{int(this_col_triple[2]*255)},'
+        overlay_custom_str += this_str    
+        #
+        overlay_to_save += '\n\t{'
+        overlay_to_save += f'\n\t\t"b": {int(this_col_triple[2]*255)},'
+        overlay_to_save += f'\n\t\t"g": {int(this_col_triple[1]*255)},'
+        overlay_to_save += f'\n\t\t"r": {int(this_col_triple[0]*255)},'
+        overlay_to_save += f'\n\t\t"val": {float(fv_param):.2f}'
+        overlay_to_save += '\n\t}'
+        if fv_param!=fv_param_steps[-1]:
+            overlay_to_save += ','
+    overlay_to_save += '\n]'
+    
+    return overlay_custom_str, overlay_to_save

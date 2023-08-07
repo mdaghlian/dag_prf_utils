@@ -9,6 +9,23 @@ import random
 
 opj = os.path.join
 
+import subprocess
+def dag_get_cores_used():
+    user_name = os.environ['USER']
+    command = f"qstat -u {user_name}"  # Replace with your actual username
+    output = subprocess.check_output(command, shell=True).decode('utf-8')
+    if output == '':
+        return 0
+    lines = output.strip().split('\n')
+    header = lines[0].split()
+    cores_index = header.index('slots')  # Or 'TPN' if 'C' is not available
+    cores = 0
+    for line in lines[2:]:
+        columns = line.split()
+        if columns:
+            cores += int(columns[cores_index])
+
+    return cores 
 
 def dag_qprint(print_str):
     print(print_str, flush=True)
@@ -62,7 +79,7 @@ def dag_load_roi(sub, roi, fs_dir, split_LR=False, do_bool=True):
     n_verts = dag_load_nverts(sub=sub, fs_dir=fs_dir)
     total_num_vx = np.sum(n_verts)
     
-    if roi=='all':
+    if 'all' in roi :
         roi_idx = np.ones(total_num_vx, dtype=bool)
         return roi_idx    
     elif roi=='occ':
@@ -93,11 +110,11 @@ def dag_load_roi(sub, roi, fs_dir, split_LR=False, do_bool=True):
             do_not = False
         roi_file = {}
         try:
-            roi_file['lh'] = dag_find_file_in_folder([this_roi, '.thresh', '.label', 'lh'], roi_dir)    
-            roi_file['rh'] = dag_find_file_in_folder([this_roi, '.thresh', '.label', 'rh'], roi_dir)    
+            roi_file['lh'] = dag_find_file_in_folder([this_roi, '.thresh', '.label', 'lh'], roi_dir, recursive=True)    
+            roi_file['rh'] = dag_find_file_in_folder([this_roi, '.thresh', '.label', 'rh'], roi_dir, recursive=True)    
         except:
-            roi_file['lh'] = dag_find_file_in_folder([this_roi, '.label', 'lh'], roi_dir,exclude='._')    
-            roi_file['rh'] = dag_find_file_in_folder([this_roi, '.label', 'rh'], roi_dir,exclude='._')    
+            roi_file['lh'] = dag_find_file_in_folder([this_roi, '.label', 'lh'], roi_dir,exclude='._', recursive=True)    
+            roi_file['rh'] = dag_find_file_in_folder([this_roi, '.label', 'rh'], roi_dir,exclude='._', recursive=True)    
 
         LR_bool = []
         for i,hemi in enumerate(['lh', 'rh']):
@@ -267,8 +284,13 @@ def dag_pol_to_clock(pol):
     clock_values = (pol / (2 * np.pi)) * 12
     return clock_values
 
-def dag_weighted_mean(w,x):
-    w_mean = np.sum(w * x) / np.sum(w)
+def dag_weighted_mean(w,x, axis='all'):
+    # w_mean = np.sum(w * x) / np.sum(w) # original form
+    if axis=='all':
+        w_mean = np.nansum(w * x) / np.nansum(w)
+    else:
+        w_mean = np.nansum(w * x, axis=axis) / np.nansum(w, axis=axis)
+
     return w_mean
 
 

@@ -404,16 +404,19 @@ def dag_fs_to_ply(sub, data, fs_dir, mesh_name='inflated', out_dir=None, under_s
         ply_file_2write.write(ply_str)
         ply_file_2write.close()       
 
-        # Now save the rgb csv file
-        rgb_file_2write = open(rgb_surf_file, "w")
-        rgb_file_2write.write(rgb_str)
-        rgb_file_2write.close()       
+        # Remove the srf file
+        os.system(f'rm {srf_surf_file}')
+
+        # # Now save the rgb csv file
+        # rgb_file_2write = open(rgb_surf_file, "w")
+        # rgb_file_2write.write(rgb_str)
+        # rgb_file_2write.close()       
         
     # Return list of .ply files to open...
     if return_ply_file:
         return ply_file_2open
 
-def dag_srf_to_ply(srf_file, rgb_vals=None, hemi=None, values=None, incl_rgb=False):
+def dag_srf_to_ply(srf_file, rgb_vals=None, hemi=None, values=None, incl_rgb=True):
     '''
     dag_srf_to_ply
     Convert srf file to .ply

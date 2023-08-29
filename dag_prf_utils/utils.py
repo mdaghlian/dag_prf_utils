@@ -6,7 +6,7 @@ import sys
 import struct
 import string
 import random
-
+import time
 opj = os.path.join
 
 import subprocess
@@ -16,8 +16,30 @@ def dag_get_cores_used():
     output = subprocess.check_output(command, shell=True).decode('utf-8')
     if output == '':
         return 0
+
     lines = output.strip().split('\n')
-    header = lines[0].split()
+    header = lines[0].split()    
+    n_cols = len(lines[1].split())
+
+    count = 0 # sometimes take a second to load...
+    while 'qw' in output: # 
+        time.sleep(5)
+        count += 1
+        
+        output = subprocess.check_output(command, shell=True).decode('utf-8')
+        if output == '':
+            return 0    
+        if 'Eqw' in output:
+            print('EQW')    
+            sys.exit()
+        print(output)
+
+        lines = output.strip().split('\n')
+        header = lines[0].split()    
+        if count > 10:
+            print('bloop')
+            break
+
     cores_index = header.index('slots')  # Or 'TPN' if 'C' is not available
     cores = 0
     for line in lines[2:]:
@@ -64,7 +86,7 @@ def dag_load_nfaces_nverts(sub, fs_dir):
     return n_verts, n_faces
 
 
-def dag_load_roi(sub, roi, fs_dir, split_LR=False, do_bool=True):
+def dag_load_roi(sub, roi, fs_dir, split_LR=False, do_bool=True, **kwargs):
     '''
     Return a boolean array of voxels included in the specified roi
     array is vector with each entry corresponding to a point on the subjects cortical surface
@@ -79,19 +101,33 @@ def dag_load_roi(sub, roi, fs_dir, split_LR=False, do_bool=True):
     n_verts = dag_load_nverts(sub=sub, fs_dir=fs_dir)
     total_num_vx = np.sum(n_verts)
     
-    if 'all' in roi :
-        roi_idx = np.ones(total_num_vx, dtype=bool)
+    if 'all' in roi :        
+        if split_LR:
+            roi_idx = {}
+            roi_idx['lh'] = np.ones(n_verts[0], dtype=bool)
+            roi_idx['rh'] = np.ones(n_verts[1], dtype=bool)
+        else:
+            roi_idx = np.ones(total_num_vx, dtype=bool)
         return roi_idx    
     elif roi=='occ':
-        roi_idx = dag_id_occ_ctx(sub=sub, fs_dir=fs_dir, split_LR=split_LR)
+        roi_idx = dag_id_occ_ctx(sub=sub, fs_dir=fs_dir, split_LR=split_LR, **kwargs)
         return roi_idx
     elif 'demo' in roi:
         if '-' in roi:
             n_demo = int(roi.split('-')[-1])
         else:
             n_demo = 100
-        roi_idx = np.zeros(total_num_vx, dtype=bool)
-        roi_idx[:n_demo] = True
+        if split_LR:
+            roi_idx = {}
+            roi_idx['lh'] = np.zeros(n_verts[0], dtype=bool)
+            roi_idx['rh'] = np.zeros(n_verts[1], dtype=bool)
+            roi_idx['lh'][:n_demo] = True
+            roi_idx['rh'][:n_demo] = True
+
+        else:
+            roi_idx = np.zeros(total_num_vx, dtype=bool)        
+            roi_idx[:n_demo] = True
+
         return roi_idx
 
     # Else look for rois in subs freesurfer label folder

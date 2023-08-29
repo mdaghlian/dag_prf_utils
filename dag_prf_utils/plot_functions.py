@@ -19,8 +19,21 @@ with open(custom_col_path, 'r') as fp:
     custom_col_dict = json.load(fp)
 
 def dag_add_ecc_pol_lines(ax, **kwargs):
-    '''
-    Add eccentricity and polar lines to a plot    
+    '''dag_add_ecc_pol_lines    
+    Description:
+        Add eccentricity and polar lines to a plot
+        Useful for plotting visual field
+    Input:        
+        ax              matplotlib axes
+        *Optional*
+        ecc_bounds      np.ndarray      eccentricity bounds
+        pol_bounds      np.ndarray      polar angle bounds
+        vf_line_col     str             color of lines
+        incl_ticks      bool            Include ticks on the plot
+        aperture_rad    float           Radius of aperture
+        aperture_col    str             Color of aperture
+    Output:
+        None    
     '''
     ecc_bounds = kwargs.get("ecc_bounds", default_ecc_bounds)
     pol_bounds = kwargs.get("pol_bounds", default_pol_bounds)        
@@ -29,37 +42,43 @@ def dag_add_ecc_pol_lines(ax, **kwargs):
     aperture_rad = kwargs.get("aperture_rad", None)
     aperture_col = kwargs.get('aperture_col', 'k')
     # **** ADD THE LINES ****
-    if not incl_ticks:
+    if not incl_ticks: # Don't include ticks
         ax.set_xticks([])    
         ax.set_yticks([])
     else:
-        ax.set_xticks(ecc_bounds, rotation = 90)
-        ax.set_xticklabels([f"{ecc_bounds[i]:.2f}\N{DEGREE SIGN}" for i in range(len(ecc_bounds))], rotation=90)
+        ax.set_xticks(ecc_bounds, rotation = 90) # 
+        ax.set_xticklabels(
+            [f"{ecc_bounds[i]:.2f}\N{DEGREE SIGN}" for i in range(len(ecc_bounds))], 
+            rotation=90
+            )   # Set the labels of  
         ax.set_yticks([])
+    # Remove the spines
     ax.spines['right'].set_visible(False)
     ax.spines['left'].set_visible(False)
     ax.spines['top'].set_visible(False)
     ax.spines['bottom'].set_visible(False)        
 
+    # Add the lines
     n_polar_lines = len(pol_bounds)
 
-    for i_pol in range(n_polar_lines):
-        i_pol_val = pol_bounds[i_pol]
-        outer_x = np.cos(i_pol_val)*ecc_bounds[-1]
-        outer_y = np.sin(i_pol_val)*ecc_bounds[-1]
-        outer_x_txt = outer_x*1.1
+    for i_pol in range(n_polar_lines): # Loop through polar lines
+        i_pol_val = pol_bounds[i_pol] # Get the polar angle
+        outer_x = np.cos(i_pol_val)*ecc_bounds[-1] # Get the x,y coords of the outer line
+        outer_y = np.sin(i_pol_val)*ecc_bounds[-1] 
+        outer_x_txt = outer_x*1.1 # Get the x,y coords of the text
         outer_y_txt = outer_y*1.1        
-        outer_txt = f"{180*i_pol_val/np.pi:.0f}\N{DEGREE SIGN}"
+        outer_txt = f"{180*i_pol_val/np.pi:.0f}\N{DEGREE SIGN}" # Get the text
         # Don't show 360, as this goes over the top of 0 degrees and is ugly...
         if not '360' in outer_txt:
             ax.plot((0, outer_x), (0, outer_y), color=line_col, alpha=0.3)
             if incl_ticks:
                 ax.text(outer_x_txt, outer_y_txt, outer_txt, ha='center', va='center')
 
-    for i_ecc, i_ecc_val in enumerate(ecc_bounds):
+    for i_ecc, i_ecc_val in enumerate(ecc_bounds): # Loop through eccentricity lines
         grid_line = patches.Circle((0, 0), i_ecc_val, color=line_col, alpha=0.3, fill=0)    
         ax.add_patch(grid_line)                    
-    if aperture_rad!=None:
+    
+    if aperture_rad!=None: # Add the aperture
         aperture_line = patches.Circle((0, 0), aperture_rad, color=aperture_col, linewidth=8, alpha=0.5, fill=0)    
         ax.add_patch(aperture_line)
     # Set equal ratio
@@ -68,7 +87,22 @@ def dag_add_ecc_pol_lines(ax, **kwargs):
     y_low, y_high = ax.get_ylim()
     ax.set_aspect(abs((x_right-x_left)/(y_low-y_high))*ratio) 
 
-def dag_add_ax_basics(ax, **kwargs):        
+def dag_add_ax_basics(ax, **kwargs):    
+    '''dag_add_ax_basics
+    Description:
+        Add basic features to a plot
+        
+    Input:
+        ax              matplotlib axes
+        *Optional*
+        xlabel          str             x axis label
+        ylabel          str             y axis label
+        title           str             title
+        x_lim           tuple           x axis limits
+        y_lim           tuple           y axis limits
+    Return:
+        None
+    '''    
     xlabel = kwargs.get("xlabel", None)
     ylabel = kwargs.get("ylabel", None)
     title = kwargs.get("title", None)
@@ -82,21 +116,43 @@ def dag_add_ax_basics(ax, **kwargs):
     ax.legend()
 
 def dag_update_fig_fontsize(fig, new_font_size):
-    fig_kids = fig.get_children()
-    for i_kid in fig_kids:
-        if isinstance(i_kid, mpl.axes.Axes):
+    '''dag_update_fig_fontsize
+    Description:
+        Update the font size of a figure
+    Input:
+        fig             matplotlib figure
+        new_font_size   int/float             
+    Return:
+        None        
+    '''
+    fig_kids = fig.get_children() # Get the children of the figure, i.e., the axes
+    for i_kid in fig_kids: # Loop through the children
+        if isinstance(i_kid, mpl.axes.Axes): # If the child is an axes, update the font size of the axes
             dag_update_ax_fontsize(i_kid, new_font_size)
-        elif isinstance(i_kid, mpl.text.Text):
+        elif isinstance(i_kid, mpl.text.Text): # If the child is a text, update the font size of the text
             i_kid.set_fontsize(new_font_size)
 
 def dag_update_ax_fontsize(ax, new_font_size, include=None, do_extra_search=True):
-    if include is None:        
+    '''dag_update_ax_fontsize
+    Description:
+        Update the font size of am axes
+    Input:
+        ax              matplotlib axes
+        new_font_size   int/float
+        *Optional*
+        include         list of strings     What to update the font size of. 
+                                            Options are: 'title', 'xlabel', 'ylabel', 'xticks','yticks'
+        do_extra_search bool                Whether to search through the children of the axes, and update the font size of any text
+    Return:
+        None        
+    '''
+    if include is None: # If no include is specified, update all the text       
         include = ['title', 'xlabel', 'ylabel', 'xticks','yticks']
-    if not isinstance(include, list):
+    if not isinstance(include, list): # If include is not a list, make it a list
         include = [include]
     incl_list = []
-    for i in include:
-        if i=='title':
+    for i in include: # Loop through the include list, and add the relevant text to the list
+        if i=='title': 
             incl_list += [ax.title]
         elif i=='xlabel':
             incl_list += [ax.xaxis.label]
@@ -107,7 +163,7 @@ def dag_update_ax_fontsize(ax, new_font_size, include=None, do_extra_search=True
         elif i=='yticks':
             incl_list += ax.get_yticklabels()
 
-    for item in (incl_list):
+    for item in (incl_list): # Loop through the text, and update the font size
         item.set_fontsize(new_font_size)        
     if do_extra_search:
         for item in ax.get_children():
@@ -120,20 +176,19 @@ def dag_update_ax_fontsize(ax, new_font_size, include=None, do_extra_search=True
             elif isinstance(item, mpl.text.Text):
                 item.set_fontsize(new_font_size)                
 
-def dag_update_fig_fontsize(fig, new_font_size, **kwargs):
-    fig_kids = fig.get_children()
-    for i_kid in fig_kids:
-        if isinstance(i_kid, mpl.axes.Axes):
-            dag_update_ax_fontsize(i_kid, new_font_size, **kwargs)
-        elif isinstance(i_kid, mpl.figure.SubFigure):
-            dag_update_fig_fontsize(i_kid, new_font_size, **kwargs)
-        elif isinstance(i_kid, mpl.text.Text):
-            i_kid.set_fontsize(new_font_size)
+
 
 def dag_update_ax_dotsize(ax, new_dot_size):
-    # print(type(ax))
-    for i_kid in ax.get_children():
-        # print(type(i_kid))
+    '''dag_update_ax_dotsize
+    Description:
+        Update the dot size of an axes
+    Input:
+        ax              matplotlib axes
+        new_dot_size    int/float
+    Return:
+        None
+    '''
+    for i_kid in ax.get_children(): 
         if isinstance(i_kid, mpl.collections.PathCollection):
             # if hasattr(i_kid, 'set_sizes')
             # print(type(i_kid))
@@ -143,6 +198,15 @@ def dag_update_ax_dotsize(ax, new_dot_size):
 
 
 def dag_update_fig_dotsize(fig, new_dot_size):
+    '''dag_update_fig_dotsize
+    Description:
+        Update the dot size of a figure
+    Input:
+        fig            matplotlib figure
+        new_dot_size    int/float
+    Return:
+        None
+    '''    
     for i_kid in fig.get_children():
         # print(i_kid)
         if isinstance(i_kid, mpl.axes.Axes):
@@ -151,29 +215,31 @@ def dag_update_fig_dotsize(fig, new_dot_size):
             dag_update_fig_dotsize(i_kid, new_dot_size)
 
 def dag_return_ecc_pol_bin(params2bin, ecc4bin, pol4bin, bin_weight=None, **kwargs):
-    '''
-    params2bin      list of np.ndarrays, to bin
-    ecc4bin         eccentricity & polar angle used in binning
-    pol4bin
-    ecc_bounds      how to split into bins 
-    pol_bounds
-    bin_weight      Something used to weight the binning (e.g., rsq)
-    Return the parameters binned by the specified ecc, and pol bounds 
-
+    '''dag_return_ecc_pol_bin
+    Description:
+        Bin parameters by eccentricity and polar angle
+    Input:
+        params2bin      list of np.ndarrays, to bin
+        ecc4bin         eccentricity & polar angle used in binning
+        pol4bin         ""
+        ecc_bounds      how to split into bins
+        pol_bounds      ""
+        bin_weight      Something used to weight the binning (e.g., rsq)
+    Returns:
+        params_binned   list of np.ndarrays, binned by ecc and pol
     '''
     # TODO have option for converting X,Y...    
     ecc_bounds = kwargs.get("ecc_bounds", default_ecc_bounds)
     pol_bounds = kwargs.get("pol_bounds", default_pol_bounds)            
-    n_params_gt_1 = False
-    if not isinstance(params2bin, list):
+    n_params_gt_1 = False # If there is more than 1 parameter to bin
+    if not isinstance(params2bin, list): # If there is only 1 parameter to bin, make it a list
         params2bin = [params2bin]
         n_params_gt_1 = True
 
-    total_n_bins = (len(ecc_bounds)-1) * (len(pol_bounds)-1)
+    total_n_bins = (len(ecc_bounds)-1) * (len(pol_bounds)-1) 
     params_binned = []
-    for i_param in range(len(params2bin)):
-
-        bin_mean = np.zeros((len(ecc_bounds)-1, len(pol_bounds)-1))
+    for i_param in range(len(params2bin)): # Loop through the parameters to bin
+        bin_mean = np.zeros((len(ecc_bounds)-1, len(pol_bounds)-1)) 
         bin_idx = []
         for i_ecc in range(len(ecc_bounds)-1):
             for i_pol in range(len(pol_bounds)-1):
@@ -187,7 +253,7 @@ def dag_return_ecc_pol_bin(params2bin, ecc4bin, pol4bin, bin_weight=None, **kwar
                 pol_idx =(pol4bin >= pol_lower) & (pol4bin <=pol_upper)        
                 bin_idx = pol_idx & ecc_idx
 
-                if bin_weight is not None:
+                if bin_weight is not None: # If there is a bin weight, use it
                     bin_mean[i_ecc, i_pol] = (params2bin[i_param][bin_idx] * bin_weight[bin_idx]).sum() / bin_weight[bin_idx].sum()
                 else:
                     bin_mean[i_ecc, i_pol] = np.mean(params2bin[i_param][bin_idx])
@@ -201,27 +267,47 @@ def dag_return_ecc_pol_bin(params2bin, ecc4bin, pol4bin, bin_weight=None, **kwar
     return params_binned
 
 def dag_visual_field_scatter(ax, dot_x, dot_y, **kwargs):
-    ''' 
-    Plot a (prf) parameter around the visual field (e.g., size, rsquared etc)
-    Using scatter for position dot_x, dot_y
+    '''dag_visual_field_scatter
+    Description:
+        Plot a scatter of points on a visual field (e.g., size, rsquared etc)
+        With the option to do various creative things. e.g., binning, color coding, etc
+    Input:
+        ax              matplotlib axes
+        dot_x           np.ndarray      x coord of points
+        dot_y           np.ndarray      y coord of points
+        *Optional*
+        do_binning      bool            Whether to bin the points
+        bin_weight      np.ndarray      Weighted mean in each bin, not just the average
+        ecc_bounds      np.ndarray      eccentricity bounds
+        pol_bounds      np.ndarray      polar angle bounds
+        dot_alpha       float           alpha of points
+        dot_size        float           size of points
+        dot_col         str             color of points
+        dot_vmin        float           min value for color map
+        dot_vmax        float           max value for color map
+        dot_cmap        str             color map
+    
+    Return:
+        ax              matplotlib axes
+        cb              colorbar
 
     '''
     do_binning = kwargs.get("do_binning", False)
+    # -> add option for dot size scaling... ( & alpha scaling) ??
+    bin_weight = kwargs.get("bin_weight", None)
     ecc_bounds = kwargs.get("ecc_bounds", np.linspace(0, 5, 7) )
     pol_bounds = kwargs.get("pol_bounds", np.linspace(-np.pi, np.pi, 13))            
     dot_alpha = kwargs.get("alpha", 0.5)
     dot_size = kwargs.get("dot_size",200)
-    # -> add option for dot size scaling... ( & alpha scaling) ??
-    bin_weight = kwargs.get("bin_weight", None)
     dot_col = kwargs.get("dot_col", 'k')   
     dot_vmin =  kwargs.get("dot_vmin", None)   
     dot_vmax =  kwargs.get("dot_vmax", None)   
     dot_cmap =  kwargs.get("dot_cmap", None)   
+    
     if isinstance(dot_col, np.ndarray) & (dot_cmap==None):
         dot_cmap = 'viridis'
 
     if do_binning:
-
         dot_ecc, dot_pol = dag_coord_convert(dot_x,dot_y,old2new="cart2pol")
         total_n_bins = (len(ecc_bounds)-1) * (len(pol_bounds)-1)
         bin_x, bin_y = dag_return_ecc_pol_bin(params2bin=[dot_x, dot_y], 
@@ -287,6 +373,29 @@ def dag_visual_field_scatter(ax, dot_x, dot_y, **kwargs):
     return ax, cb
 
 def dag_plot_bin_line(ax, X,Y, bin_using, **kwargs):    
+    '''dag_plot_bin_line
+    Description:
+        Plot a line, binned by a variable. 
+        e.g., plot the mean rsquared, binned by eccentricity
+
+    Input:
+        ax              matplotlib axes
+        X               np.ndarray      x coord of points
+        Y               np.ndarray      y coord of points
+        bin_using       np.ndarray      What to bin by (often you will bin by X)
+        *Optional*
+        line_col        str             color of line
+        line_label      str             label of line
+        lw              float           line width
+        n_bins          int             number of bins
+        bins            np.ndarray      bin edges
+        do_basics       bool            Whether to add basic features to the plot (i.e., run dag_add_ax_basics)
+        xerr            bool            Whether to include x error bars
+        do_bars         bool            Whether to include error bars
+    Return:
+        None
+
+    '''
     # GET PARAMETERS....
     line_col = kwargs.get("line_col", "k")    
     line_label = kwargs.get("line_label", None)
@@ -337,36 +446,40 @@ def dag_plot_bin_line(ax, X,Y, bin_using, **kwargs):
         dag_add_ax_basics(ax, **kwargs)
 
 def dag_arrow_plot(ax, old_x, old_y, new_x, new_y, **kwargs):
-    ''' 
-    PLOT FUNCTION: 
-    Takes voxel position in condition 1 and 2  and end coords (new_x, new_y) produces a plot, with arrows from old to new points 
-    Will also show the aperture of stimuli
-    Parameters
-    ---------------
-    ax :           matplotlib axes         where to plot
-    old_x,old_y     np.ndarray              Old x,y coord
-    new_x,new_y     np.ndarray              New x,y coord
-    
-    OPTIONAL
-    ---------------
-    do_binning      bool                    Bin the position (or not)
-    bin_weight      np.ndarray              Weighted mean in each bin, not just the average    
-    do_scatter      bool                    Include scatters of the voxel positions
-    do_scatter_old  ""
-    do_scatter_new  ""
-    do_arrows       bool                    Include arrows
-    ecc_bounds      np.ndarays              If binning, how split the visual field
-    pol_bounds                               
-    old_col         any value for color     Gives color for points
-    new_col        
-    patch_col       any value for color     Color for the patch 
-    dot_alpha       single float or array   Alpha for each point (not split by old and new)
-    dot_size        single float or array   Size for each point (not split by old and new)
-    arrow_col       string                  Color for the arrows. Another option is "angle", where arrows will be coloured depending on there angle
-    arrow_kwargs    dict                    Another dict for arrow properties
-        scale       Always 1, exact pt to pt
-        width       Of shaft relative to plot
-        headwidth   relative to shaft width
+    '''dag_arrow_plot
+    Description:
+        Plot arrows from old to new points. Includes the option to bin the points
+        Also various fun things such as color coding the arrows by angle, color coding the points, etc...
+    Input:
+        ax              matplotlib axes
+        old_x           np.ndarray      x coord of old points
+        old_y           np.ndarray      y coord of old points
+        new_x           np.ndarray      x coord of new points
+        new_y           np.ndarray      y coord of new points
+        *Optional*
+        do_binning      bool            Whether to bin the points
+        bin_weight      np.ndarray      Weighted mean in each bin, not just the average
+        ecc_bounds      np.ndarray      eccentricity bounds
+        pol_bounds      np.ndarray      polar angle bounds
+        do_scatter      bool            Whether to include scatters of the voxel positions
+        do_scatter_old  ""              Whether to include scatters of the old voxel positions
+        do_scatter_new  ""              Whether to include scatters of the new voxel positions
+        old_col         color           Gives color for old points
+        new_col         color           Gives color for new points
+        patch_col       color           Color for the patch 
+        dot_alpha       float or array  Alpha for each point (not split by old and new)
+        dot_size        float or array  Size for each point (not split by old and new)        
+        do_arrows       bool            Whether to include arrows
+        patch_col       str             Color of the patch
+        dot_alpha       float           alpha of points
+        dot_size        float           size of points
+        arrow_col       str             Color for the arrows. Another option is "angle", where arrows will be coloured depending on there angle
+        arrow_kwargs    dict            Another dict for arrow properties
+            scale       Always 1, exact pt to pt
+            width       Of shaft relative to plot
+            headwidth   relative to shaft width
+    Return:
+        None
     '''
     # Get arguments related to plotting:
     do_binning = kwargs.get("do_binning", False)
@@ -462,6 +575,161 @@ def dag_arrow_plot(ax, old_x, old_y, new_x, new_y, **kwargs):
 
 #     return
 
+
+
+def dag_rapid_corr(X,Y,ax=None, **kwargs):
+    if ax is None:
+        ax = plt.gca()
+    do_kde = kwargs.get('do_kde', False)    
+    do_id_line = kwargs.get('do_id_line', False)
+    do_ow = kwargs.get('ow', False)
+    do_scatter = kwargs.get('do_scatter', True)
+    do_line = kwargs.get('do_line', False)
+    dot_col = kwargs.get('dot_col', None)
+    dot_alpha = kwargs.get('dot_alpha', None)    
+    dot_cmap = kwargs.get('dot_cmap', None)
+    vmin = kwargs.get('vmin', None)
+    vmax = kwargs.get('vmax', None)
+    dot_label=kwargs.get('dot_label')
+    if do_scatter:        
+        scat_col = ax.scatter(
+            X,Y, c=dot_col, alpha=dot_alpha, label=dot_label,
+            cmap=dot_cmap, vmin=vmin, vmax=vmax) # added **kwargs
+        if dot_col is not None:
+            fig = plt.gcf()
+            # cb = fig.colorbar(scat_col, ax=ax)        
+    if do_line:
+        dag_plot_bin_line(ax=ax, X=X,Y=Y, bin_using=X, **kwargs)
+    corr_xy = dag_get_corr(X,Y)
+    corr_str = f'corr={corr_xy:.3f}'
+    if not do_ow:
+        corr_str = ax.get_title() + corr_str
+
+    kwargs['title'] = kwargs.get('title', '') + corr_str
+    if do_kde:
+        sns.kdeplot(X,Y, color=dot_col)
+    if do_id_line:
+        xlim = kwargs.get('x_lim', ax.get_xlim())
+        ylim = kwargs.get('y_lim', ax.get_ylim())
+        min_v = np.min([xlim[0], ylim[0]])
+        max_v = np.max([xlim[1], ylim[1]])
+        ax.plot((min_v,max_v), (min_v,max_v), 'k')
+        ax.set_xlim(min_v,max_v)
+        ax.set_ylim(min_v,max_v)
+    dag_add_ax_basics(ax=ax, **kwargs)
+
+
+def dag_multi_scatter(data_in, **kwargs):
+    '''
+    Many parameters to correlate do x,y... etc    
+    '''
+    dag_scatter = kwargs.get('dag_scatter', False)
+    skip_hist = kwargs.get('skip_hist', False)
+    if isinstance(data_in, np.ndarray):
+        n_pdim = data_in.shape[-1]
+        p_labels = kwargs.get('p_labels', np.arange(n_pdim))
+        data_dict = {}
+        for i,p in enumerate(p_labels):
+            data_dict[p] = data_in[:,i]
+    else:
+        data_dict = data_in
+        p_labels = kwargs.get('p_labels', data_dict.keys())
+        n_pdim = len(p_labels)
+
+    fig = kwargs.get('fig', plt.figure())    
+    rows = n_pdim
+    cols = n_pdim
+    plot_i = 1
+    ax_list = {}
+
+    for i1,y_param in enumerate(p_labels):
+        ax_list[i1] = {}
+        for i2,x_param in enumerate(p_labels):
+            ax = fig.add_subplot(rows,cols,plot_i)
+            ax_list[i1][i2] = ax
+            if i1>i2:
+                ax.axis('off')
+            else:
+                ax.set_xlabel(x_param)
+                if i1==i2:
+                    ax.hist(data_dict[x_param])
+                else:
+                    if not dag_scatter:
+                        ax.set_ylabel(y_param)
+                        ax.scatter(
+                            data_dict[x_param],
+                            data_dict[y_param],
+                        )        
+                        ax.set_title(
+                            f'corr={np.corrcoef(data_dict[x_param],data_dict[y_param])[0,1]:.3f}')
+                    else:
+                        dag_rapid_corr(
+                            X= data_dict[x_param],
+                            Y= data_dict[y_param],
+                            ax=ax,
+                            **kwargs
+                        )           
+                        ax.set_xlabel(x_param)
+                        ax.set_ylabel(y_param)                 
+            plot_i += 1
+        fig.set_tight_layout('tight')
+    return fig, ax_list
+
+
+
+# VIOLIN STUFF
+def dag_full_violin(pd2plot):
+    sns.set_style("whitegrid")
+    sns.violinplot(                                                                        
+        data=pd2plot, width=1, linewidth=0, 
+        inner=None,saturation=0.5,
+        )                                     
+    sns.boxplot(
+        data=pd2plot, showfliers = False, width=.5, saturation=0.5,
+        )
+    sns.pointplot(
+        data=pd2plot, estimator=np.median,
+        )   
+
+def dag_half_violin(pd2plot, match_id, split_id, **kwargs):
+    new_pd = {}
+    new_pd['match_id'] = []
+    new_pd['split_id'] = []
+    new_pd['val'] = []
+    for p in pd2plot.keys():
+        pname = p.split('-')[0]
+        #
+        pmatch = []
+        psplit = []
+        if match_id[0] in pname:
+            pmatch = match_id[0]
+        elif match_id[1] in pname:
+            pmatch = match_id[1]
+        
+        if split_id[0] in pname:
+            psplit = match_id[0]
+        elif split_id[1] in pname:
+            psplit = split_id[1]
+
+        new_pd['match_id'] += pmatch * len(pd2plot[p])
+        new_pd['split_id'] += psplit * len(pd2plot[p])
+        new_pd['val'] += list(pd2plot[p])
+    new_pd = pd.DataFrame(new_pd)    
+    sns.set_style("whitegrid")
+    sns.violinplot(                                                                        
+        data=new_pd, width=1, linewidth=0, inner=None,saturation=0.5,
+        x='match_id', y='val', hue='split_id', split=True
+        )                                     
+    sns.boxplot(
+        data=new_pd, showfliers = False, width=.5, saturation=0.5,
+        x='match_id', y='val', hue='split_id', 
+        )
+    sns.pointplot(
+        data=new_pd, x='match_id', y='val', hue='split_id',
+        estimator=np.median,
+        )    
+
+# ************ SAVED COLOR STUFF *************************
 import matplotlib.colors as mcolors
 def dag_get_col_vals(col_vals, cmap, vmin=None, vmax=None):
     # cmap = dag_get_cmap(cmap)
@@ -636,81 +904,6 @@ def dag_load_custom_col_dict():
         cc_dict = json.load(fp)        
     return cc_dict
 
-def dag_rapid_corr(X,Y,ax=None, **kwargs):
-    if ax is None:
-        ax = plt.gca()
-    do_kde = kwargs.get('do_kde', False)    
-    do_id_line = kwargs.get('do_id_line', False)
-    do_ow = kwargs.get('ow', False)
-    do_scatter = kwargs.get('do_scatter', True)
-    do_line = kwargs.get('do_line', False)
-    dot_col = kwargs.get('dot_col', None)
-    dot_alpha = kwargs.get('dot_alpha', None)    
-    dot_label=kwargs.get('dot_label')
-    if do_scatter:
-        ax.scatter(X,Y, c=dot_col, alpha=dot_alpha, label=dot_label)
-    if do_line:
-        dag_plot_bin_line(ax=ax, X=X,Y=Y, bin_using=X, **kwargs)
-    corr_xy = dag_get_corr(X,Y)
-    corr_str = f'corr={corr_xy:.3f}'
-    if not do_ow:
-        corr_str = ax.get_title() + corr_str
-
-    kwargs['title'] = kwargs.get('title', '') + corr_str
-    if do_kde:
-        sns.kdeplot(X,Y, color=dot_col)
-    if do_id_line:
-        xlim = kwargs.get('x_lim', ax.get_xlim())
-        ylim = kwargs.get('y_lim', ax.get_ylim())
-        min_v = np.min([xlim[0], ylim[0]])
-        max_v = np.max([xlim[1], ylim[1]])
-        ax.plot((min_v,max_v), (min_v,max_v), 'k')
-        ax.set_xlim(min_v,max_v)
-        ax.set_ylim(min_v,max_v)
-    dag_add_ax_basics(ax=ax, **kwargs)
-
-
-def dag_multi_scatter(data_in, **kwargs):
-    '''
-    Many parameters to correlate do x,y... etc    
-    '''
-    if not isinstance(data_in, dict):
-        n_pdim = data_in.shape[-1]
-        p_labels = kwargs.get('p_labels', np.arange(n_pdim))
-        data_dict = {}
-        for i,p in enumerate(p_labels):
-            data_dict[p] = data_in[:,i]
-    else:
-        data_dict = data_in
-        p_labels = kwargs.get('p_labels', data_dict.keys())
-        n_pdim = len(p_labels)
-
-    fig = kwargs.get('fig', plt.figure())
-    rows = n_pdim
-    cols = n_pdim
-    plot_i = 1
-    for i1,y_param in enumerate(p_labels):
-        for i2,x_param in enumerate(p_labels):
-            ax = fig.add_subplot(rows,cols,plot_i)
-            if i1>i2:
-                ax.axis('off')
-            else:
-                ax.set_xlabel(x_param)
-                if i1==i2:
-                    ax.hist(data_dict[x_param])
-                else:
-                    ax.set_ylabel(y_param)
-                    ax.scatter(
-                        data_dict[x_param],
-                        data_dict[y_param],
-                    )        
-                    ax.set_title(
-                        f'corr={np.corrcoef(data_dict[x_param],data_dict[y_param])[0,1]:.3f}')
-            plot_i += 1
-        fig.set_tight_layout('tight')
-    return fig
-
-# ************ SAVED COLOR STUFF *************************
 def dag_rgb(r,g,b):
     return [r/255,g/255,b/255]
 

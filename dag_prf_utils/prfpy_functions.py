@@ -326,13 +326,13 @@ class Prf1T1M(object):
         'comparison-param' : value
         e.g.: to exclude gauss fits with rsq less than 0.1
         th = {'min-rsq': 0.1 } 
-        comparison  -> min, max
-        param       -> any of... (model dependent)
-            "x", "y", "ecc", "pol"
-            gauss: "a_sigma", "a_val", "bold_baseline", "rsq"
-            norm : "a_sigma", "a_val", "bold_baseline", "c_val", "n_sigma", "b_val", "d_val", "rsq"            
-            returns a boolean array, excluding all vx where rsq < 0.1 in LE condition
+        comparison  -> min, max,bound
+        param       -> any of... (model dependent, see prfpy_params_dict)
+        value       -> float, or tuple of floats (for bounds)
+
+        A special case is applied for roi, which is a boolean array you specified previously
         
+
         Input:
         ----------
         th          dict, threshold for parameters
@@ -384,21 +384,7 @@ class Prf1T1M(object):
         return param_out
     
     def hist(self, param, th={'min-rsq':.1}, ax=None, **kwargs):
-        '''hist
-        Plot a histogram of a parameter, masked by the vx_mask
-
-        Notes:
-        ----------
-        Default vx mask is all voxels with rsq > 0.1
-
-        Input:
-        ----------
-        param       str, parameter to plot
-        th          dict, threshold for parameters
-        Optional:
-        ax          matplotlib.axes, if None, then plt.axes() is used
-        kwargs      dict, kwargs for plt.hist
-        '''
+        '''hist: Plot a histogram of a parameter, masked by th'''
         if ax==None:
             ax = plt.axes()
         vx_mask = self.return_vx_mask(th)        
@@ -456,7 +442,7 @@ class Prf1T1M(object):
         ax          matplotlib.axes, if None, then plt.axes() is used
         dot_col     str, color of the dots
         dot_alpha   float, alpha of the dots
-        kwargs      dict, kwargs for dag_rapid_corr
+        kwargs      dict, kwargs for dag_scatter
 
         '''
 
@@ -483,7 +469,7 @@ class Prf1T1M(object):
         pc = kwargs.get('pc', None)        
         if pc is not None:
             kwargs['dot_col'] = self.pd_params[pc][vx_mask]
-        dag_rapid_corr(
+        dag_scatter(
             ax=ax,
             X=self.pd_params[px][vx_mask],
             Y=self.pd_params[py][vx_mask],
@@ -491,6 +477,17 @@ class Prf1T1M(object):
         )        
     
     def plot_ts(self, ts, idx, ax=None, **kwargs):
+        '''plot_ts
+        Plot the time series of a voxel 
+
+        Input:
+        ----------
+        ts          np.ndarray, time series, n_vx x n_time
+        idx         int, which voxel to plot
+        Optional:
+        ax          matplotlib.axes, if None, then plt.axes() is used
+        kwargs      dict, kwargs for plt.plot
+        '''
         if ax==None:
             ax = plt.axes()
         context_str = self.make_context_str(idx)
@@ -505,13 +502,27 @@ class Prf1T1M(object):
                 prf_str = old_str + '\n' + prf_str
         ax.set_title(prf_str)
 
-    def make_prf_str(self, idx, add_context=False):
+    def make_prf_str(self, idx, pid_list=None, add_context=False):
+        '''make_prf_str
+        Make a string of the parameters for a voxel
+
+        Input:
+        ----------
+        idx         int, which voxel to plot
+        Optional:
+        add_context bool, if True, then add the task, model, and voxel index
+
+        Output:
+        ----------
+        prf_str     str, string of the parameters for a voxel
+        '''
         prf_str = ''
         if add_context:
             prf_str += self.make_context_str(idx=idx)
         param_count = 0
-        param_keys = self.model_labels
-        for param_key in param_keys:
+        if pid_list is None:
+            pid_list = self.model_labels
+        for param_key in pid_list:
             if param_key in self.pd_params.keys():
                 param_count += 1
                 prf_str += f'{param_key}= {self.pd_params[param_key][idx]:.2f}; '
@@ -519,7 +530,9 @@ class Prf1T1M(object):
                 prf_str += '\n'
                 param_count = 0
         return prf_str
+    
     def make_context_str(self, idx):
+        '''make_context_str: add task, model to the string'''
         if self.task is None:
             ctxt_task = ''
         else:
@@ -529,6 +542,19 @@ class Prf1T1M(object):
         return context_str
     
     def rsq_w_mean(self, pid_list, th={'min-rsq':.1}):
+        '''rsq_w_mean
+        Calculate the weighted mean of a parameter, weighted by rsq
+
+        Input:
+        ----------
+        pid_list    list, parameter id list
+        Optional:
+        th          dict, threshold for parameters
+
+        Output:
+        ----------
+        wm_param    dict, weighted mean of the parameters
+        '''
         if not isinstance(pid_list, list):
             pid_list = [pid_list]
 
@@ -550,10 +576,43 @@ class Prf1T1M(object):
 
 
 class PrfMulti(object):
-    '''
-    Same as Prf1T1Mx2, but 
+    '''PrfMulti
+    Class for parsing prfpy output for multiple models/tasks for the *same subject*
+    
+    Notes:
+    ----------
+    It is important that there are the same number of voxels in each model/task    
+    Create a list of Prf1T1M objects, and associated labels, which are all collected in
+    this class.     
+    It will hold all of the original Prf1T1M objects inside a dictionary    
+    The idea is that it makes it easier to do comparisons across conditions/models
+
+    Functions:
+    ----------
+    Data processing:
+    return_vx_mask: returns a mask (boolean array) for voxels
+    return_th_param: returns the specified parameters, masked by the vx_mask
+    add_prf_diff: add a difference between 2 prf_obj (e.g., diff between 2 tasks)
+    TODO: add_prf_mean: add a mean between 2 prf_obj (e.g., mean between 2 tasks)
+
+    ** Plot functions **:
+    hist: plot a histogram of a parameter
+    scatter: scatter plot of 2 parameters
+    multi_scatter: Several scatter plots... multiple comparisons...
+    arrow: plot an arrow between 2 prf_obj
+
+    TODO: ? visual_field: plot voxels around the visual field of the voxels, masked by the vx_mask
+        and colored by a parameter
     '''
     def __init__(self,prf_obj_list, id_list=[]):
+        '''__init__
+        
+        Input:
+        ----------
+        prf_obj_list    list, of Prf1T1M objects
+        Optional:
+        id_list         list, of strings, to label the prf_obj_list        
+        '''
         self.id_list = id_list
         self.prf_obj = {}
         self.n_vox = prf_obj_list[0].n_vox
@@ -561,17 +620,33 @@ class PrfMulti(object):
             self.prf_obj[id] = prf_obj_list[i]
     
     def return_vx_mask(self, th={}):
-        '''
-        return_vx_mask: returns a mask (boolean array) for voxels, specified by the user        
+        '''return_vx_mask
+        Returns a mask (boolean array) for voxels
+        
+        Notes: 
+        ----------
+        As in Prf1T1M, but with one extra part of the key:        
         th keys must be split into 3 parts
-        'task-comparison-param' : value
-        e.g.: to exclude gauss fits with rsq less than 0.1
-        th = {'AS0_gauss-min-rsq': 0.1 } 
-        task        -> task1, task2, diff, mean, all. (all means apply the threshold to both task1, and task2)
-        comparison  -> min, max, bound
-        param       -> any of... (model dependent e.g., 'x', 'y', 'ecc'...)
+        'id-comparison-param' : value
+        th = {'prf1-min-rsq': 0.1 } 
+        id          -> which prf_obj to apply the threshold to
+                        Can also be 'all', which applies to all prf_obj
+        comparison  -> min, max,bound
+        param       -> any of... (model dependent, see prfpy_params_dict)
+        value       -> float, or tuple of floats (for bounds)
+
+        A special case is applied for roi, which is a boolean array you specified previously
         
 
+        Input:
+        ----------
+        th          dict, threshold for parameters
+
+        Output:
+        ----------
+        vx_mask     np.ndarray, boolean array, length = n_vx
+                Returns a mask (boolean array) for voxels
+        
         '''        
 
         # Start with EVRYTHING        
@@ -588,7 +663,8 @@ class PrfMulti(object):
             if id=='all':
                 # Apply to both task1 and task2:                
                 for prf_id in self.id_list:
-                    if 'diff_' in prf_id:
+                    if 'diff_' in prf_id: # skip the diff ones...
+                        print('not applying threshold to diff')
                         continue
 
                     p_available = list(self.prf_obj[prf_id].pd_params.keys())
@@ -604,6 +680,9 @@ class PrfMulti(object):
         return vx_mask
     
     def return_th_params(self, px_list, th=None, **kwargs):
+        '''return_th_param
+        return all the parameters listed, masked by vx_mask        
+        '''
         px_id = [None] * len(px_list)
         px_p = [None] * len(px_list)
         for i,p in enumerate(px_list):
@@ -625,46 +704,30 @@ class PrfMulti(object):
             tmp_dict[f'{i_px_id}-{i_px_p}'] = self.prf_obj[i_px_id].pd_params[i_px_p][vx_mask].to_numpy()
         return tmp_dict
     
-    # def return_th_pd_params(self, id_list=None, th=None, **kwargs):
-    #     if id_list is None:
-    #         id_list = self.id_list
-    #     if th is None:
-    #         min_rsq = kwargs.get('min_rsq',.1)
-    #         th = {}
-    #         for this_id in id_list:
-    #             th[f'{this_id}-min-rsq'] = min_rsq
-    #     th_plus = kwargs.get('th_plus', {})
-    #     th = {**th, **th_plus}        
-    #     vx_mask = self.return_vx_mask(th)
-        
-    #     # something to split the names by
-    #     attrib_dict = kwargs.get('attrib_dict', {}) 
-    #     m2 = kwargs.get('m2', None) # marker 1
+    def add_prf_diff(self, id1, id2, new_id=None):
+        '''add_prf_diff
+        Add a difference between 2 prf_obj (e.g., diff between 2 tasks)
 
-    #     new_pd = {}
-    #     new_pd['name'] = []
-    #     new_pd['idx'] = []
-    #     for att in attrib_dict.keys():
-    #         new_pd[att] = []
-    #     for p in self.prf_obj[id_list[0]].pd_params.keys():
-    #         new_pd[p] = []
-    #     # cycle through the ids... 
-    #     for this_id in id_list:
-    #         # how many entries from this prf obj?
-    #         n_entry = prf_all.prf_obj[this_id].pd_params.shape[0]
-    #         # Add specified attributes... (e.g., labels)
-    #         for att in attrib_dict.keys():
-    #             new_pd[att] += attrib_dict[att] * n_entry
-    #         # Add index
-    #         new_pd['idx'] += list(np.arange(n_entry))
-    #         # Add parameters
-    #         for p in self.prf_obj[this_id].pd_params.keys():
-    #             new_pd[p] += list(self.prf_obj[this_id].pd_params[p][vx_mask])
-    #     return new_pd
+        Input:
+        ----------
+        id1         str, id of the first prf_obj
+        id2         str, id of the second prf_obj
+        Optional:
+        new_id      str, id of the new prf_obj
+        '''
+        if new_id is None:
+            new_id = f'diff_{id1}_{id2}'
+        if new_id in self.id_list:
+            print(f'Already created {new_id}')
+        else:
+            self.prf_obj[new_id] = PrfDiff(
+                self.prf_obj[id1], self.prf_obj[id2], diff_id=new_id,
+            )
+            self.id_list += [new_id]
+    # TODO - add_prf_mean    
 
-
-
-    def rapid_hist(self, px, th=None, ax=None, **kwargs):
+    def hist(self, px, th=None, ax=None, **kwargs):
+        '''hist: Plot a histogram of a parameter, masked by th'''
         if ax==None:
             ax = plt.axes()
         px_id, px_p = px.split('-')                
@@ -677,8 +740,8 @@ class PrfMulti(object):
         ax.set_title(f'{px_id}-{px_p}')
         dag_add_ax_basics(ax=ax, **kwargs)
 
-
-    def rapid_p_corr(self, px, py, th=None, ax=None, **kwargs):
+    def scatter(self, px, py, th=None, ax=None, **kwargs):
+        '''scatter: As in Prf1T1M, but can also specify across different prf_obj'''
         # dot_col = kwargs.get('dot_col', 'k')
         # dot_alpha = kwargs.get('dot_alpha', None)
         if ax==None:
@@ -707,29 +770,26 @@ class PrfMulti(object):
         vx_mask = self.return_vx_mask(th)
         if pc is not None:
             kwargs['dot_col'] = self.prf_obj[pc_id].pd_params[pc_p][vx_mask]
-        dag_rapid_corr(
+        dag_scatter(
             ax=ax,
             X=self.prf_obj[px_id].pd_params[px_p][vx_mask],
             Y=self.prf_obj[py_id].pd_params[py_p][vx_mask],
             **kwargs
         )                
         ax.set_xlabel(px)        
-        ax.set_ylabel(py)
+        ax.set_ylabel(py)                        
 
-
-    # def rapid_scatter(self, th={'all-min-rsq':.1}, ax=None, dot_col='k', **kwargs):
-    #     if ax==None:
-    #         ax = plt.axes()
-    #     vx_mask = self.return_vx_mask(th)
-                
-    #     dag_visual_field_scatter(
-    #         ax=ax, 
-    #         dot_x=self.pd_params['x'][vx_mask],
-    #         dot_y=self.pd_params['y'][vx_mask],
-    #         dot_col = dot_col,
-    #         **kwargs
-    #     )                          
-    def rapid_arrow(self, pold, pnew, ax=None, th=None, **kwargs):
+    def multi_scatter(self, px_list, th=None, ax=None, **kwargs):
+        '''multi_scatter
+        Several scatter plots... multiple comparisons...
+        i.e., creates a grid of scatter plots
+        '''
+        tmp_dict = self.return_th_params(px_list, th, **kwargs)
+        fig, ax_list = dag_multi_scatter(tmp_dict, **kwargs)            
+        return fig, ax_list
+    
+    def arrow(self, pold, pnew, ax=None, th=None, **kwargs):
+        '''arrow: arrows from one prf_obj to another'''
         if ax==None:
             ax = plt.gca()
         if th is None:
@@ -755,24 +815,11 @@ class PrfMulti(object):
             **kwargs
             )
 
-    def rapid_multi_scat(self, px_list, th=None, ax=None, **kwargs):
-        tmp_dict = self.return_th_params(px_list, th, **kwargs)
-        fig, ax_list = dag_multi_scatter(tmp_dict, **kwargs)            
-        return fig, ax_list
-
-
-    def add_prf_diff(self, id1, id2, new_id=None):
-        if new_id is None:
-            new_id = f'diff_{id1}_{id2}'
-        if new_id in self.id_list:
-            print(f'Already created {new_id}')
-        else:
-            self.prf_obj[new_id] = PrfDiff(
-                self.prf_obj[id1], self.prf_obj[id2], diff_id=new_id,
-            )
-            self.id_list += [new_id]
 
 class PrfDiff(object):
+    '''PrfDiff
+    Used with PrfMulti, to contrast 2 conditions
+    '''
     def __init__(self, prf_obj1, prf_obj2, diff_id, **kwargs):
         assert ('diff' in diff_id), 'Needs a diff'
         # if not 'diff_' in id:
@@ -1245,7 +1292,7 @@ class Prf1T1Mx2(object):
         #     )[0,1]
         
         # ax.set_title(f'corr {px}, {py} = {corr_xy:.3f}')
-        dag_rapid_corr(
+        dag_scatter(
             ax=ax,
             X=self.pd_params[px_id][px_p][vx_mask],
             Y=self.pd_params[py_id][py_p][vx_mask],

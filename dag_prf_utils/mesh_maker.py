@@ -76,7 +76,7 @@ class FSMaker(object):
         dag_str2file(filename=opj(self.custom_surf_dir, f'{surf_name}_overlay'),txt=overlay_to_save)
         self.overlay_str[surf_name] = overlay_custom_str
         self.surf_list.append(surf_name)
-    def open_fs_surface(self, surf_name='curv', **kwargs):
+    def open_fs_surface(self, surf_name=None, **kwargs):
         # surf name - which surface to load...
         
         os.chdir(self.sub_surf_dir) # move to freeview dir        
@@ -84,13 +84,13 @@ class FSMaker(object):
         # self.save_fs_cmd(surf_name, **kwargs)
         os.system(fs_cmd)        
 
-    def save_fs_cmd(self, surf_name='curv', **kwargs):
+    def save_fs_cmd(self, surf_name=None, **kwargs):
         cmd_name = kwargs.get('cmd_name', f'{surf_name}_cmd.txt')
         print(f'Custom overlay string saved here: ({opj(self.custom_surf_dir, cmd_name)})')
         fs_cmd = self.write_fs_cmd(surf_name=surf_name, **kwargs)
         dag_str2file(filename=opj(self.custom_surf_dir, cmd_name),txt=fs_cmd)
         
-    def write_fs_cmd(self, surf_name='curv', **kwargs):
+    def write_fs_cmd(self, surf_name=None, **kwargs):
         '''
         Write the bash command to open the specific surface with the overlay
 
@@ -121,6 +121,10 @@ class FSMaker(object):
         scr_shot_file   = kwargs.get('scr_shot_file', None)
         # *** COLOR BAR ***
         do_col_bar  = kwargs.get('do_col_bar', True)
+
+        do_surf = True
+        if surf_name is None:
+            do_surf = False
 
         if not isinstance(mesh_list, list):
             mesh_list = [mesh_list]
@@ -160,15 +164,15 @@ class FSMaker(object):
                         roi_col = f'{int(roi_col[0]*255)},{int(roi_col[1]*255)},{int(roi_col[2]*255)}'
                         this_roi_path = self.get_roi_file(roi, this_hemi)
                         fs_cmd += f':label={this_roi_path}:label_outline=True:label_visible=True:label_color={roi_col}' # false...
-                # if surf_name is not None:
-                for this_surf_name in surf_name:
-                    # this_surf_path = opj(self.custom_surf_dir, f'{this_hemi}.{this_surf_name}')                
-                    this_surf_path = self.get_surf_path(this_hemi=this_hemi, this_surf_name=this_surf_name)
-                    this_overlay_str = self.get_overlay_str(this_surf_name, **kwargs)
-                    fs_cmd += f':overlay={this_surf_path}:{this_overlay_str}'                        
-                    if roi_mask is not None:
-                        this_roi_path = self.get_roi_file(roi, this_hemi)
-                        fs_cmd += f':overlay_mask={this_roi_path}'
+                if do_surf:
+                    for this_surf_name in surf_name:
+                        # this_surf_path = opj(self.custom_surf_dir, f'{this_hemi}.{this_surf_name}')                
+                        this_surf_path = self.get_surf_path(this_hemi=this_hemi, this_surf_name=this_surf_name)
+                        this_overlay_str = self.get_overlay_str(this_surf_name, **kwargs)
+                        fs_cmd += f':overlay={this_surf_path}:{this_overlay_str}'                        
+                        if roi_mask is not None:
+                            this_roi_path = self.get_roi_file(roi, this_hemi)
+                            fs_cmd += f':overlay_mask={this_roi_path}'
         fs_cmd +=  f' --camera Azimuth {cam_azimuth} Zoom {cam_zoom} Elevation {cam_elevation} Roll {cam_roll} '
         fs_cmd += f'{col_bar_flag} {scr_shot_flag}'
         return fs_cmd 
@@ -207,22 +211,23 @@ class FSMaker(object):
             return overlay_str
         if surf_name in self.overlay_str.keys():
             overlay_str = self.overlay_str[surf_name]
-        else:
-            # Not found in struct: check the custom surf dir...
-            print(f'{surf_name} not in dict')
-            print(f'Checking custom surf dir')
-            overlay_str = ':overlay_custom='
-            overlay_str += dag_find_file_in_folder(
-                filt=[surf_name, 'overlay'],
-                path=self.sub_surf_dir,
-                recursive=True,
-                return_msg=None,
-            )
+            return overlay_str
 
-        if overlay_str is None:
+        # Not found in struct: check the custom surf dir...
+        overlay_str = ':overlay_custom='            
+        print(f'{surf_name} not in dict')
+        print(f'Checking custom surf dir')
+        overlay_str_file = dag_find_file_in_folder(
+            filt=[surf_name, 'overlay'],
+            path=self.sub_surf_dir,
+            recursive=True,
+            return_msg=None,
+        )
+
+        if overlay_str_file is None:
             overlay_str = ''#'greyscale :colormap=grayscale' #  grayscale/lut/heat/jet/gecolor/nih/pet/binary
-        elif isinstance(overlay_str, list):
-            overlay_str = overlay_str[0]
+        elif isinstance(overlay_str_file, list):
+            overlay_str += overlay_str_file[0]
 
         return overlay_str
     
@@ -395,10 +400,10 @@ def dag_fs_to_ply(sub, data, fs_dir, mesh_name='inflated', out_dir=None, under_s
         # [4] Use my script to write a ply file...
         if ih=='lh.':
             # ply_str = obj_to_ply(obj_surf_file, display_rgb[:n_hemi_vx[0],:]) # lh
-            ply_str, rgb_str = dag_srf_to_ply(srf_surf_file, display_rgb[:n_hemi_vx[0],:], hemi=ih, values=data) # lh
+            ply_str, rgb_str = dag_srf_to_ply(srf_surf_file, display_rgb[:n_hemi_vx[0],:], hemi=ih, values=data, **kwargs) # lh
         else:
             # ply_str = obj_to_ply(obj_surf_file, display_rgb[n_hemi_vx[0]:,:]) # rh
-            ply_str, rgb_str = dag_srf_to_ply(srf_surf_file, display_rgb[n_hemi_vx[0]:,:],hemi=ih, values=data) # rh
+            ply_str, rgb_str = dag_srf_to_ply(srf_surf_file, display_rgb[n_hemi_vx[0]:,:],hemi=ih, values=data, **kwargs) # rh
         # Now save the ply file
         ply_file_2write = open(ply_surf_file, "w")
         ply_file_2write.write(ply_str)
@@ -416,12 +421,13 @@ def dag_fs_to_ply(sub, data, fs_dir, mesh_name='inflated', out_dir=None, under_s
     if return_ply_file:
         return ply_file_2open
 
-def dag_srf_to_ply(srf_file, rgb_vals=None, hemi=None, values=None, incl_rgb=True):
+def dag_srf_to_ply(srf_file, rgb_vals=None, hemi=None, values=None, incl_rgb=True, **kwargs):
     '''
     dag_srf_to_ply
     Convert srf file to .ply
     
     '''
+    x_offset = kwargs.get('x_offset', None)
     
     if not isinstance(values, np.ndarray):
         values = np.ones(rgb_vals.shape[0])
@@ -447,12 +453,13 @@ def dag_srf_to_ply(srf_file, rgb_vals=None, hemi=None, values=None, incl_rgb=Tru
     ply_str += f'property list uchar int vertex_index\n'
     ply_str += f'end_header\n'
 
-    if hemi==None:
-        x_offset = 0
-    elif 'lh' in hemi:
-        x_offset = -50
-    elif 'rh' in hemi:
-        x_offset = 50
+    if x_offset is None:
+        if hemi==None:
+            x_offset = 0
+        elif 'lh' in hemi:
+            x_offset = -50
+        elif 'rh' in hemi:
+            x_offset = 50
     # Cycle through the lines of the obj file and add vx + coords + rgb
     v_idx = 0 # Keep count of vertices     
     for i in range(2,len(srf_lines)):

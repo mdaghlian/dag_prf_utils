@@ -608,3 +608,24 @@ def dag_read_fs_mesh(filepath):
         'faces' : faces,        
     }
     return mesh_info
+
+def dag_merge_dicts(a: dict, b: dict, max_depth=3, path=[]):
+    '''
+    Merge two dictionaries recursively
+    Adapted from
+    https://stackoverflow.com/questions/7204805/how-to-merge-dictionaries-of-dictionaries    
+    '''    
+    merged_dict = a.copy()  # Create a copy of dictionary 'a' to start with
+    for key in b:
+        if key in merged_dict:
+            if isinstance(merged_dict[key], dict) and isinstance(b[key], dict):
+                if len(path) < max_depth:
+                    # Recursively merge dictionaries
+                    merged_dict[key] = dag_merge_dicts(merged_dict[key], b[key], max_depth, path + [str(key)])
+                else:
+                    raise Exception('Max depth reached at ' + '.'.join(path + [str(key)]))
+            elif merged_dict[key] != b[key]:
+                raise Exception('Conflict at ' + '.'.join(path + [str(key)]))
+        else:
+            merged_dict[key] = b[key]  # If the key is not in 'merged_dict', add it
+    return merged_dict    

@@ -69,15 +69,16 @@ def prfpy_params_dict():
     }            
 
     p_order['csf']  ={
-        'width_r'       :  0,
-        'sf0'           :  1,
-        'maxC'          :  2,
-        'width_l'       :  3,
-        'amp_1'         :  4,
-        'bold_baseline' :  5,
-        'hrf_deriv'     :  6, # *hrf_1
-        'hrf_disp'      :  7, # *hrf_2        
-        'rsq'           : -1,
+        'width_r'   : 0,
+        'sf0'       : 1,
+        'maxC'      : 2,
+        'width_l'   : 3,
+        'crf_exp'   : 4,
+        'beta'      : 5,
+        'baseline'  : 6,
+        'hrf_1'     : 7,
+        'hrf_2'     : 8,
+        'rsq'       : 9,
     }
 
     return p_order
@@ -276,6 +277,7 @@ class Prf1T1M(object):
         self.model = model        
         self.model_labels = prfpy_params_dict()[self.model] # Get names for different model parameters...
         self.prf_params_np = prf_params
+        self.saved_kwargs = kwargs
         self.fixed_hrf = kwargs.get('fixed_hrf', False)
         self.incl_rsq = kwargs.get('incl_rsq', True)
         #
@@ -295,7 +297,10 @@ class Prf1T1M(object):
         if self.model in ['gauss', 'norm', 'css', 'dog']:
             # Ecc, pol
             self.params_dd['ecc'], self.params_dd['pol'] = dag_coord_convert(
-                self.params_dd['x'],self.params_dd['y'],'cart2pol')        
+                self.params_dd['x'],self.params_dd['y'],'cart2pol')      
+            # pol4roi
+            self.params_dd['pol4roi'] = np.abs(np.degrees(np.arctan2(self.params_dd['x'],self.params_dd['y'])))  #I know xy looks backwards 
+
         if self.model in ('norm', 'dog'):
             # -> size ratio:
             self.params_dd['size_ratio'] = self.params_dd['size_2'] / self.params_dd['size_1']
@@ -350,6 +355,12 @@ class Prf1T1M(object):
             if 'roi' in th_key_str: # Input roi specification...                
                 vx_mask &= th[th_key]
                 continue # now next item in key
+            if 'idx'==th_key_str:
+                # Input voxel index specification...
+                idx_mask = np.zeros(self.n_vox, dtype=bool)
+                idx_mask[th[th_key]] = True
+                vx_mask &= idx_mask
+                continue
 
             comp, p = th_key_str.split('-')
             th_val = th[th_key]
@@ -604,13 +615,12 @@ class PrfMulti(object):
     TODO: ? visual_field: plot voxels around the visual field of the voxels, masked by the vx_mask
         and colored by a parameter
     '''
-    def __init__(self,prf_obj_list, id_list=[]):
+    def __init__(self,prf_obj_list, id_list):
         '''__init__
         
         Input:
         ----------
         prf_obj_list    list, of Prf1T1M objects
-        Optional:
         id_list         list, of strings, to label the prf_obj_list        
         '''
         self.id_list = id_list
@@ -657,6 +667,12 @@ class PrfMulti(object):
                 # Input roi specification...
                 vx_mask &= th[th_key]
                 continue # now next item in key
+            if 'idx'==th_key_str:
+                # Input voxel index specification...
+                idx_mask = np.zeros(self.n_vox, dtype=bool)
+                idx_mask[th[th_key]] = True
+                vx_mask &= idx_mask
+                continue            
 
             id, comp, p = th_key_str.split('-')
             th_val = th[th_key]
@@ -704,6 +720,16 @@ class PrfMulti(object):
             tmp_dict[f'{i_px_id}-{i_px_p}'] = self.prf_obj[i_px_id].pd_params[i_px_p][vx_mask].to_numpy()
         return tmp_dict
     
+    def add_prf(self, new_prf, new_id):
+        '''add_prf_obj
+        Add a new prf_obj to the list
+        '''
+        if new_id in self.id_list:
+            print(f'{new_id} already exists')
+        else:
+            self.prf_obj[new_id] = new_prf
+            self.id_list += [new_id]
+
     def add_prf_diff(self, id1, id2, new_id=None):
         '''add_prf_diff
         Add a difference between 2 prf_obj (e.g., diff between 2 tasks)
@@ -770,6 +796,9 @@ class PrfMulti(object):
         vx_mask = self.return_vx_mask(th)
         if pc is not None:
             kwargs['dot_col'] = self.prf_obj[pc_id].pd_params[pc_p][vx_mask]
+        if vx_mask.sum()==0:
+            print('Warning: no voxels found')
+            return
         dag_scatter(
             ax=ax,
             X=self.prf_obj[px_id].pd_params[px_p][vx_mask],

@@ -399,6 +399,7 @@ def dag_plot_bin_line(ax, X,Y, bin_using, **kwargs):
     line_col = kwargs.get("line_col", "k")    
     line_label = kwargs.get("line_label", None)
     lw= kwargs.get("lw", 5)
+    line_kwargs = kwargs.get('line_kwargs', {})
     n_bins = kwargs.get('n_bins', 10)
     bins = kwargs.get('bins', None)
     do_basics = kwargs.get('do_basics', False)
@@ -422,16 +423,18 @@ def dag_plot_bin_line(ax, X,Y, bin_using, **kwargs):
                 color=line_col,
                 label=line_label, 
                 lw=lw,
+                **line_kwargs
                 )
         else:
             ax.errorbar(
                 X_mean,
                 Y_mean,
                 yerr=Y_std,
-                xerr=X_std,
+                # xerr=X_std,
                 color=line_col,
                 label=line_label,
                 lw=lw,
+                **line_kwargs
                 )        
     else:
         ax.plot(
@@ -439,7 +442,9 @@ def dag_plot_bin_line(ax, X,Y, bin_using, **kwargs):
             Y_mean,
             color=line_col,
             label=line_label,
-            lw=lw,)
+            lw=lw,
+            **line_kwargs,
+            )
     ax.legend()
     if do_basics:    
         dag_add_ax_basics(ax, **kwargs)

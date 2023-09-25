@@ -111,6 +111,7 @@ class FSMaker(object):
         mesh_list = kwargs.get('mesh_list', ['inflated'])
         hemi_list = kwargs.get('hemi_list', ['lh', 'rh'])
         roi_list = kwargs.get('roi_list',None)
+        roi_col_spec = kwargs.get('roi_col_spec', None)
         roi_mask = kwargs.get('roi_mask', None)
         # *** CAMERA ANGLE ***
         cam_azimuth     = kwargs.get('azimuth', 0)
@@ -160,8 +161,11 @@ class FSMaker(object):
                 fs_cmd += f' {this_hemi}.{mesh}'
                 if roi_list is not None:
                     for i_roi, roi in enumerate(roi_list):
-                        roi_col = dag_get_col_vals(i_roi, 'jet', 0, len(roi_list))
-                        roi_col = f'{int(roi_col[0]*255)},{int(roi_col[1]*255)},{int(roi_col[2]*255)}'
+                        if roi_col_spec is None:
+                            roi_col = dag_get_col_vals(i_roi, 'jet', 0, len(roi_list))
+                            roi_col = f'{int(roi_col[0]*255)},{int(roi_col[1]*255)},{int(roi_col[2]*255)}'
+                        else:
+                            roi_col = roi_col_spec
                         this_roi_path = self.get_roi_file(roi, this_hemi)
                         fs_cmd += f':label={this_roi_path}:label_outline=True:label_visible=True:label_color={roi_col}' # false...
                 if do_surf:

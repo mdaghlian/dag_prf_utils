@@ -5,11 +5,6 @@ import concurrent.futures
 import time
 from datetime import datetime, timedelta
 
-
-
-
-
-
 # class DagThreader:
 #     def __init__(self, io_function):
 #         self.io_function = io_function
@@ -28,46 +23,6 @@ from datetime import datetime, timedelta
         
 #         final_results = [result[1] for result in sorted(results, key=lambda item: item[0])]
 #         return final_results
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 class DagThreader:

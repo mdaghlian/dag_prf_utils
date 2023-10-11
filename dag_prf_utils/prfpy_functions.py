@@ -69,16 +69,16 @@ def prfpy_params_dict():
     }            
 
     p_order['csf']  ={
-        'width_r'   : 0,
-        'sf0'       : 1,
-        'maxC'      : 2,
-        'width_l'   : 3,
-        'crf_exp'   : 4,
-        'beta'      : 5,
-        'baseline'  : 6,
-        'hrf_1'     : 7,
-        'hrf_2'     : 8,
-        'rsq'       : 9,
+        'width_r'       : 0,
+        'SFp'           : 1,
+        'CSp'          : 2,
+        'width_l'       : 3,
+        'crf_exp'       : 4,
+        'amp_1'         : 5,
+        'bold_baseline' : 6,
+        'hrf_1'         : 7,
+        'hrf_2'         : 8,
+        'rsq'           : -1,
     }
 
     return p_order
@@ -310,12 +310,12 @@ class Prf1T1M(object):
             # Suppression index 
             self.params_dd['sup_idx'] = (self.params_dd['amp_1'] * self.params_dd['size_1']**2) / (self.params_dd['amp_2'] * self.params_dd['size_2']**2)
         if self.model=='csf':
-            self.params_dd['log10_sf0'] = np.log10(self.params_dd['sf0'])
-            self.params_dd['log10_maxC'] = np.log10(self.params_dd['maxC'])
+            self.params_dd['log10_SFp'] = np.log10(self.params_dd['SFp'])
+            self.params_dd['log10_CSp'] = np.log10(self.params_dd['CSp'])
             self.params_dd['sfmax'] = np.nan_to_num(
-                10**(np.sqrt(self.params_dd['log10_maxC']/(self.params_dd['width_r']**2)) + \
-                                            self.params_dd['log10_sf0']))            
-            self.params_dd['sfmax'][self.params_dd['sfmax']>100] = 100 # MAX VALUE
+                10**(np.sqrt(self.params_dd['log10_CSp']/(self.params_dd['width_r']**2)) + \
+                                            self.params_dd['log10_SFp']))            
+            self.params_dd['sfmax'][self.params_dd['sfmax']>50] = 50 # MAX VALUE
             self.params_dd['log10_sfmax'] = np.log10(self.params_dd['sfmax'])
 
         # Convert to PD           
@@ -1023,11 +1023,11 @@ class Prf2T1M(object):
             if self.model=='norm':
                 all_task_dict[i_task]['bd_ratio'] = all_task_dict[i_task]['b_val'] / all_task_dict[i_task]['d_val']
             if self.model=='csf':
-                all_task_dict[i_task]['log10_sf0']  = np.log10(all_task_dict[i_task]['sf0'])
-                all_task_dict[i_task]['log10_maxC'] = np.log10(all_task_dict[i_task]['maxC'])
+                all_task_dict[i_task]['log10_SFp']  = np.log10(all_task_dict[i_task]['SFp'])
+                all_task_dict[i_task]['log10_CSp'] = np.log10(all_task_dict[i_task]['CSp'])
                 all_task_dict[i_task]['sfmax'] = np.nan_to_num(
-                    10**(np.sqrt(all_task_dict[i_task]['log10_maxC'] / (all_task_dict[i_task]['width_r']**2)) + \
-                                                all_task_dict[i_task]['log10_sf0']))            
+                    10**(np.sqrt(all_task_dict[i_task]['log10_CSp'] / (all_task_dict[i_task]['width_r']**2)) + \
+                                                all_task_dict[i_task]['log10_SFp']))            
                 all_task_dict[i_task]['sfmax'][all_task_dict[i_task]['sfmax']>100] = 100 # MAX VALUE
                 all_task_dict[i_task]['log10_sfmax'] = np.log10(all_task_dict[i_task]['sfmax'])
         
@@ -1058,11 +1058,11 @@ class Prf2T1M(object):
             if self.model=='norm':
                 all_task_dict[i_comp]['bd_ratio'] = all_task_dict[i_comp]['b_val'] / all_task_dict[i_comp]['d_val']
             if self.model=='csf':
-                all_task_dict[i_comp]['log10_sf0']  = np.log10(all_task_dict[i_comp]['sf0'])
-                all_task_dict[i_comp]['log10_maxC'] = np.log10(all_task_dict[i_comp]['maxC'])
+                all_task_dict[i_comp]['log10_SFp']  = np.log10(all_task_dict[i_comp]['SFp'])
+                all_task_dict[i_comp]['log10_CSp'] = np.log10(all_task_dict[i_comp]['CSp'])
                 all_task_dict[i_comp]['sfmax'] = np.nan_to_num(
-                    10**(np.sqrt(all_task_dict[i_comp]['log10_maxC'] / (all_task_dict[i_comp]['width_r']**2)) + \
-                                                all_task_dict[i_comp]['log10_sf0']))            
+                    10**(np.sqrt(all_task_dict[i_comp]['log10_CSp'] / (all_task_dict[i_comp]['width_r']**2)) + \
+                                                all_task_dict[i_comp]['log10_SFp']))            
                 all_task_dict[i_comp]['sfmax'][all_task_dict[i_comp]['sfmax']>100] = 100 # MAX VALUE
                 all_task_dict[i_comp]['log10_sfmax'] = np.log10(all_task_dict[i_comp]['sfmax'])
 
@@ -1203,11 +1203,11 @@ class Prf1T1Mx2(object):
         #     if both_norm:
         #         comp_dict[i_comp]['bd_ratio'] = comp_dict[i_comp]['b_val'] / comp_dict[i_comp]['d_val']
         #     if both_csf:
-        #         comp_dict[i_comp]['log10_sf0']  = np.log10(comp_dict[i_comp]['sf0'])
-        #         comp_dict[i_comp]['log10_maxC'] = np.log10(comp_dict[i_comp]['maxC'])
+        #         comp_dict[i_comp]['log10_SFp']  = np.log10(comp_dict[i_comp]['SFp'])
+        #         comp_dict[i_comp]['log10_CSp'] = np.log10(comp_dict[i_comp]['CSp'])
         #         comp_dict[i_comp]['sfmax'] = np.nan_to_num(
-        #             10**(np.sqrt(comp_dict[i_comp]['log10_maxC'] / (comp_dict[i_comp]['width_r']**2)) + \
-        #                                         comp_dict[i_comp]['log10_sf0']))            
+        #             10**(np.sqrt(comp_dict[i_comp]['log10_CSp'] / (comp_dict[i_comp]['width_r']**2)) + \
+        #                                         comp_dict[i_comp]['log10_SFp']))            
         #         comp_dict[i_comp]['sfmax'][comp_dict[i_comp]['sfmax']>100] = 100 # MAX VALUE
         #         comp_dict[i_comp]['log10_sfmax'] = np.log10(comp_dict[i_comp]['sfmax'])            
         # Enter into pd data frame

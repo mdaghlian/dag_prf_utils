@@ -1,0 +1,51 @@
+#!/usr/bin/env python
+#$ -j Y
+#$ -cwd
+#$ -V
+import sys
+import getopt
+
+import matplotlib.pyplot as plt
+import numpy as np
+
+from dag_prf_utils.plot_functions import *
+from dag_prf_utils.mesh_maker import *
+
+
+def main(argv):
+    """
+    ---------------------------------------------------------------------------------------------------
+    Convert one mesh to another
+
+    Args (optional):
+        --mesh_in   path of mesh in 
+        --mesh_out  name of mesh to convert
+    ---------------------------------------------------------------------------------------------------
+    """
+    mesh_in = None
+
+    try:
+        opts = getopt.getopt(argv,"h:",["mesh_in="])[0]
+    except getopt.GetoptError:
+        print(main.__doc__)
+        sys.exit(2)
+
+    for opt, arg in opts:
+        if opt == '-q':
+            print(main.__doc__)
+            sys.exit()
+
+        elif opt=="--mesh_in":
+            mesh_in = arg
+    
+    # Check the mesh extension
+    # Get abs path to mesh_in
+    mesh_in = os.path.abspath(mesh_in)
+    # Get the folder that contains the mesh
+    mesh_folder = os.path.dirname(mesh_in)
+    
+    dag_vtk_to_ply(mesh_in)
+    
+
+if __name__ == "__main__":
+    main(sys.argv[1:])

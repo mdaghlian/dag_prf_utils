@@ -74,14 +74,22 @@ class FSMaker(object):
         # write_morph_data(opj(self.custom_surf_dir, f'rh.{surf_name}'),rh_masked_param)        
         
         dag_str2file(filename=opj(self.custom_surf_dir, f'{surf_name}_overlay'),txt=overlay_to_save)
-        self.overlay_str[surf_name] = overlay_custom_str
+        self.overlay_str[surf_name] = overlay_custom_str        
+
+        # Check, if it is already in the surf list:
+        # if it is remove it and add it at the end
+        # if not add it at the end
+        if surf_name in self.surf_list:
+            self.surf_list.remove(surf_name)
         self.surf_list.append(surf_name)
+
+
     def open_fs_surface(self, surf_name=None, **kwargs):
         # surf name - which surface to load...
         
         os.chdir(self.sub_surf_dir) # move to freeview dir        
         fs_cmd = self.write_fs_cmd(surf_name=surf_name, **kwargs)
-        # self.save_fs_cmd(surf_name, **kwargs)
+        # self.save_fs_cmd(surf_name, **kwargs)        
         os.system(fs_cmd)        
 
     def save_fs_cmd(self, surf_name=None, **kwargs):
@@ -688,3 +696,49 @@ def dag_make_overlay_str(**kwargs):
     overlay_to_save += '\n]'
     
     return overlay_custom_str, overlay_to_save
+
+
+# ******
+def dag_vtk_to_ply(vtk_file):
+    '''
+    dag_vtk_to_ply
+    Convert .vtk file to .ply
+    
+    '''
+    
+    with open(vtk_file) as f:
+        vtk_lines = f.readlines()
+    # Find number of vertices & faces
+    for i, line in enumerate(vtk_lines):
+        if 'POINTS' in line:
+            # n_vx is the only integer on this line
+            n_vx = int(line.split(' ')[1])
+            point_line = i
+        if 'POLYGONS' in line:
+            # n_f is the only integer on this line
+            n_f = int(line.split(' ')[1])
+            poly_line = i
+
+    # Create the ply string -> following this format
+    ply_str  = f'ply\n'
+    ply_str += f'format ascii 1.0\n'
+    ply_str += f'element vertex {n_vx}\n'
+    ply_str += f'property float x\n'
+    ply_str += f'property float y\n'
+    ply_str += f'property float z\n'
+    # ply_str += f'property float quality\n'
+    ply_str += f'element face {n_f}\n'
+    ply_str += f'property list uchar int vertex_index\n'
+    ply_str += f'end_header\n'
+
+    # Now add vertex coordinates (from points_line+1 to points_line+n_vx)
+    for i in range(point_line+1, point_line+n_vx+1):
+        ply_str += vtk_lines[i]
+    
+    # Now add the faces
+    for i in range(poly_line+1, poly_line+n_f+1):
+        ply_str += vtk_lines[i]
+
+    # save the ply file
+    ply_file = vtk_file.replace('.vtk', '.ply')
+    dag_str2file(filename=ply_file, txt=ply_str)

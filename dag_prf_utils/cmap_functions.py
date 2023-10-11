@@ -75,6 +75,9 @@ def dag_make_custom_cmap(col_list, col_steps=None, cmap_name='', save_cmap=False
     # Change any values to rgb tuple
     conv2rgb = mcolors.ColorConverter().to_rgb
     for i_col,v_col in enumerate(col_list):
+        if isinstance(v_col, np.ndarray):
+            v_col = tuple(v_col)
+
         if (not isinstance(v_col, tuple)) and (not isinstance(v_col, list)):
             col_list[i_col] = conv2rgb(v_col) 
     # Check whether it is in 255 format (should be b/w 0 and 1)
@@ -113,7 +116,15 @@ def dag_make_diverge_cmap(low, high, mid='white'):
     return custom_cmap
 
 def dag_get_cmap(cmap_name, **kwargs):    
+    '''dag_get_cmap
+    Loads custom cmaps (specified in cmaps.json) or default matplotlib versions
+
+    do_reverse : reverse the colormap
+
+    '''
     do_reverse = kwargs.get('reverse', False)    
+    do_log = kwargs.get('log', False)
+
     if isinstance(cmap_name, dict):
         cdict_copy = cmap_name
         cmap_name = cdict_copy.get('cmap_name', '')        
@@ -127,6 +138,9 @@ def dag_get_cmap(cmap_name, **kwargs):
     if '_r' in cmap_name:
         do_reverse = True
         cmap_name = cmap_name.split('_r')[0]
+    if '_log' in cmap_name:
+        do_log = True
+        cmap_name = cmap_name.split('_log')[0]
     
     cc_dict = dag_load_custom_col_dict()
     if col_list is not None:
@@ -134,9 +148,14 @@ def dag_get_cmap(cmap_name, **kwargs):
     elif cmap_name in cc_dict.keys():
         col_list = cc_dict[cmap_name]['col_list']
         col_steps = cc_dict[cmap_name]['col_steps']
+        if do_log:
+            col_steps = np.log10(col_steps)
         this_cmap = dag_make_custom_cmap(col_list=col_list, col_steps=col_steps, cmap_name=cmap_name)
     elif cmap_name in mpl.cm.__dict__.keys():
         this_cmap = mpl.cm.__dict__[cmap_name]
+        if do_log:
+            col_list = this_cmap(np.linspace(0,1,100))
+            this_cmap = dag_make_custom_cmap(col_list=col_list, col_steps=np.logspace(.01,1,100))
     if do_reverse:
         this_cmap = this_cmap.reversed()
     return this_cmap

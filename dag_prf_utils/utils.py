@@ -152,6 +152,17 @@ def dag_load_roi(sub, roi, fs_dir, split_LR=False, do_bool=True, **kwargs):
             roi_file['lh'] = dag_find_file_in_folder([this_roi, '.label', 'lh'], roi_dir,exclude='._', recursive=True)    
             roi_file['rh'] = dag_find_file_in_folder([this_roi, '.label', 'rh'], roi_dir,exclude='._', recursive=True)    
 
+        # If more than 1 match print the matches and raise error
+        if isinstance(roi_file['lh'], list):
+            print(f'Multiple matches for {this_roi} in {roi_dir}')
+            print(roi_file['lh'])
+            raise ValueError
+        if isinstance(roi_file['rh'], list):
+            print(f'Multiple matches for {this_roi} in {roi_dir}')
+            print(roi_file['rh'])
+            raise ValueError
+
+
         LR_bool = []
         for i,hemi in enumerate(['lh', 'rh']):
             with open(roi_file[hemi]) as f:

@@ -372,6 +372,7 @@ class Prf1T1M(object):
                 vx_mask &= self.pd_params[p].gt(th_val[0])
                 vx_mask &= self.pd_params[p].lt(th_val[1])
             else:
+                print(f'Error, {comp} is not any of min, max, or bound')
                 sys.exit()
         if hasattr(vx_mask, 'to_numpy'):
             vx_mask = vx_mask.to_numpy()
@@ -573,8 +574,8 @@ class Prf1T1M(object):
         wm_param = {}
         for i_param in pid_list:
             wm_param[i_param] = dag_weighted_mean(
-                w=self.pd_params['rsq'][vx_mask],
-                x=self.pd_params[i_param][vx_mask]
+                w=self.pd_params['rsq'][vx_mask].copy(),
+                x=self.pd_params[i_param][vx_mask].copy(),
             )
             # if np.isnan(wm_param[i_param]):
             #     print('bloop')

@@ -129,6 +129,9 @@ def dag_load_roi(sub, roi, fs_dir, split_LR=False, do_bool=True, **kwargs):
             roi_idx[:n_demo] = True
 
         return roi_idx
+    
+    elif '+' in roi:
+        roi = roi.split('+')
 
     # Else look for rois in subs freesurfer label folder
     roi_dir = opj(fs_dir, sub, 'label')    

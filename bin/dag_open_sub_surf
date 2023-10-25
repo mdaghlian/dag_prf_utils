@@ -1,0 +1,157 @@
+#!/usr/bin/env python
+#$ -j Y
+#$ -cwd
+#$ -V
+
+
+import sys
+import os
+opj = os.path.join
+
+
+import numpy as np
+
+from dag_prf_utils.utils import dag_find_file_in_folder
+from dag_prf_utils.mesh_maker import FSMaker
+
+
+
+def main(argv):
+    '''
+    ---------------------------
+    Run the fitting procedure
+
+    Args (optional):
+        --sub               subject number
+        --to_show           <surf_names>...
+        --print_overlay    
+        # 
+        -h          help
+    
+    Example:
+
+    ** TODO HRF refitting option... ***
+
+    '''
+    # Load the fitting settings, add in the new info
+    # [1] Setup parameters:
+    sub = None
+    to_show = None
+    print_overlay = False
+    do_search = False
+    search_incl = []
+    search_excl = []
+    kwargs = {}
+    for i,arg in enumerate(argv):
+        if '--sub' in arg:
+            sub = f'sub-{argv[i+1]}'
+        elif '--print_overlay' in arg:
+            print_overlay = True
+
+        elif '--to_show' in arg:
+            to_show = argv[i+1]
+            if ',' in to_show:
+                to_show = to_show.split(',')
+            if not isinstance(to_show, list):
+                to_show = [to_show]
+        elif '--find' in arg:
+            do_search = True
+            search_incl = argv[i+1]
+            if ',' in search_incl:
+                search_incl = search_incl.split(',')
+            if not isinstance(search_incl, list):
+                search_incl = [search_incl]
+        elif '--exclude' in arg:
+            search_excl = argv[i+1]
+            if ',' in search_excl:
+                search_excl = search_excl.split(',')
+            if not isinstance(search_excl, list):
+                search_excl = [search_excl]
+
+        elif '-h' in arg:
+            print(main.__doc__)
+            sys.exit()
+
+            
+        elif '--' in arg: # ********** ARBITRARY KWARGS **********
+            # If argv[i] is an argument, then argv[i+1] is its value
+            this_kwarg_value = argv[i+1]
+            # Check if the value is a list
+            if ',' in this_kwarg_value:
+                this_kwarg_value = this_kwarg_value.split(',')
+                this_kwarg_value = [arg_checker(arg) for arg in this_kwarg_value]
+            else:
+                this_kwarg_value = arg_checker(this_kwarg_value)
+            # Add to kwargs
+            this_kwarg = arg.replace('--','')
+            kwargs[this_kwarg] = this_kwarg_value
+
+    # [3] Check the arguments
+    if sub is None:
+        raise ValueError('Subject number not specified')
+    
+    # Make fs object
+    fs = FSMaker(sub)
+    
+    if print_overlay:
+        if to_show is None:
+            surf_name = 'curv'
+        overlay_str = fs.get_overlay_str(
+            surf_name=surf_name,
+            **kwargs
+        )
+        print(overlay_str)
+        return
+
+    if do_search:
+        # Find the surfaces
+        surf_list = dag_find_file_in_folder(
+            filt = search_incl,
+            path=fs.sub_surf_dir,
+            exclude = search_excl + ['rh.', 'overlay', '.png'], # exclude right hemisphere in search to avoid duplicates
+            recursive=True,
+            return_msg=None
+        )
+        if isinstance(surf_list, str):
+            surf_list = [surf_list]
+        surf_list = [surf.split('/')[-1] for surf in surf_list]
+        surf_list = [surf.replace('lh.', '') for surf in surf_list]
+
+        for i,surf in enumerate(surf_list):
+            print(i, surf)
+        if len(surf_list)==0: 
+            print('No surfaces found')
+            return
+        elif len(surf_list)==1:
+            to_show = surf_list
+        else:
+            print('Enter the number of the surface you want to open:')        
+            surf_num = input()
+            if 'all' in surf_num:
+                to_show = surf_list
+            elif ',' in surf_num:
+                surf_num = surf_num.split(',')
+                surf_num = [int(i) for i in surf_num]
+                to_show = [surf_list[i] for i in surf_num]
+            elif surf_num.isdigit():
+                surf_num = int(surf_num)
+                to_show = surf_list[surf_num]
+            else:
+                print('Invalid input')
+            
+
+
+    fs.open_fs_surface(to_show, **kwargs)
+
+def arg_checker(arg2check):
+    
+    if arg2check.isdigit():
+        arg_out = int(arg2check)
+    elif arg2check.replace('.','',1).isdigit():
+        arg_out = float(arg2check)                
+    else:
+        arg_out = arg2check
+    return arg_out
+
+if __name__ == "__main__":
+    main(sys.argv[1:])    

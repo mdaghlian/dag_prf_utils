@@ -794,3 +794,29 @@ def dag_add_axis_to_xtick(fig, ax, dx_axs=1, **kwargs):
         xticks_axs.append(nax)
         xtick_out.append(xticks[i_tick])
     return xtick_out, xticks_axs
+
+
+
+def dag_change_fit_item_col(fig_item, old_col, new_col, depth=0):
+    '''
+    Cycle recursively through all items in a figure and change the color of anything that matches old_col to new_col
+    '''
+    if depth > 100:
+        print('Max depth reached')
+        return
+    if fig_item is []:
+        return        
+
+    if isinstance(fig_item, list):
+        for item in fig_item:
+            dag_change_fit_item_col(item, old_col, new_col, depth=depth+1)
+    else:
+        if hasattr(fig_item, 'get_color'):
+            # print(depth)
+            # print(fig_item)
+            if fig_item.get_color() == old_col:
+                print(fig_item.get_color())
+                fig_item.set_color(new_col)
+        if hasattr(fig_item, 'get_children'):
+            dag_change_fit_item_col(fig_item.get_children(), old_col, new_col, depth=depth+1)
+            

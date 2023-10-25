@@ -20,7 +20,7 @@ class FSMaker(object):
     Will create a curv file in subjects freesurfer dir, and load it a specific colormap 
     saved as the relevant command
     '''
-    def __init__(self, sub, fs_dir):
+    def __init__(self, sub, fs_dir=os.environ['SUBJECTS_DIR']):
         
         self.sub = sub        
         self.fs_dir = fs_dir        # Where the freesurfer files are        
@@ -45,7 +45,8 @@ class FSMaker(object):
 
         data_mask = kwargs.get('data_mask', np.ones_like(data, dtype=bool))
         # Load colormap properties: (cmap, vmin, vmax)
-        vmin = kwargs.get('vmin', np.percentile(data[data_mask], 10))
+        # vmin = kwargs.get('vmin', np.percentile(data[data_mask], 10))
+        vmin = kwargs.get('vmin', np.nanmin(data[data_mask]))
         # Get the overlay custom str and overlay to save...
         overlay_custom_str, overlay_to_save = dag_make_overlay_str(masked_data=data[data_mask], **kwargs)
         
@@ -108,7 +109,7 @@ class FSMaker(object):
         hemi_list       which hemispheres to load
         roi_list        which roi outlines to load
         roi_mask        mask by roi?
-
+        keep_running    keep running the command (use "&" at the end of the command)
         -> Screen shot stuff
         do_scrn_shot    bool            take a screenshot of the surface when it is loaded?
         azimuth         float           camera angle(0-360) Default: 0
@@ -121,8 +122,9 @@ class FSMaker(object):
         roi_list = kwargs.get('roi_list',None)
         roi_col_spec = kwargs.get('roi_col_spec', None)
         roi_mask = kwargs.get('roi_mask', None)
+        keep_running = kwargs.get('keep_running', False)
         # *** CAMERA ANGLE ***
-        cam_azimuth     = kwargs.get('azimuth', 0)
+        cam_azimuth     = kwargs.get('azimuth', 90)
         cam_zoom        = kwargs.get('zoom', 1)
         cam_elevation   = kwargs.get('elevation', 0)
         cam_roll        = kwargs.get('roll', 0)
@@ -182,11 +184,15 @@ class FSMaker(object):
                         this_surf_path = self.get_surf_path(this_hemi=this_hemi, this_surf_name=this_surf_name)
                         this_overlay_str = self.get_overlay_str(this_surf_name, **kwargs)
                         fs_cmd += f':overlay={this_surf_path}:{this_overlay_str}'                        
+                        print(this_overlay_str)
                         if roi_mask is not None:
                             this_roi_path = self.get_roi_file(roi, this_hemi)
                             fs_cmd += f':overlay_mask={this_roi_path}'
         fs_cmd +=  f' --camera Azimuth {cam_azimuth} Zoom {cam_zoom} Elevation {cam_elevation} Roll {cam_roll} '
         fs_cmd += f'{col_bar_flag} {scr_shot_flag}'
+        fs_cmd += ' --verbose'
+        if keep_running:
+            fs_cmd += ' &'
         return fs_cmd 
 
     def get_roi_file(self, roi_name, hemi):
@@ -240,6 +246,8 @@ class FSMaker(object):
             overlay_str = ''#'greyscale :colormap=grayscale' #  grayscale/lut/heat/jet/gecolor/nih/pet/binary
         elif isinstance(overlay_str_file, list):
             overlay_str += overlay_str_file[0]
+        else:
+            overlay_str += overlay_str_file
 
         return overlay_str
     
@@ -356,8 +364,11 @@ def dag_fs_to_ply(sub, data, fs_dir, mesh_name='inflated', out_dir=None, under_s
     
     # Load colormap properties: (cmap, vmin, vmax)
     cmap = kwargs.get('cmap', 'viridis')    
-    vmin = kwargs.get('vmin', np.percentile(data[data_mask], 10))
-    vmax = kwargs.get('vmax', np.percentile(data[data_mask], 90))
+    vmin = kwargs.get('vmin', np.nanmin(data[data_mask]))
+    vmax = kwargs.get('vmin', np.nanmax(data[data_mask]))
+
+    # vmin = kwargs.get('vmin', np.percentile(data[data_mask], 10))
+    # vmax = kwargs.get('vmax', np.percentile(data[data_mask], 90))
 
 
     # Create rgb values mapping from data to cmap

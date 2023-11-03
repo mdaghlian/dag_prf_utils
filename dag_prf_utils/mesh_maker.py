@@ -122,7 +122,12 @@ class FSMaker(object):
         roi_list = kwargs.get('roi_list',None)
         roi_col_spec = kwargs.get('roi_col_spec', None)
         roi_mask = kwargs.get('roi_mask', None)
-        keep_running = kwargs.get('keep_running', False)
+        keep_running = kwargs.get('keep_running', False) # open window and keep running
+        shading_off = kwargs.get('shading_off', False) # Turn shading off
+        shading_off_str = ''
+        if shading_off:
+            shading_off_str = ':no_shading=1'
+
         # *** CAMERA ANGLE ***
         cam_azimuth     = kwargs.get('azimuth', 90)
         cam_zoom        = kwargs.get('zoom', 1)
@@ -143,8 +148,12 @@ class FSMaker(object):
             hemi_list = [hemi_list]
         if not isinstance(surf_name, list):
             surf_name = [surf_name]        
-        if (roi_list is not None) and (not isinstance(roi_list, list)):
-            roi_list = [roi_list]
+        
+        # Prepare for roi stuff
+        do_rois = False
+        if roi_list is not None:
+            do_rois = True
+            sorted_roi_list = self.get_lr_roi_list(roi_list)
 
         if do_scrn_shot:         
             if scr_shot_file is None:
@@ -169,38 +178,69 @@ class FSMaker(object):
         for mesh in mesh_list:
             for this_hemi in hemi_list:
                 fs_cmd += f' {this_hemi}.{mesh}'
-                if roi_list is not None:
-                    for i_roi, roi in enumerate(roi_list):
+                if do_rois:
+                    for i_roi, roi in enumerate(sorted_roi_list[this_hemi]):
                         if roi_col_spec is None:
                             roi_col = dag_get_col_vals(i_roi, 'jet', 0, len(roi_list))
                             roi_col = f'{int(roi_col[0]*255)},{int(roi_col[1]*255)},{int(roi_col[2]*255)}'
                         else:
                             roi_col = roi_col_spec
-                        this_roi_path = self.get_roi_file(roi, this_hemi)
-                        fs_cmd += f':label={this_roi_path}:label_outline=True:label_visible=True:label_color={roi_col}' # false...
+                        # this_roi_path = self.get_roi_file(roi, this_hemi)                        
+                        fs_cmd += f':label={roi}:label_outline=True:label_visible=True' #:label_color={roi_col}' # false...
                 if do_surf:
                     for this_surf_name in surf_name:
                         # this_surf_path = opj(self.custom_surf_dir, f'{this_hemi}.{this_surf_name}')                
                         this_surf_path = self.get_surf_path(this_hemi=this_hemi, this_surf_name=this_surf_name)
                         this_overlay_str = self.get_overlay_str(this_surf_name, **kwargs)
                         fs_cmd += f':overlay={this_surf_path}:{this_overlay_str}'                        
+                        fs_cmd += shading_off_str
                         print(this_overlay_str)
                         if roi_mask is not None:
                             this_roi_path = self.get_roi_file(roi, this_hemi)
                             fs_cmd += f':overlay_mask={this_roi_path}'
         fs_cmd +=  f' --camera Azimuth {cam_azimuth} Zoom {cam_zoom} Elevation {cam_elevation} Roll {cam_roll} '
         fs_cmd += f'{col_bar_flag} {scr_shot_flag}'
-        fs_cmd += ' --verbose'
+        fs_cmd += ' --verbose'        
         if keep_running:
             fs_cmd += ' &'
         return fs_cmd 
+
+    def get_lr_roi_list(self, roi_list):
+        '''
+        Sort out the list of rois... per hemi
+        Include make it capable of dealing with missing rois
+        And fining matching ones
+        '''
+        sorted_roi_list = {
+            'lh':[],
+            'rh':[],
+        }
+        if not isinstance(roi_list, list):
+            roi_list = [roi_list]
+        for roi_name in roi_list:
+            for hemi in ['lh', 'rh']:
+                this_roi_path = dag_find_file_in_folder(
+                    filt=[roi_name, hemi],
+                    path=self.sub_label_dir,
+                    recursive=True,
+                    exclude=['._', '.thresh'],
+                    return_msg=None,
+                    )
+                if this_roi_path is not None:
+                    if isinstance(this_roi_path, list):
+                        sorted_roi_list[hemi] += this_roi_path
+                    else:
+                        sorted_roi_list[hemi].append(this_roi_path)
+
+        return sorted_roi_list
 
     def get_roi_file(self, roi_name, hemi):
         roi = dag_find_file_in_folder(
             filt=[roi_name, hemi],
             path=self.sub_label_dir,
             recursive=True,
-            exclude=['._', '.thresh']
+            exclude=['._', '.thresh'],
+            return_msg=None,
             )
         if isinstance(roi, list):
             roi = roi[0]

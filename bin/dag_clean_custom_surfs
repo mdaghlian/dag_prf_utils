@@ -1,0 +1,143 @@
+#!/usr/bin/env python
+#$ -j Y
+#$ -cwd
+#$ -V
+
+
+import sys
+import os
+opj = os.path.join
+
+
+import numpy as np
+
+from dag_prf_utils.utils import dag_find_file_in_folder
+
+
+
+def main(argv):
+    '''
+    ---------------------------
+    Run the fitting procedure
+
+    Args (optional):
+        --sub               subject number
+        --find 
+        --exclude 
+        # 
+        -h          help
+    
+    Example:
+
+    ** TODO HRF refitting option... ***
+
+    '''
+    # Load the fitting settings, add in the new info
+    # [1] Setup parameters:
+    sub = None
+    search_incl = []
+    search_excl = []
+    for i,arg in enumerate(argv):
+        if '--sub' in arg:
+            sub = f'sub-{argv[i+1]}'
+        elif '--print_overlay' in arg:
+            print_overlay = True
+
+        elif '--find' in arg:
+            do_search = True
+            search_incl = argv[i+1]
+            if ',' in search_incl:
+                search_incl = search_incl.split(',')
+            if not isinstance(search_incl, list):
+                search_incl = [search_incl]
+        elif '--exclude' in arg:
+            search_excl = argv[i+1]
+            if ',' in search_excl:
+                search_excl = search_excl.split(',')
+            if not isinstance(search_excl, list):
+                search_excl = [search_excl]
+
+        elif '-h' in arg:
+            print(main.__doc__)
+            sys.exit()
+
+    # [3] Check the arguments
+    if sub is None:
+        raise ValueError('Subject number not specified')
+    
+    fs_dir=os.environ['SUBJECTS_DIR']
+    print(f'Looking in {fs_dir}')
+    custom_surf_dir = opj(fs_dir, sub, 'surf', 'custom')
+    print(f'Looing in {custom_surf_dir}')
+    print('Are you sure this is the correct subject and directory? (y/n)')
+    if input() != 'y':
+        print('Exiting...')
+        return
+    
+    # Find the surfaces
+    surf_list = dag_find_file_in_folder(
+        filt = search_incl,
+        path=custom_surf_dir,
+        exclude = search_excl + ['rh.', 'overlay', '.png'], # exclude right hemisphere in search to avoid duplicates
+        recursive=True,
+        return_msg=None
+    )
+    if surf_list is None: 
+        print('No surfaces found')
+        return
+
+    if isinstance(surf_list, str):
+        surf_list = [surf_list]
+    surf_list = [surf.split('/')[-1] for surf in surf_list]
+    surf_list = [surf.replace('lh.', '') for surf in surf_list]
+
+    for i,surf in enumerate(surf_list):
+        print(i, surf)
+
+    if len(surf_list)==1:
+        to_remove = surf_list
+    else:
+        print('Enter the number of the surface you want to remove:')        
+        surf_num = input()
+        if 'all' in surf_num:
+            to_remove = surf_list
+        elif ',' in surf_num:
+            surf_num = surf_num.split(',')
+            surf_num = [int(i) for i in surf_num]
+            to_remove = [surf_list[i] for i in surf_num]
+        elif surf_num.isdigit():
+            surf_num = int(surf_num)
+            to_remove = surf_list[surf_num]
+        else:
+            print('Invalid input')
+    
+    print(f'Are you sure you want to remove the following? (y/n)')
+    print(to_remove)
+    if input() != 'y':
+        print('Exiting...')
+        return
+    
+    for this_surf in to_remove:
+        # Find them again
+        surf_list = dag_find_file_in_folder(
+            filt = this_surf,
+            path=custom_surf_dir,
+            recursive=True,
+            return_msg=None
+        )
+        if surf_list is None:
+            print(f'No {this_surf} found')
+            continue
+        if isinstance(surf_list, str):
+            surf_list = [surf_list]
+        for surf in surf_list:
+            print(surf)
+            # print(f'really really sure? (y/n)')
+            # if input() != 'y':
+            #     print('Exiting...')
+            #     continue
+            os.remove(surf)
+
+
+if __name__ == "__main__":
+    main(sys.argv[1:])    

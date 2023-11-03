@@ -19,24 +19,26 @@ from dag_prf_utils.mesh_maker import FSMaker
 def main(argv):
     '''
     ---------------------------
-    Run the fitting procedure
+    Open the freesurfer surfaces for a subject
 
     Args (optional):
         --sub               subject number
         --to_show           <surf_names>...
-        --print_overlay    
+        --find              comma separated list of strings to search for in the surface names
+        --exclude           comma separated list of strings to exclude from the search
+        --custom_only       only search in the custom surfaces
         # 
         -h          help
     
     Example:
 
-    ** TODO HRF refitting option... ***
 
     '''
     # Load the fitting settings, add in the new info
     # [1] Setup parameters:
     sub = None
     to_show = None
+    custom_only = False
     print_overlay = False
     do_search = False
     search_incl = []
@@ -67,8 +69,10 @@ def main(argv):
                 search_excl = search_excl.split(',')
             if not isinstance(search_excl, list):
                 search_excl = [search_excl]
+        elif '--custom_only' in arg:
+            custom_only = True
 
-        elif '-h' in arg:
+        elif '-h' == arg:
             print(main.__doc__)
             sys.exit()
 
@@ -85,6 +89,7 @@ def main(argv):
             # Add to kwargs
             this_kwarg = arg.replace('--','')
             kwargs[this_kwarg] = this_kwarg_value
+
 
     # [3] Check the arguments
     if sub is None:
@@ -104,10 +109,14 @@ def main(argv):
         return
 
     if do_search:
+        if custom_only:
+            search_dir = fs.custom_surf_dir
+        else:
+            search_dir = fs.sub_surf_dir
         # Find the surfaces
         surf_list = dag_find_file_in_folder(
             filt = search_incl,
-            path=fs.sub_surf_dir,
+            path=search_dir,
             exclude = search_excl + ['rh.', 'overlay', '.png'], # exclude right hemisphere in search to avoid duplicates
             recursive=True,
             return_msg=None
@@ -144,13 +153,22 @@ def main(argv):
     fs.open_fs_surface(to_show, **kwargs)
 
 def arg_checker(arg2check):
-    
-    if arg2check.isdigit():
-        arg_out = int(arg2check)
-    elif arg2check.replace('.','',1).isdigit():
-        arg_out = float(arg2check)                
+    '''arg2check is a string, check if it's a number, return the number if so, otherwise return the string
+    Should be able to deal with negative numbers too
+    '''
+    if arg2check[0] == '-':
+        arg_valence = -1
+        arg2check = arg2check[1:]
     else:
-        arg_out = arg2check
+        arg_valence = 1
+
+    if arg2check.isdigit():
+        arg_out = arg_valence * int(arg2check)
+    elif arg2check.replace('.','',1).isdigit():
+        arg_out = arg_valence * float(arg2check)                
+    else:
+        arg_out = arg2check   
+
     return arg_out
 
 if __name__ == "__main__":

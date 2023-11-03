@@ -1,11 +1,10 @@
 # #!/usr/bin/env bash
 
-# specify your folder here!
-export DAG_UTILS="/data1/projects/dumoulinlab/Lab_members/Marcus/programs/dag_prf_utils"
-
+# specify the folder where dag_prf_utils is held
 DPU_SETUP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 DPU_SETUP_FILE="${DPU_SETUP_DIR}/dpu_setup"
 DPU_REPO_DIR=$(dirname ${DPU_SETUP_DIR})
+export DAG_UTILS=$DPU_REPO_DIR
 
 if [[ $1 == "setup" ]]; then
     echo "==================================================================================================="

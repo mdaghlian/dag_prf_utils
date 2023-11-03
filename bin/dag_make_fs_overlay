@@ -12,7 +12,7 @@ opj = os.path.join
 import numpy as np
 
 from dag_prf_utils.utils import dag_find_file_in_folder
-from dag_prf_utils.mesh_maker import dag_make_overlay_str
+from dag_prf_utils.fs_tools import dag_make_overlay_str
 
 
 

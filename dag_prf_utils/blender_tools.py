@@ -7,6 +7,7 @@ import os
 opj = os.path.join
 
 from .mesh_maker import *
+from .fs_tools import *
 
 blender_init = os.environ['BLENDER']
 

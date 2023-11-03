@@ -1,19 +1,39 @@
 # dag_prf_utils repository
+This repository is a collection of useful tools (mainly) for analysing and visualising PRF data. It is designed to work with prfpy https://github.com/VU-Cog-Sci/prfpy, but some of the tools are general purpose.
+Other potentially useful repos:
+https://github.com/gallantlab/pycortex
+https://github.com/gjheij/linescanning
 
-This repository is a collection of useful tools for analysing and visualising PRF data. It is designed to work with prfpy https://github.com/VU-Cog-Sci/prfpy, but with some of the tools are general purpose. 
+
+## In active development
+This package is still in development and its API might change. 
+
+## Installation 
+[1] Install prfpy, use this to make a nice conda environment with all the required dependencies (https://github.com/VU-Cog-Sci/prfpy)
+[2] If you're on linux, and you want to have the command line tools (stuff in /bin) then run
+> ./shell/dpu_setup 
+Otherwise, you can just do `python setup.py develop`
+
+[3] If you want to use blender, you can install that too. You may need to specify the path in the __init__ file
+
+# Overview of files 
+
+## cmap_functions
+Ways of interacting  with matplotib cmaps, making your own custom cmaps etc. Could be useful if you want to plot specific things on the surface. Stores custom cmaps in "cmaps.json". You can use this for plotting in python, but also in freesurfer for making overlays. 
 
 ## utils
 Mainly generic tools - for searching for files, some mathematical stuff which comes up again and again in PRF analyses (converting between cartesian and polar coordinates etc; calculating rsq...).
 
+## prfpy_functions
 In addition there are a couple of *prfpy specific tools*, i.e., Prf1T1M, etc., which are designed to load the outputs of prfpy models and hold them in easily manipulatable ways.
 
 ## plot functions
 Several functions useful for plotting PRF properties around the visual field. All focus on matplotlib
 
 ## surface plotting and meshes
-*Note that for many (almost all) cases you will be better off using pycortex; this simply provides a couple of alternative methods, should you want to do that.*
+*Note that for many cases you will be better off using pycortex; this simply provides a couple of alternative methods, should you want to do that.*
 
-I have created several tools for plotting data on the cortical surface. This will of course require that you have surface data (i.e., run freesurfer); and any data you want to plot will need to be in a vertex wise format. pycortex (https://github.com/gallantlab/pycortex) is a very powerful way of plotting information on the cortical surface and an excellent tool. Many of the tools here are already developed in pycortex. But I have 'remade' them. The main reason for doing this is to improve my understanding of surface plotting generally, and also to improve my understanding of pycortex. 
+I have created several tools for plotting data on the cortical surface. This will of course require that you have surface data (i.e., run freesurfer); and any data you want to plot will need to be in a vertex wise format. pycortex (https://github.com/gallantlab/pycortex) is a very powerful way of plotting information on the cortical surface and an excellent tool. Many of the tools here are already developed in pycortex.  
 
 If you want to do some simple, quick and dirty stuff these tools might be useful. Also it can be useful to have the cortical mesh in a generic format readable by any 3D rendering software (e.g., .ply), and in a way that you can send a single file anywhere, and it be instantly readable, with color and everything. 
 
@@ -46,9 +66,9 @@ To this end I have created a couple of different ways to visualize surface infor
 
 For blender you can install using: https://www.blender.org/download/
 For meshlab you can install using: https://www.meshlab.net/#download
+
+
 ## In active development
 Stuff may well change. 
 
-## Installation
-Standard git install 
-Then setup using `python setup.py develop`
+

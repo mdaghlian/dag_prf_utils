@@ -18,7 +18,7 @@ from dag_prf_utils.utils import dag_find_file_in_folder
 def main(argv):
     '''
     ---------------------------
-    Print the custom surfaces for a subject (in the fs custom folder)
+    Print the custom rois for a subject (in the fs custom folder)
 
     Args (optional):
         --sub               subject number
@@ -39,7 +39,6 @@ def main(argv):
     for i,arg in enumerate(argv):
         if '--sub' in arg:
             sub = f'sub-{argv[i+1]}'
-
         elif '--find' in arg:
             search_incl = argv[i+1]
             if ',' in search_incl:
@@ -63,28 +62,28 @@ def main(argv):
     
     fs_dir=os.environ['SUBJECTS_DIR']
     print(f'Looking in {fs_dir}')
-    custom_surf_dir = opj(fs_dir, sub, 'surf', 'custom')
-    print(f'Looing in {custom_surf_dir}')
+    custom_roi_dir = opj(fs_dir, sub, 'label', 'custom')
+    print(f'Looing in {custom_roi_dir}')
     
-    # Find the surfaces
-    surf_list = dag_find_file_in_folder(
+    # Find the ROIs
+    roi_list = dag_find_file_in_folder(
         filt = search_incl,
-        path=custom_surf_dir,
-        exclude = search_excl + ['rh.', 'overlay', '.png'], # exclude right hemisphere in search to avoid duplicates
+        path=custom_roi_dir,
+        exclude = search_excl + ['rh.'], # exclude right hemisphere 
         recursive=True,
         return_msg=None
     )
-    if surf_list is None: 
-        print('No surfaces found')
+    if roi_list is None: 
+        print('No ROIs found')
         return
 
-    if isinstance(surf_list, str):
-        surf_list = [surf_list]
-    surf_list = [surf.split('/')[-1] for surf in surf_list]
-    surf_list = [surf.replace('lh.', '') for surf in surf_list]
+    if isinstance(roi_list, str):
+        roi_list = [roi_list]
+    roi_list = [roi.split('/')[-1] for roi in roi_list]
+    roi_list = [roi.replace('lh.', '') for roi in roi_list]
 
-    for i,surf in enumerate(surf_list):
-        print(i, surf)
+    for i,roi in enumerate(roi_list):
+        print(i, roi)
 
 
 if __name__ == "__main__":

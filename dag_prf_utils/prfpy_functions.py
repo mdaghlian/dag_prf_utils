@@ -581,7 +581,7 @@ class Prf1T1M(object):
             #     print('bloop')
             #     print(vx_mask.sum())
         self.wm_param = wm_param
-        return wm_param    
+        return wm_param
     
 
 
@@ -627,9 +627,14 @@ class PrfMulti(object):
         self.id_list = id_list
         self.prf_obj = {}
         self.n_vox = prf_obj_list[0].n_vox
-        for i,id in enumerate(id_list):
-            self.prf_obj[id] = prf_obj_list[i]
-    
+        for i,this_id in enumerate(id_list):
+            self.prf_obj[this_id] = prf_obj_list[i]
+        total_dict = {}
+        for this_id in id_list:
+            for p in self.prf_obj[this_id].pd_params.keys():
+                total_dict[f'{this_id}-{p}'] = self.prf_obj[this_id].pd_params[p].to_numpy()
+        self.pd_params = pd.DataFrame(total_dict)
+
     def return_vx_mask(self, th={}):
         '''return_vx_mask
         Returns a mask (boolean array) for voxels
@@ -730,6 +735,9 @@ class PrfMulti(object):
         else:
             self.prf_obj[new_id] = new_prf
             self.id_list += [new_id]
+            for p in  new_prf.pd_params.keys():
+                self.pd_params[f'{new_id}-{p}'] = new_prf.pd_params[p].to_numpy()
+
 
     def add_prf_diff(self, id1, id2, new_id=None):
         '''add_prf_diff

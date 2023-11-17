@@ -40,8 +40,6 @@ def main(argv):
     for i,arg in enumerate(argv):
         if '--sub' in arg:
             sub = f'sub-{argv[i+1]}'
-        elif '--print_overlay' in arg:
-            print_overlay = True
 
         elif '--find' in arg:
             do_search = True

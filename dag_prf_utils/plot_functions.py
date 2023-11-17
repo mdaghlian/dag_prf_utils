@@ -16,6 +16,17 @@ from .cmap_functions import *
 default_ecc_bounds =  np.linspace(0, 5, 7)
 default_pol_bounds = np.linspace(-np.pi, np.pi, 13)
 
+# def dag_rm_dag_cmaps_from_mpl():
+#     # Add to matplotlib cmaps?
+#     for cm_name in custom_col_dict.keys():
+#         plt.unregister_cmap(cm_name)
+
+
+def dag_add_dag_cmaps_to_mpl():
+    # Add to matplotlib cmaps?
+    for cm_name in custom_col_dict.keys():
+        this_cm = dag_get_cmap(cm_name)
+        mpl.colormaps.register(cmap=this_cm)
 
 def dag_add_ecc_pol_lines(ax, **kwargs):
     '''dag_add_ecc_pol_lines    
@@ -161,6 +172,8 @@ def dag_update_ax_fontsize(ax, new_font_size, include=None, do_extra_search=True
             incl_list += ax.get_xticklabels()
         elif i=='yticks':
             incl_list += ax.get_yticklabels()
+        elif i=='legend':
+            incl_list += ax.get_legend().get_texts()
 
     for item in (incl_list): # Loop through the text, and update the font size
         item.set_fontsize(new_font_size)        
@@ -797,7 +810,7 @@ def dag_add_axis_to_xtick(fig, ax, dx_axs=1, **kwargs):
 
 
 
-def dag_change_fit_item_col(fig_item, old_col, new_col, depth=0):
+def dag_change_fig_item_col(fig_item, old_col, new_col, depth=0):
     '''
     Cycle recursively through all items in a figure and change the color of anything that matches old_col to new_col
     '''
@@ -809,7 +822,7 @@ def dag_change_fit_item_col(fig_item, old_col, new_col, depth=0):
 
     if isinstance(fig_item, list):
         for item in fig_item:
-            dag_change_fit_item_col(item, old_col, new_col, depth=depth+1)
+            dag_change_fig_item_col(item, old_col, new_col, depth=depth+1)
     else:
         if hasattr(fig_item, 'get_color'):
             # print(depth)
@@ -818,5 +831,20 @@ def dag_change_fit_item_col(fig_item, old_col, new_col, depth=0):
                 print(fig_item.get_color())
                 fig_item.set_color(new_col)
         if hasattr(fig_item, 'get_children'):
-            dag_change_fit_item_col(fig_item.get_children(), old_col, new_col, depth=depth+1)
-            
+            dag_change_fig_item_col(fig_item.get_children(), old_col, new_col, depth=depth+1)
+
+
+
+def dag_get_row_col(plot_index, n_cols=None, n_rows=None, dir='col', start_idx=0):
+    '''
+    Get row and col for a subplot index
+    If dir is 'row', then row is the first index to change
+    If dir is 'col', then col is the first index to change
+    '''
+    if dir == 'col':                
+        row = (plot_index // n_cols ) + start_idx
+        col = (plot_index % n_cols) + start_idx
+    elif dir == 'row':
+        row = (plot_index % n_rows) + start_idx
+        col = (plot_index // n_rows) + start_idx
+    return row, col

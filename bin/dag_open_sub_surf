@@ -37,7 +37,7 @@ def main(argv):
     # Load the fitting settings, add in the new info
     # [1] Setup parameters:
     sub = None
-    to_show = None
+    to_show = []
     custom_only = False
     print_overlay = False
     do_search = False
@@ -99,7 +99,7 @@ def main(argv):
     fs = FSMaker(sub)
     
     if print_overlay:
-        if to_show is None:
+        if to_show is []:
             surf_name = 'curv'
         overlay_str = fs.get_overlay_str(
             surf_name=surf_name,
@@ -132,19 +132,19 @@ def main(argv):
             print('No surfaces found')
             return
         elif len(surf_list)==1:
-            to_show = surf_list
+            to_show += surf_list
         else:
             print('Enter the number of the surface you want to open:')        
             surf_num = input()
             if 'all' in surf_num:
-                to_show = surf_list
+                to_show += surf_list
             elif ',' in surf_num:
                 surf_num = surf_num.split(',')
                 surf_num = [int(i) for i in surf_num]
-                to_show = [surf_list[i] for i in surf_num]
+                to_show += [surf_list[i] for i in surf_num]
             elif surf_num.isdigit():
                 surf_num = int(surf_num)
-                to_show = surf_list[surf_num]
+                to_show += [surf_list[surf_num]]
             else:
                 print('Invalid input')
             

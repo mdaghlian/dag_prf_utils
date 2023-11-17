@@ -52,21 +52,21 @@ def dag_get_cores_used():
 def dag_qprint(print_str):
     print(print_str, flush=True)
 
-def dag_load_nverts(sub, fs_dir):    
+def dag_load_nverts(sub, fs_dir = os.environ['SUBJECTS_DIR']):    
     '''
     nverts (points) in a given mesh
     '''
     n_verts, n_faces = dag_load_nfaces_nverts(sub, fs_dir)
     return n_verts
 
-def dag_load_nfaces(sub, fs_dir):
+def dag_load_nfaces(sub, fs_dir=os.environ['SUBJECTS_DIR']):
     '''
     nfaces (triangular) in a given mesh
     '''
     n_verts, n_faces = dag_load_nfaces_nverts(sub, fs_dir)
     return n_faces
 
-def dag_load_nfaces_nverts(sub, fs_dir):
+def dag_load_nfaces_nverts(sub, fs_dir=os.environ['SUBJECTS_DIR']):
     """
     Adapted from pycortex https://github.com/gallantlab/pycortex
     Load the number of vertices and faces in a given mesh
@@ -86,7 +86,7 @@ def dag_load_nfaces_nverts(sub, fs_dir):
     return n_verts, n_faces
 
 
-def dag_load_roi(sub, roi, fs_dir, split_LR=False, do_bool=True, **kwargs):
+def dag_load_roi(sub, roi, fs_dir=os.environ['SUBJECTS_DIR'], split_LR=False, do_bool=True, **kwargs):
     '''
     Return a boolean array of voxels included in the specified roi
     array is vector with each entry corresponding to a point on the subjects cortical surface

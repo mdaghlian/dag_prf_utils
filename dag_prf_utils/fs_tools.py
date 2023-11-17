@@ -85,12 +85,25 @@ class FSMaker(object):
 
 
     def open_fs_surface(self, surf_name=None, **kwargs):
-        # surf name - which surface to load...
-        
+        # surf name - which surface to load...        
         os.chdir(self.sub_surf_dir) # move to freeview dir        
         fs_cmd = self.write_fs_cmd(surf_name=surf_name, **kwargs)
         # self.save_fs_cmd(surf_name, **kwargs)        
         os.system(fs_cmd)        
+
+    def open_fs_surface_FIND(self, include=[], exclude=[], **kwargs):
+        surf_name = dag_find_file_in_folder(
+            filt=include,
+            path=self.surf_list,
+            exclude=exclude,
+        )
+        print(surf_name)
+        # surf name - which surface to load...        
+        os.chdir(self.sub_surf_dir) # move to freeview dir        
+        fs_cmd = self.write_fs_cmd(surf_name=surf_name, **kwargs)
+        # self.save_fs_cmd(surf_name, **kwargs)        
+        os.system(fs_cmd)        
+
 
     def save_fs_cmd(self, surf_name=None, **kwargs):
         cmd_name = kwargs.get('cmd_name', f'{surf_name}_cmd.txt')
@@ -289,7 +302,55 @@ class FSMaker(object):
             overlay_str += overlay_str_file
 
         return overlay_str
-    
+
+    def clean_custom_surf_dir(self, do_all=False, include=[], exclude=[], sure=False):
+        '''
+        Remove files in the custom surf dir
+        '''
+        # REMOVE ALL    
+        if do_all:            
+            print('Removing all files')
+            if not sure:
+                print('Are you sure? (y/n)')
+                if input() != 'y':
+                    print('Exiting...')
+                    return
+            for file in os.listdir(self.custom_surf_dir):
+                os.remove(opj(self.custom_surf_dir, file))
+            return
+        # REMOVE SPECIFIC
+        if (include==[]) & (exclude==[]):
+            print('Include or exclude must be specified')
+            print('Removing nothing')
+            return
+
+        surf_list = dag_find_file_in_folder(
+            filt = include,
+            path=self.custom_surf_dir,
+            exclude = exclude, 
+            recursive=True,
+            return_msg=None
+        )        
+        if isinstance(surf_list, str):
+            surf_list = [surf_list]
+        
+        if surf_list is None: 
+            print('No surfaces found')
+            return
+        
+        if not sure:
+            print(f'Are you sure you want to remove the following? (y/n)')
+            print(surf_list)
+            if input() != 'y':
+                print('Exiting...')
+                return
+
+        for surf in surf_list:
+            os.remove(surf)
+        
+        return
+        
+
 def dag_write_curv(fn, curv, fnum):
     ''' Adapted from https://github.com/simnibs/simnibs
     

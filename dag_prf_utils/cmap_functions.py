@@ -101,7 +101,7 @@ def dag_make_custom_cmap(col_list, col_steps=None, cmap_name='', save_cmap=False
             col_steps=col_val,
             col_list=col_list
         )
-
+    print(type(custom_cmap))
         
     return custom_cmap
 
@@ -159,13 +159,14 @@ def dag_get_cmap(cmap_name, **kwargs):
     if do_reverse:
         this_cmap = this_cmap.reversed()
     return this_cmap
-def dag_delete_cmap(cmap_name):
+def dag_delete_cmap(cmap_name, sure=False):
     cc_dict = dag_load_custom_col_dict()
     if cmap_name in cc_dict.keys():
-        print(f'Are you sure you want to delete {cmap_name}? (y/n)')
-        delete_yn = input()
-        if delete_yn!='y':
-            return
+        if not sure:
+            print(f'Are you sure you want to delete {cmap_name}? (y/n)')
+            delete_yn = input()
+            if delete_yn!='y':
+                return
     else:
         print(f'Cannot find {cmap_name}')
         return

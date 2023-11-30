@@ -3,18 +3,92 @@ import matplotlib.pyplot as plt
 import matplotlib as mpl
 from datetime import datetime
 import os
+from scipy.spatial import ConvexHull
 opj = os.path.join
-# try:
-#     from nibabel.freesurfer.io import write_morph_data
-# except ImportError:
-#     raise ImportError('Error importing nibabel... Not a problem unless you want to use FSMaker')
+
 from dag_prf_utils.utils import *
 from dag_prf_utils.plot_functions import *
 
 
-path_to_utils = os.path.abspath(os.path.dirname(__file__))
+def dag_srf_to_ply(srf_file, rgb_vals=None, hemi=None, values=None, incl_rgb=True, **kwargs):
+    '''
+    dag_srf_to_ply
+    Convert srf file to .ply
+    
+    '''
+    x_offset = kwargs.get('x_offset', None)
+    
+    if not isinstance(values, np.ndarray):
+        values = np.ones(rgb_vals.shape[0])
+    with open(srf_file) as f:
+        srf_lines = f.readlines()
+    n_vx, n_f = srf_lines[1].split(' ')
+    n_vx, n_f = int(n_vx), int(n_f)
+    # Also creating an rgb str...
+    rgb_str = ''    
+    # Create the ply string -> following this format
+    ply_str  = f'ply\n'
+    ply_str += f'format ascii 1.0\n'
+    ply_str += f'element vertex {n_vx}\n'
+    ply_str += f'property float x\n'
+    ply_str += f'property float y\n'
+    ply_str += f'property float z\n'
+    if incl_rgb:
+        ply_str += f'property uchar red\n'
+        ply_str += f'property uchar green\n'
+        ply_str += f'property uchar blue\n'
+    ply_str += f'property float quality\n'
+    ply_str += f'element face {n_f}\n'
+    ply_str += f'property list uchar int vertex_index\n'
+    ply_str += f'end_header\n'
 
-# Functions for messing around with meshes that are not freesurfer related...
+    if x_offset is None:
+        if hemi==None:
+            x_offset = 0
+        elif 'lh' in hemi:
+            x_offset = -50
+        elif 'rh' in hemi:
+            x_offset = 50
+    # Cycle through the lines of the obj file and add vx + coords + rgb
+    v_idx = 0 # Keep count of vertices     
+    for i in range(2,len(srf_lines)):
+        # If there is a '.' in the line then it is a vertex
+        if '.' in srf_lines[i]:
+            split_coord = srf_lines[i][:-2:].split(' ')                        
+            coord_count = 0
+            for coord in split_coord:
+                if ('.' in coord) & (coord_count==0): # Add x_offset
+                    ply_str += f'{float(coord)+x_offset:.6f} ' 
+                    coord_count += 1
+                elif '.' in coord:
+                    ply_str += f'{float(coord):.6f} ' 
+                    coord_count += 1                    
+            
+            # Now add the value of the parameters...
+            # Now add the rgb values. as integers between 0 and 255
+            if incl_rgb:
+                ply_str += f' {int(rgb_vals[v_idx][0]*255)} {int(rgb_vals[v_idx][1]*255)} {int(rgb_vals[v_idx][2]*255)} '
+                # ply_str += f' {rgb_vals[v_idx][0]} {rgb_vals[v_idx][1]} {rgb_vals[v_idx][2]} '
+
+            # RGB str
+            rgb_str += f'{int(rgb_vals[v_idx][0]*255)},{int(rgb_vals[v_idx][1]*255)},{int(rgb_vals[v_idx][2]*255)}\n'
+            
+            ply_str += f'{values[v_idx]:.3f}\n'
+            v_idx += 1 # next vertex
+        
+        else:
+            # After we finished all the vertices, we need to define the faces
+            # -> these are triangles (hence 3 at the beginning of each line)
+            # -> the index of the three vx is given
+            # For some reason the index is 1 less in .ply files vs .obj files
+            # ... i guess like the difference between matlab and python
+            ply_str += '3 ' 
+            split_idx = srf_lines[i][:-1:].split(' ')
+            ply_str += f'{int(split_idx[0])} '
+            ply_str += f'{int(split_idx[1])} '
+            ply_str += f'{int(split_idx[2])} '
+            ply_str += '\n'
+    return ply_str, rgb_str
 
 def dag_fs_to_ply(sub, data, fs_dir=os.environ['SUBJECTS_DIR'], mesh_name='inflated', out_dir=None, under_surf='curv', **kwargs):
     '''
@@ -177,86 +251,6 @@ def dag_fs_to_ply(sub, data, fs_dir=os.environ['SUBJECTS_DIR'], mesh_name='infla
     if return_ply_file:
         return ply_file_2open
 
-def dag_srf_to_ply(srf_file, rgb_vals=None, hemi=None, values=None, incl_rgb=True, **kwargs):
-    '''
-    dag_srf_to_ply
-    Convert srf file to .ply
-    
-    '''
-    x_offset = kwargs.get('x_offset', None)
-    
-    if not isinstance(values, np.ndarray):
-        values = np.ones(rgb_vals.shape[0])
-    with open(srf_file) as f:
-        srf_lines = f.readlines()
-    n_vx, n_f = srf_lines[1].split(' ')
-    n_vx, n_f = int(n_vx), int(n_f)
-    # Also creating an rgb str...
-    rgb_str = ''    
-    # Create the ply string -> following this format
-    ply_str  = f'ply\n'
-    ply_str += f'format ascii 1.0\n'
-    ply_str += f'element vertex {n_vx}\n'
-    ply_str += f'property float x\n'
-    ply_str += f'property float y\n'
-    ply_str += f'property float z\n'
-    if incl_rgb:
-        ply_str += f'property uchar red\n'
-        ply_str += f'property uchar green\n'
-        ply_str += f'property uchar blue\n'
-    ply_str += f'property float quality\n'
-    ply_str += f'element face {n_f}\n'
-    ply_str += f'property list uchar int vertex_index\n'
-    ply_str += f'end_header\n'
-
-    if x_offset is None:
-        if hemi==None:
-            x_offset = 0
-        elif 'lh' in hemi:
-            x_offset = -50
-        elif 'rh' in hemi:
-            x_offset = 50
-    # Cycle through the lines of the obj file and add vx + coords + rgb
-    v_idx = 0 # Keep count of vertices     
-    for i in range(2,len(srf_lines)):
-        # If there is a '.' in the line then it is a vertex
-        if '.' in srf_lines[i]:
-            split_coord = srf_lines[i][:-2:].split(' ')                        
-            coord_count = 0
-            for coord in split_coord:
-                if ('.' in coord) & (coord_count==0): # Add x_offset
-                    ply_str += f'{float(coord)+x_offset:.6f} ' 
-                    coord_count += 1
-                elif '.' in coord:
-                    ply_str += f'{float(coord):.6f} ' 
-                    coord_count += 1                    
-            
-            # Now add the value of the parameters...
-            # Now add the rgb values. as integers between 0 and 255
-            if incl_rgb:
-                ply_str += f' {int(rgb_vals[v_idx][0]*255)} {int(rgb_vals[v_idx][1]*255)} {int(rgb_vals[v_idx][2]*255)} '
-                # ply_str += f' {rgb_vals[v_idx][0]} {rgb_vals[v_idx][1]} {rgb_vals[v_idx][2]} '
-
-            # RGB str
-            rgb_str += f'{int(rgb_vals[v_idx][0]*255)},{int(rgb_vals[v_idx][1]*255)},{int(rgb_vals[v_idx][2]*255)}\n'
-            
-            ply_str += f'{values[v_idx]:.3f}\n'
-            v_idx += 1 # next vertex
-        
-        else:
-            # After we finished all the vertices, we need to define the faces
-            # -> these are triangles (hence 3 at the beginning of each line)
-            # -> the index of the three vx is given
-            # For some reason the index is 1 less in .ply files vs .obj files
-            # ... i guess like the difference between matlab and python
-            ply_str += '3 ' 
-            split_idx = srf_lines[i][:-1:].split(' ')
-            ply_str += f'{int(split_idx[0])} '
-            ply_str += f'{int(split_idx[1])} '
-            ply_str += f'{int(split_idx[2])} '
-            ply_str += '\n'
-    return ply_str, rgb_str
-
 def dag_srf_to_ply_basic(srf_file, hemi=None):
     '''dag_srf_to_ply_basic
     Convert srf file to .ply (not including values, or rgb stuff)
@@ -379,7 +373,6 @@ def dag_get_rgb_str(rgb_vals):
         rgb_str += f'{rgb_vals[v_idx][0]},{rgb_vals[v_idx][1]},{rgb_vals[v_idx][2]}\n'
     return rgb_str    
 
-# ******
 def dag_vtk_to_ply(vtk_file):
     '''
     dag_vtk_to_ply

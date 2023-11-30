@@ -324,6 +324,11 @@ def dag_coord_convert(a,b,old2new):
         
     return new_a, new_b
 
+def dag_pol_difference(pol, ref_pol):
+    abs_diff = np.abs(ref_pol - pol)
+    abs_diff = np.min(abs_diff, 2*np.pi-abs_diff)
+    return abs_diff
+
 def dag_pol_to_clock(pol):
     # Convert angles to the range [0, 2*pi)
     # rotate by 90

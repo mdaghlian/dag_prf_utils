@@ -8,6 +8,7 @@ opj = os.path.join
 
 from dag_prf_utils.utils import *
 from dag_prf_utils.plot_functions import *
+from dag_prf_utils.mesh_format import *
 
 import plotly.graph_objects as go
 
@@ -17,7 +18,7 @@ class GenMeshMaker(object):
     '''Used to make .ply files 
     One of many options for surface plotting. 
     '''
-    def __init__(self, sub, output_dir=[], fs_dir=os.environ['SUBJECTS_DIR']):
+    def __init__(self, sub, fs_dir=os.environ['SUBJECTS_DIR'], output_dir=[]):
         
         self.sub = sub        
         self.fs_dir = fs_dir        # Where the freesurfer files are        
@@ -61,33 +62,6 @@ class GenMeshMaker(object):
                 self.mesh_info[mesh_name][hemi]['i']=this_mesh_info['faces'][:,0]
                 self.mesh_info[mesh_name][hemi]['j']=this_mesh_info['faces'][:,1]
                 self.mesh_info[mesh_name][hemi]['k']=this_mesh_info['faces'][:,2]
-
-        # self.inflated = {}
-        # self.sphere = {} # sphere for computing the roi borders
-        # for hemi in ['lh', 'rh']:
-        #     this_mesh_info = dag_read_fs_mesh(opj(self.sub_surf_dir, f'{hemi}.inflated'))
-        #     # Put it into x,y,z, i,j,k format. Plus add offset to x
-        #     self.inflated[hemi] = {}                                    
-        #     self.inflated[hemi]['x']=this_mesh_info['coords'][:,0]
-        #     self.inflated[hemi]['x'] += 50 if hemi=='rh' else -50 # Offset the x coords
-        #     self.inflated[hemi]['y']=this_mesh_info['coords'][:,1]
-        #     self.inflated[hemi]['z']=this_mesh_info['coords'][:,2]
-        #     self.inflated[hemi]['i']=this_mesh_info['faces'][:,0]
-        #     self.inflated[hemi]['j']=this_mesh_info['faces'][:,1]
-        #     self.inflated[hemi]['k']=this_mesh_info['faces'][:,2]
-
-        #     # Also load the sphere
-        #     this_mesh_info = dag_read_fs_mesh(opj(self.sub_surf_dir, f'{hemi}.sphere'))
-        #     # Put it into x,y,z, i,j,k format. Plus add offset to x
-        #     self.sphere[hemi] = {}
-        #     self.sphere[hemi]['x']=this_mesh_info['coords'][:,0]
-        #     self.sphere[hemi]['x'] += 50 if hemi=='rh' else -50 # Offset the x coords
-        #     self.sphere[hemi]['y']=this_mesh_info['coords'][:,1]
-        #     self.sphere[hemi]['z']=this_mesh_info['coords'][:,2]
-        #     self.sphere[hemi]['i']=this_mesh_info['faces'][:,0]
-        #     self.sphere[hemi]['j']=this_mesh_info['faces'][:,1]
-        #     self.sphere[hemi]['k']=this_mesh_info['faces'][:,2]
-
 
 
     def add_ply_surface(self, data, surf_name, **kwargs):
@@ -223,7 +197,7 @@ class GenMeshMaker(object):
         if not isinstance(hemi_list, list):
             hemi_list = [hemi_list]
         return_mesh_obj = kwargs.get('return_mesh_obj', False)
-        roi_list = kwargs.get('roi_list', [])
+        # roi_list = kwargs.get('roi_list', [])
         if not isinstance(data, np.ndarray):
             print(f'Just creating curv file..')
             data = np.zeros(self.total_n_vx)            
@@ -239,13 +213,30 @@ class GenMeshMaker(object):
                 # showscale=True
                 )
             mesh3d_obj.append(this_mesh3d)
-        if len(roi_list)>0:
-            roi_obj = self.plotly_return_roi_obj(**kwargs)
-            mesh3d_obj += roi_obj
+        # if len(roi_list)>0:
+        #     roi_obj = self.plotly_return_roi_obj(**kwargs)
+        #     mesh3d_obj += roi_obj
 
         if return_mesh_obj:
             return mesh3d_obj
-        fig = go.Figure(data=mesh3d_obj)
+        ply_axis_dict = dict(
+            showgrid=False, 
+            showticklabels=False, 
+            title='',
+            showbackground=False,
+        )
+        fig = go.Figure(
+            data=mesh3d_obj,
+            layout=go.Layout(
+                scene=dict(
+                    xaxis=ply_axis_dict,
+                    yaxis=ply_axis_dict,
+                    zaxis=ply_axis_dict,
+                    # bgcolor='rgba(0,0,0,0)'  # Set background color to transparent
+                    
+                )
+            ),            
+        )
         return fig
     
     def plotly_return_mesh_dict(self, data, **kwargs):
@@ -300,160 +291,89 @@ class GenMeshMaker(object):
     
         return mesh_dict
 
-    def plotly_return_roi_obj(self, roi_list, **kwargs):
-        '''
-        Return a plotly object for a given roi
-        '''
-        if not isinstance(roi_list, list):
-            roi_list = [roi_list]
-        hemi_list = kwargs.get('hemi_list', ['lh', 'rh'])
-        if not isinstance(hemi_list, list):
-            hemi_list = [hemi_list]
-        mesh_name = kwargs.get('mesh_name', 'inflated')
+    # def plotly_return_roi_obj(self, roi_list, **kwargs):
+    #     '''
+    #     Return a plotly object for a given roi
+    #     '''
+    #     if not isinstance(roi_list, list):
+    #         roi_list = [roi_list]
+    #     hemi_list = kwargs.get('hemi_list', ['lh', 'rh'])
+    #     if not isinstance(hemi_list, list):
+    #         hemi_list = [hemi_list]
+    #     mesh_name = kwargs.get('mesh_name', 'inflated')
 
-        roi_obj = []
-        for hemi in hemi_list:
-            for roi in roi_list:
-                # Load roi index:
-                roi_idx = dag_load_roi(
-                    self.sub, 
-                    roi=roi, 
-                    fs_dir=self.fs_dir,
-                    split_LR=True)[hemi]
-                roi_idx = np.where(roi_idx)[0]
-                # Find the border vertices
-                border_vx_idx = dag_find_vx_border_on_sphere(roi_idx, self.mesh_info['sphere'][hemi])
-                border_vx = np.column_stack((
-                    self.mesh_info[mesh_name][hemi]['x'][border_vx_idx], 
-                    self.mesh_info[mesh_name][hemi]['y'][border_vx_idx], 
-                    self.mesh_info[mesh_name][hemi]['z'][border_vx_idx]))
+    #     roi_obj = []
+    #     for hemi in hemi_list:
+    #         for roi in roi_list:
+    #             # Load roi index:
+    #             roi_idx = dag_load_roi(
+    #                 self.sub, 
+    #                 roi=roi, 
+    #                 fs_dir=self.fs_dir,
+    #                 split_LR=True)[hemi]
+    #             roi_idx = np.where(roi_idx)[0]
+    #             # Find the border vertices
+    #             border_vx_idx = dag_find_vx_border_on_sphere(roi_idx, self.mesh_info['sphere'][hemi])
+    #             border_vx = np.column_stack((
+    #                 self.mesh_info[mesh_name][hemi]['x'][border_vx_idx], 
+    #                 self.mesh_info[mesh_name][hemi]['y'][border_vx_idx], 
+    #                 self.mesh_info[mesh_name][hemi]['z'][border_vx_idx]))
 
-                border_vx = np.column_stack((
-                    self.mesh_info[mesh_name][hemi]['x'][roi_idx], 
-                    self.mesh_info[mesh_name][hemi]['y'][roi_idx], 
-                    self.mesh_info[mesh_name][hemi]['z'][roi_idx]))
+    #             border_vx = np.column_stack((
+    #                 self.mesh_info[mesh_name][hemi]['x'][roi_idx], 
+    #                 self.mesh_info[mesh_name][hemi]['y'][roi_idx], 
+    #                 self.mesh_info[mesh_name][hemi]['z'][roi_idx]))
                 
-                # print(border_vx)
-                # return border_vx                
-                # roi_coords = self.inflated[hemi]['coords'][roi_idx,:]
-                # # Create a convex hull, to find the border
-                # cvx_hull = ConvexHull(roi_coords)
-                # # Get the border vertices
-                # border_vx = roi_coords[cvx_hull.vertices,:]
-                # Create a the line object for the border
-                border_line = go.Scatter3d(
-                    x=border_vx[:,0],
-                    y=border_vx[:,1],
-                    z=border_vx[:,2],
-                    # mode=,
-                    name=roi,
-                    # marker=dict(
-                    #     size=1,
-                    #     color='red',
-                    #     alpha=0.5,
-                    # ),
-                    # line=dict(
-                    #     color='red',
-                    #     width=2
-                    # )
-                )
-                roi_obj.append(border_line)
-        return roi_obj
-    
+    #             # print(border_vx)
+    #             # return border_vx                
+    #             # roi_coords = self.inflated[hemi]['coords'][roi_idx,:]
+    #             # # Create a convex hull, to find the border
+    #             # cvx_hull = ConvexHull(roi_coords)
+    #             # # Get the border vertices
+    #             # border_vx = roi_coords[cvx_hull.vertices,:]
+    #             # Create a the line object for the border
+    #             border_line = go.Scatter3d(
+    #                 x=border_vx[:,0],
+    #                 y=border_vx[:,1],
+    #                 z=border_vx[:,2],
+    #                 # mode=,
+    #                 name=roi,
+    #                 # marker=dict(
+    #                 #     size=1,
+    #                 #     color='red',
+    #                 #     alpha=0.5,
+    #                 # ),
+    #                 # line=dict(
+    #                 #     color='red',
+    #                 #     width=2
+    #                 # )
+    #             )
+    #             roi_obj.append(border_line)
+    #     return roi_obj
 
-def dag_find_vx_border_on_sphere(vx_idx, sphere_mesh_info):
-    ''' Take advantage of the fact that the sphere is a convex hull'''
-    vertices = np.column_stack((sphere_mesh_info['x'], sphere_mesh_info['y'], sphere_mesh_info['z']))
 
-    # Extract the vertices in vx_list
-    clump_vertices = vertices[vx_idx, :]
+# def dag_find_vx_border_on_sphere(vx_idx, sphere_mesh_info):
+#     ''' Take advantage of the fact that the sphere is a convex hull'''
+#     vertices = np.column_stack((sphere_mesh_info['x'], sphere_mesh_info['y'], sphere_mesh_info['z']))
 
-    # Compute the convex hull of the clump vertices
-    hull = ConvexHull(clump_vertices)
+#     # Extract the vertices in vx_list
+#     clump_vertices = vertices[vx_idx, :]
 
-    # Get the indices of the vertices on the convex hull
-    outer_vertex_indices = np.unique(hull.vertices)
-    return outer_vertex_indices
-        
-def dag_srf_to_ply(srf_file, rgb_vals=None, hemi=None, values=None, incl_rgb=True, **kwargs):
-    '''
-    dag_srf_to_ply
-    Convert srf file to .ply
-    
-    '''
-    x_offset = kwargs.get('x_offset', None)
-    
-    if not isinstance(values, np.ndarray):
-        values = np.ones(rgb_vals.shape[0])
-    with open(srf_file) as f:
-        srf_lines = f.readlines()
-    n_vx, n_f = srf_lines[1].split(' ')
-    n_vx, n_f = int(n_vx), int(n_f)
-    # Also creating an rgb str...
-    rgb_str = ''    
-    # Create the ply string -> following this format
-    ply_str  = f'ply\n'
-    ply_str += f'format ascii 1.0\n'
-    ply_str += f'element vertex {n_vx}\n'
-    ply_str += f'property float x\n'
-    ply_str += f'property float y\n'
-    ply_str += f'property float z\n'
-    if incl_rgb:
-        ply_str += f'property uchar red\n'
-        ply_str += f'property uchar green\n'
-        ply_str += f'property uchar blue\n'
-    ply_str += f'property float quality\n'
-    ply_str += f'element face {n_f}\n'
-    ply_str += f'property list uchar int vertex_index\n'
-    ply_str += f'end_header\n'
+#     # Compute the convex hull of the clump vertices
+#     hull = ConvexHull(clump_vertices)
 
-    if x_offset is None:
-        if hemi==None:
-            x_offset = 0
-        elif 'lh' in hemi:
-            x_offset = -50
-        elif 'rh' in hemi:
-            x_offset = 50
-    # Cycle through the lines of the obj file and add vx + coords + rgb
-    v_idx = 0 # Keep count of vertices     
-    for i in range(2,len(srf_lines)):
-        # If there is a '.' in the line then it is a vertex
-        if '.' in srf_lines[i]:
-            split_coord = srf_lines[i][:-2:].split(' ')                        
-            coord_count = 0
-            for coord in split_coord:
-                if ('.' in coord) & (coord_count==0): # Add x_offset
-                    ply_str += f'{float(coord)+x_offset:.6f} ' 
-                    coord_count += 1
-                elif '.' in coord:
-                    ply_str += f'{float(coord):.6f} ' 
-                    coord_count += 1                    
-            
-            # Now add the value of the parameters...
-            # Now add the rgb values. as integers between 0 and 255
-            if incl_rgb:
-                ply_str += f' {int(rgb_vals[v_idx][0]*255)} {int(rgb_vals[v_idx][1]*255)} {int(rgb_vals[v_idx][2]*255)} '
-                # ply_str += f' {rgb_vals[v_idx][0]} {rgb_vals[v_idx][1]} {rgb_vals[v_idx][2]} '
+#     # Get the indices of the vertices on the convex hull
+#     outer_vertex_indices = np.unique(hull.vertices)
+#     return outer_vertex_indices
 
-            # RGB str
-            rgb_str += f'{int(rgb_vals[v_idx][0]*255)},{int(rgb_vals[v_idx][1]*255)},{int(rgb_vals[v_idx][2]*255)}\n'
-            
-            ply_str += f'{values[v_idx]:.3f}\n'
-            v_idx += 1 # next vertex
-        
-        else:
-            # After we finished all the vertices, we need to define the faces
-            # -> these are triangles (hence 3 at the beginning of each line)
-            # -> the index of the three vx is given
-            # For some reason the index is 1 less in .ply files vs .obj files
-            # ... i guess like the difference between matlab and python
-            ply_str += '3 ' 
-            split_idx = srf_lines[i][:-1:].split(' ')
-            ply_str += f'{int(split_idx[0])} '
-            ply_str += f'{int(split_idx[1])} '
-            ply_str += f'{int(split_idx[2])} '
-            ply_str += '\n'
-    return ply_str, rgb_str
+
+def dag_plotly_eye(el, az, zoom):
+    x = zoom*np.cos(el)*np.cos(az)
+    y = zoom*np.cos(el)*np.sin(az)
+    z = zoom*np.sin(el)
+
+    # fig.update_layout(scene_camera=dict(eye=dict(x=x, y=y, z=z)))
+    return dict(eye=dict(x=x, y=y, z=z))
 
 
 

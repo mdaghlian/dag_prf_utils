@@ -120,14 +120,18 @@ class FSMaker(object):
         mesh_list       which mesh(es) to plot the surface info on (e.g., inflated, pial...)
         hemi_list       which hemispheres to load
         roi_list        which roi outlines to load
+        roi_col_spec    if loading rois, what color? If not specified will do different colors for each nes     
         roi_mask        mask by roi?
-        keep_running    keep running the command (use "&" at the end of the command)
-        -> Screen shot stuff
+        keep_running    keep running the command (use "&" at the end of the command). Useful if you want to take many screen shots.
+        shading_off     Turn of shading? i.e., don't make it darker underneath. Default is false        
         do_scrn_shot    bool            take a screenshot of the surface when it is loaded?
+        scr_shot_file   str             Where to put the screenshot. If not specified goes in custom surface dir
         azimuth         float           camera angle(0-360) Default: 0
         zoom            float           camera zoom         Default: 1.00
         elevation       float           camera angle(0-360) Default: 0
         roll            float           camera angle(0-360) Default: 0        
+        do_col_bar      bool            show color bar at the end. Default is true
+        TODO: add argument 'extra_kwargs'. Dict which gives custom kwargs...
         '''
         mesh_list = kwargs.get('mesh_list', ['inflated'])
         hemi_list = kwargs.get('hemi_list', ['lh', 'rh'])
@@ -140,13 +144,13 @@ class FSMaker(object):
         if shading_off:
             shading_off_str = ':no_shading=1'
 
+        do_scrn_shot    = kwargs.get('do_scrn_shot', False)
+        scr_shot_file   = kwargs.get('scr_shot_file', None)
         # *** CAMERA ANGLE ***
         cam_azimuth     = kwargs.get('azimuth', 90)
         cam_zoom        = kwargs.get('zoom', 1)
         cam_elevation   = kwargs.get('elevation', 0)
         cam_roll        = kwargs.get('roll', 0)
-        do_scrn_shot    = kwargs.get('do_scrn_shot', False)
-        scr_shot_file   = kwargs.get('scr_shot_file', None)
         # *** COLOR BAR ***
         do_col_bar  = kwargs.get('do_col_bar', True)
 
@@ -198,7 +202,7 @@ class FSMaker(object):
                         else:
                             roi_col = roi_col_spec
                         # this_roi_path = self.get_roi_file(roi, this_hemi)                        
-                        fs_cmd += f':label={roi}:label_outline=True:label_visible=True' #:label_color={roi_col}' # false...
+                        fs_cmd += f':label={roi}:label_outline=True:label_visible=True:label_color={roi_col}' # false...
                 if do_surf:
                     for this_surf_name in surf_name:
                         # this_surf_path = opj(self.custom_surf_dir, f'{this_hemi}.{this_surf_name}')                
@@ -351,6 +355,10 @@ class FSMaker(object):
         return
         
 
+
+# ************************************************************************
+# ************************************************************************
+# *************************** SUPPORTING FUNCTIONS ***********************
 def dag_write_curv(fn, curv, fnum):
     ''' Adapted from https://github.com/simnibs/simnibs
     

@@ -51,6 +51,7 @@ def dag_add_ecc_pol_lines(ax, **kwargs):
     incl_ticks = kwargs.get("incl_ticks", False)
     aperture_rad = kwargs.get("aperture_rad", None)
     aperture_col = kwargs.get('aperture_col', 'k')
+    do_radians = kwargs.get('do_radians', True)
     # **** ADD THE LINES ****
     if not incl_ticks: # Don't include ticks
         ax.set_xticks([])    
@@ -77,12 +78,22 @@ def dag_add_ecc_pol_lines(ax, **kwargs):
         outer_y = np.sin(i_pol_val)*ecc_bounds[-1] 
         outer_x_txt = outer_x*1.1 # Get the x,y coords of the text
         outer_y_txt = outer_y*1.1        
-        outer_txt = f"{180*i_pol_val/np.pi:.0f}\N{DEGREE SIGN}" # Get the text
+        if do_radians:
+            outer_txt = f"{i_pol_val:.2f}" # Get the text
+        else:
+            outer_txt = f"{180*i_pol_val/np.pi:.0f}\N{DEGREE SIGN}" # Get the text
         # Don't show 360, as this goes over the top of 0 degrees and is ugly...
-        if not '360' in outer_txt:
+        if ('360' in outer_txt) or ('-3.14' in outer_txt):
+            continue
+        else:
             ax.plot((0, outer_x), (0, outer_y), color=line_col, alpha=0.3)
             if incl_ticks:
                 ax.text(outer_x_txt, outer_y_txt, outer_txt, ha='center', va='center')
+
+        # if not '360' in outer_txt:
+        #     ax.plot((0, outer_x), (0, outer_y), color=line_col, alpha=0.3)
+        #     if incl_ticks:
+        #         ax.text(outer_x_txt, outer_y_txt, outer_txt, ha='center', va='center')
 
     for i_ecc, i_ecc_val in enumerate(ecc_bounds): # Loop through eccentricity lines
         grid_line = patches.Circle((0, 0), i_ecc_val, color=line_col, alpha=0.3, fill=0)    
@@ -140,7 +151,7 @@ def dag_update_fig_fontsize(fig, new_font_size):
         if isinstance(i_kid, mpl.axes.Axes): # If the child is an axes, update the font size of the axes
             dag_update_ax_fontsize(i_kid, new_font_size)
         elif isinstance(i_kid, mpl.text.Text): # If the child is a text, update the font size of the text
-            i_kid.set_fontsize(new_font_size)
+            i_kid.set_fontsize(new_font_size)            
 
 def dag_update_ax_fontsize(ax, new_font_size, include=None, do_extra_search=True):
     '''dag_update_ax_fontsize
@@ -268,7 +279,8 @@ def dag_return_ecc_pol_bin(params2bin, ecc4bin, pol4bin, bin_weight=None, **kwar
                 if bin_weight is not None: # If there is a bin weight, use it
                     bin_mean[i_ecc, i_pol] = (params2bin[i_param][bin_idx] * bin_weight[bin_idx]).sum() / bin_weight[bin_idx].sum()
                 else:
-                    bin_mean[i_ecc, i_pol] = np.mean(params2bin[i_param][bin_idx])
+                    # bin_mean[i_ecc, i_pol] = np.mean(params2bin[i_param][bin_idx])
+                    bin_mean[i_ecc, i_pol] = np.median(params2bin[i_param][bin_idx])
 
         bin_mean = np.reshape(bin_mean, total_n_bins)
         # REMOVE ANY NANS
@@ -278,16 +290,16 @@ def dag_return_ecc_pol_bin(params2bin, ecc4bin, pol4bin, bin_weight=None, **kwar
         params_binned = params_binned[0] 
     return params_binned
 
-def dag_visual_field_scatter(ax, dot_x, dot_y, **kwargs):
+def dag_visual_field_scatter(dot_x, dot_y, **kwargs):
     '''dag_visual_field_scatter
     Description:
         Plot a scatter of points on a visual field (e.g., size, rsquared etc)
         With the option to do various creative things. e.g., binning, color coding, etc
     Input:
-        ax              matplotlib axes
         dot_x           np.ndarray      x coord of points
         dot_y           np.ndarray      y coord of points
         *Optional*
+        ax              matplotlib axes
         do_binning      bool            Whether to bin the points
         bin_weight      np.ndarray      Weighted mean in each bin, not just the average
         ecc_bounds      np.ndarray      eccentricity bounds
@@ -304,6 +316,7 @@ def dag_visual_field_scatter(ax, dot_x, dot_y, **kwargs):
         cb              colorbar
 
     '''
+    ax = kwargs.get('ax', plt.gca())
     do_binning = kwargs.get("do_binning", False)
     # -> add option for dot size scaling... ( & alpha scaling) ??
     bin_weight = kwargs.get("bin_weight", None)
@@ -318,6 +331,8 @@ def dag_visual_field_scatter(ax, dot_x, dot_y, **kwargs):
     
     if isinstance(dot_col, np.ndarray) & (dot_cmap==None):
         dot_cmap = 'viridis'
+    if dot_cmap != None:
+        dot_cmap = dag_get_cmap(dot_cmap)
 
     if do_binning:
         dot_ecc, dot_pol = dag_coord_convert(dot_x,dot_y,old2new="cart2pol")
@@ -404,6 +419,11 @@ def dag_plot_bin_line(ax, X,Y, bin_using, **kwargs):
         do_basics       bool            Whether to add basic features to the plot (i.e., run dag_add_ax_basics)
         xerr            bool            Whether to include x error bars
         do_bars         bool            Whether to include error bars
+        do_shade        bool            Do shading instead?
+        err_args        dict            Arguments for error bars
+                    'upper_vals' -> values for upper line
+                    'lower_vals' -> values for lower line
+                    'method'    -> ... TODO (method for setting upper & lower values)
     Return:
         None
 
@@ -420,11 +440,14 @@ def dag_plot_bin_line(ax, X,Y, bin_using, **kwargs):
         bins = n_bins    
     xerr = kwargs.get("xerr", False)
     do_bars = kwargs.get("do_bars", True)
+    do_shade = kwargs.get("do_shade", False)
+    summary_type = kwargs.get("summary_type", 'mean')
+    err_type = kwargs.get("err_type", None)
     # Do the binning
-    X_mean = binned_statistic(bin_using, X, bins=bins, statistic='mean')[0]
+    X_mean = binned_statistic(bin_using, X, bins=bins, statistic=summary_type)[0]
     X_std = binned_statistic(bin_using, X, bins=bins, statistic='std')[0]
-    count = binned_statistic(bin_using, X, bins=bins, statistic='count')[0]
-    Y_mean = binned_statistic(bin_using, Y, bins=bins, statistic='mean')[0]                
+    # count = binned_statistic(bin_using, X, bins=bins, statistic='count')[0]
+    Y_mean = binned_statistic(bin_using, Y, bins=bins, statistic=summary_type)[0]  
     Y_std = binned_statistic(bin_using, Y, bins=bins, statistic='std')[0]  #/ np.sqrt(bin_data['bin_X']['count'])              
     if do_bars:
         if xerr:
@@ -449,6 +472,43 @@ def dag_plot_bin_line(ax, X,Y, bin_using, **kwargs):
                 lw=lw,
                 **line_kwargs
                 )        
+
+    elif do_shade:
+        
+        X_mid_pt = (bins[:-1] + bins[1:]) / 2
+        if 'pc' in err_type:            
+            Y_mid = binned_statistic(bin_using, Y, bins=bins, statistic=np.median)[0]                      
+            pc_lower = float(err_type.split('-')[-1])
+            pc_upper = 100 - pc_lower
+
+            pcLOWER_lambda = lambda data: np.percentile(data, pc_lower)
+            pcUPPER_lambda = lambda data: np.percentile(data, pc_upper)
+            Y_lower = binned_statistic(bin_using, Y, bins=bins, statistic=pcLOWER_lambda)[0]              
+            Y_upper = binned_statistic(bin_using, Y, bins=bins, statistic=pcUPPER_lambda)[0]              
+        if err_type=='mean':
+            Y_mid = Y_mean
+            Y_lower = Y_mean - Y_std
+            Y_upper = Y_mean + Y_std
+            
+
+        ax.plot(
+            X_mid_pt,
+            Y_mid,
+            color=line_col,
+            label=line_label,
+            alpha=0.5,
+            lw=lw,
+            **line_kwargs,
+            )
+        ax.fill_between(
+            X_mid_pt,
+            Y_lower,
+            Y_upper,
+            alpha=0.5,
+            color=line_col,            
+            label='_'        
+            )       
+
     else:
         ax.plot(
             X_mean,
@@ -639,6 +699,7 @@ def dag_scatter(X,Y,ax=None, **kwargs):
         ax.plot((min_v,max_v), (min_v,max_v), 'k')
         ax.set_xlim(min_v,max_v)
         ax.set_ylim(min_v,max_v)
+        ax.set_box_aspect(1)
     dag_add_ax_basics(ax=ax, **kwargs)
 
 
@@ -686,7 +747,7 @@ def dag_multi_scatter(data_in, **kwargs):
                         ax.set_title(
                             f'corr={np.corrcoef(data_dict[x_param],data_dict[y_param])[0,1]:.3f}')
                     else:
-                        dag_rapid_corr(
+                        dag_scatter(
                             X= data_dict[x_param],
                             Y= data_dict[y_param],
                             ax=ax,
@@ -848,3 +909,150 @@ def dag_get_row_col(plot_index, n_cols=None, n_rows=None, dir='col', start_idx=0
         row = (plot_index % n_rows) + start_idx
         col = (plot_index // n_rows) + start_idx
     return row, col
+
+
+
+def dag_set_all_fig_item_attributes(fig_item, set_attribute, new_value, depth=0):
+    '''
+    Cycle recursively through all items in a figure and change the color of anything that matches old_col to new_col
+    '''
+    if depth > 100:
+        print('Max depth reached')
+        return
+    if fig_item is []:
+        return        
+
+    if isinstance(fig_item, list):
+        for item in fig_item:
+            dag_set_all_fig_item_attributes(item, set_attribute, new_value, depth=depth+1)
+    else:
+        if hasattr(fig_item, set_attribute):
+            fig_item.__getattribute__(set_attribute)(new_value)
+        if hasattr(fig_item, 'get_children'):
+            dag_set_all_fig_item_attributes(fig_item.get_children(), set_attribute, new_value, depth=depth+1)
+
+
+def dag_add_square_axis(main_obj, width_ratio, position_ratio):
+    """
+    Add a square axis inside the given axis.
+
+    Parameters:
+    - main_obj: The main object to which the square axis will be added.
+        If figure add subplot(111)
+    - width_ratio: The width of the square axis relative to the main axis.
+    - position_ratio: The position of the square axis relative to the main axis.
+    """
+    plt.draw() # Make sure the figure is drawn first
+    if isinstance(main_obj,plt.Figure):
+        ax = main_obj.add_subplot(111)
+    elif isinstance(main_obj, plt.Axes):
+        ax = main_obj
+    else:
+        raise ValueError("Must be a figure or an axes")
+
+    # Get the position and size of the main axis
+    main_position = ax.get_position(original=True)
+    main_width = main_position.width
+    main_height = main_position.height
+
+    # Calculate the width and height of the square axis
+    square_width = main_width * width_ratio
+    square_height = main_height * width_ratio
+
+    # Calculate the position of the square axis
+    square_x = main_position.x0 + main_width * position_ratio[0] 
+    square_y = main_position.y0 + main_height * position_ratio[1]
+
+    # Add the square axis
+    square_ax = plt.axes([square_x, square_y, square_width, square_height])
+    if isinstance(main_obj,plt.Figure):
+        # remove the extra subplot
+        ax.remove()
+    return square_ax
+    
+def dag_add_compass(main_ax, width_ratio=0.5, position_ratio=[1,1], **kwargs):
+
+    
+    # Set everything up
+    pol_type = kwargs.get("pol_type", "radians")
+    n_pol    = kwargs.get("n_pol", 9)     
+    pol_list = kwargs.get("pol_list", None)   
+    x_axis_only = kwargs.get("x_axis_only", False)
+    wheel_only = kwargs.get("wheel_only", False)
+    if pol_list is None:
+        pol_list = np.linspace(-np.pi, np.pi, n_pol)
+    line_col = kwargs.get("line_col", 'k' )
+    incl_ticks = kwargs.get("incl_ticks", True)
+    aperture_col = kwargs.get('aperture_col', 'k')
+    cmap = kwargs.get('cmap', 'hsv')
+    pie_alpha = kwargs.get("pie_alpha", 1)
+    # X axis
+    # Add a scatter color map...
+    n_segments = 45
+    ecc = np.ones(n_segments)-0.2
+    pol = np.linspace(-np.pi, np.pi, n_segments)
+    xs,ys = dag_coord_convert(ecc,pol, 'pol2cart')
+    # Add to main axis...
+    if not wheel_only:
+        y_lim = main_ax.get_ylim()
+        main_ax.scatter(
+            pol, 
+            np.ones_like(pol) * y_lim[0],
+            c=pol, cmap=cmap,s=250,
+        )
+    if x_axis_only:
+        return
+
+    # Add the axis    
+    ax = dag_add_square_axis(main_ax, width_ratio, position_ratio)
+    ax.set_ylim(-1,1)
+    ax.set_xlim(-1,1)
+    # **** ADD THE LINES ****
+    ax.set_xticks([])    
+    ax.set_yticks([])
+    ax.spines['right'].set_visible(False)
+    ax.spines['left'].set_visible(False)
+    ax.spines['top'].set_visible(False)
+    ax.spines['bottom'].set_visible(False)        
+
+    # Add the lines
+    n_polar_lines = len(pol_list)
+    for i_pol in range(n_polar_lines): # Loop through polar lines
+        i_pol_val = pol_list[i_pol] # Get the polar angle
+        outer_x = np.cos(i_pol_val) # Get the x,y coords of the outer line
+        outer_y = np.sin(i_pol_val) 
+        outer_x_txt = outer_x*1.1 # Get the x,y coords of the text
+        outer_y_txt = outer_y*1.1        
+        if pol_type=="radians":
+            outer_txt = f"{i_pol_val:.2f}" # Get the text
+        elif pol_type=="degrees":
+            outer_txt = f"{180*i_pol_val/np.pi:.0f}\N{DEGREE SIGN}" # Get the text
+        # Don't show 360, as this goes over the top of 0 degrees and is ugly...
+        if ('360' in outer_txt) or ('-3.14' in outer_txt):
+            continue
+        else:
+            ax.plot((0, outer_x), (0, outer_y), color=line_col, alpha=0.3)
+            if incl_ticks:
+                ax.text(outer_x_txt, outer_y_txt, outer_txt, ha='center', va='center')
+    
+    # Add the circle
+    grid_line = patches.Circle((0, 0), 1, color=line_col, alpha=0.3, fill=0)    
+    ax.add_patch(grid_line)                        
+
+    # Add pie chart colormap
+    # Generate data for the pie chart
+    values = np.ones(n_segments)
+    cwheel_colors = dag_get_col_vals(pol, vmin=-np.pi, vmax=np.pi, cmap=cmap)
+    # Plot the pie chart
+    ax.pie(
+        values, 
+        colors=cwheel_colors, 
+        startangle=180, 
+        counterclock=True, 
+        radius=1.0, 
+        wedgeprops=dict(width=1, fill=True, alpha=pie_alpha)
+        )
+    ax.scatter(x=xs,y=ys,c=pol,cmap=cmap, s=250)
+    # Also scatter dots, for sanity check on pie...
+
+    

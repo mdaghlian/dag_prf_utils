@@ -101,7 +101,6 @@ def dag_make_custom_cmap(col_list, col_steps=None, cmap_name='', save_cmap=False
             col_steps=col_val,
             col_list=col_list
         )
-    print(type(custom_cmap))
         
     return custom_cmap
 

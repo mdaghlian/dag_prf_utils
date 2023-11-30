@@ -6,8 +6,9 @@ from datetime import datetime
 import os
 opj = os.path.join
 
-from .mesh_maker import *
-from .fs_tools import *
+from dag_prf_utils.mesh_maker import *
+from dag_prf_utils.mesh_format import *
+from dag_prf_utils.fs_tools import *
 
 blender_init = os.environ['BLENDER']
 
@@ -220,6 +221,9 @@ class BlendMaker(object):
         os.system(f'{blender_init} --python {self.blender_script}')
 
 
+
+# ************************************************************************************************************
+# ************************************************************************************************************
 
 bscript_start = '''
 ### ALWAYS DO THIS AT THE START

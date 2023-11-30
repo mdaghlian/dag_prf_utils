@@ -9,12 +9,16 @@ https://github.com/gjheij/linescanning
 This package is still in development and its API might change. 
 
 ## Installation 
-[1] Install prfpy, use this to make a nice conda environment with all the required dependencies (https://github.com/VU-Cog-Sci/prfpy)
+[1] Install prfpy, this should cover everything, use this to make a nice conda environment with all the required dependencies (https://github.com/VU-Cog-Sci/prfpy)
+
 [2] If you're on linux, and you want to have the command line tools (stuff in /bin) then run
-> ./shell/dpu_setup 
+> bash shell/dpu_setup setup
 Otherwise, you can just do `python setup.py develop`
 
-[3] If you want to use blender, you can install that too. You may need to specify the path in the __init__ file
+[3] OPTIONAL: If you want to use blender, you can install that too. You may need to specify the path in the __init__ file
+
+[4] OPTIONAL: Meshlab might also be useful (https://www.meshlab.net/ to install)
+
 
 # Overview of files 
 

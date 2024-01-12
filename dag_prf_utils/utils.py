@@ -154,6 +154,7 @@ def dag_load_roi(sub, roi, fs_dir=os.environ['SUBJECTS_DIR'], split_LR=False, do
         except:
             roi_file['lh'] = dag_find_file_in_folder([this_roi, '.label', 'lh'], roi_dir,exclude='._', recursive=True)    
             roi_file['rh'] = dag_find_file_in_folder([this_roi, '.label', 'rh'], roi_dir,exclude='._', recursive=True)    
+            # bloop
 
         # If more than 1 match print the matches and raise error
         if isinstance(roi_file['lh'], list):
@@ -328,6 +329,37 @@ def dag_pol_difference(pol, ref_pol):
     abs_diff = np.abs(ref_pol - pol)
     abs_diff = np.min(abs_diff, 2*np.pi-abs_diff)
     return abs_diff
+
+def dag_merid_idx(x, y, wedge_angle=10, angle_type='rad'):
+    """
+    Categorize points based on their position relative to specified meridians.
+
+    Parameters:
+    - x: NumPy array of x-coordinates
+    - y: NumPy array of y-coordinates
+    - wedge_angle: Number of degrees around each meridian center (+/-)
+    - angly_type: is wedge_angle specified in degrees or radians
+
+    Returns:
+    - Dictionary with meridians as keys and boolean NumPy arrays indicating points within each meridian's range
+    """
+    # Define meridian centers
+    merid_centers = {'right': 0, 'upper': np.pi/2, 'left': np.pi, 'lower': -np.pi/2}
+    if angle_type=='deg':
+        # Convert degrees around meridian to rad
+        wedge_angle *= np.pi/180
+    # Calculate polar angle
+    pol = np.arctan2(y, x) 
+    
+    merid_idx = {}
+    for merid,merid_center in merid_centers.items():        
+        # Get difference from meridian centre
+        abs_diff = np.abs(merid_center - pol)
+        abs_diff = np.min([abs_diff, 2*np.pi-abs_diff], axis=0)
+        # print(abs_diff.shape)
+        merid_idx[merid] = abs_diff <= wedge_angle
+    return merid_idx
+
 
 def dag_pol_to_clock(pol):
     # Convert angles to the range [0, 2*pi)

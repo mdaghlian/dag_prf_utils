@@ -29,7 +29,6 @@ def main(argv):
     
     Example:
 
-    ** TODO HRF refitting option... ***
 
     '''
     # Load the fitting settings, add in the new info

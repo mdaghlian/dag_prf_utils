@@ -120,11 +120,12 @@ class FSMaker(object):
         mesh_list       which mesh(es) to plot the surface info on (e.g., inflated, pial...)
         hemi_list       which hemispheres to load
         roi_list        which roi outlines to load
+        roi_list_excl   any roi to exclude...
         roi_col_spec    if loading rois, what color? If not specified will do different colors for each nes     
         roi_mask        mask by roi?
         keep_running    keep running the command (use "&" at the end of the command). Useful if you want to take many screen shots.
         shading_off     Turn of shading? i.e., don't make it darker underneath. Default is false        
-        do_scrn_shot    bool            take a screenshot of the surface when it is loaded?
+        do_scr_shot     bool            take a screenshot of the surface when it is loaded?
         scr_shot_file   str             Where to put the screenshot. If not specified goes in custom surface dir
         azimuth         float           camera angle(0-360) Default: 0
         zoom            float           camera zoom         Default: 1.00
@@ -136,6 +137,7 @@ class FSMaker(object):
         mesh_list = kwargs.get('mesh_list', ['inflated'])
         hemi_list = kwargs.get('hemi_list', ['lh', 'rh'])
         roi_list = kwargs.get('roi_list',None)
+        roi_list_excl = kwargs.get('roi_list_excl',[])
         roi_col_spec = kwargs.get('roi_col_spec', None)
         roi_mask = kwargs.get('roi_mask', None)
         keep_running = kwargs.get('keep_running', False) # open window and keep running
@@ -144,7 +146,7 @@ class FSMaker(object):
         if shading_off:
             shading_off_str = ':no_shading=1'
 
-        do_scrn_shot    = kwargs.get('do_scrn_shot', False)
+        do_scr_shot     = kwargs.get('do_scr_shot', False)
         scr_shot_file   = kwargs.get('scr_shot_file', None)
         # *** CAMERA ANGLE ***
         cam_azimuth     = kwargs.get('azimuth', 90)
@@ -169,9 +171,9 @@ class FSMaker(object):
         do_rois = False
         if roi_list is not None:
             do_rois = True
-            sorted_roi_list = self.get_lr_roi_list(roi_list)
+            sorted_roi_list = self.get_lr_roi_list(roi_list, roi_list_excl)
 
-        if do_scrn_shot:         
+        if do_scr_shot:         
             if scr_shot_file is None:
                 # Not specified -save in custom surf dir
                 scr_shot_file = opj(self.custom_surf_dir, f'{surf_name[0]}_az{cam_azimuth}_z{cam_zoom}_e{cam_elevation}_r{cam_roll}')
@@ -221,7 +223,7 @@ class FSMaker(object):
             fs_cmd += ' &'
         return fs_cmd 
 
-    def get_lr_roi_list(self, roi_list):
+    def get_lr_roi_list(self, roi_list, roi_list_excl):
         '''
         Sort out the list of rois... per hemi
         Include make it capable of dealing with missing rois
@@ -239,7 +241,7 @@ class FSMaker(object):
                     filt=[roi_name, hemi],
                     path=self.sub_label_dir,
                     recursive=True,
-                    exclude=['._', '.thresh'],
+                    exclude=['._', '.thresh'] + list(roi_list_excl),
                     return_msg=None,
                     )
                 if this_roi_path is not None:

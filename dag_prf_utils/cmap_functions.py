@@ -6,7 +6,7 @@ import numpy as np
 import matplotlib as mpl
 import matplotlib.colors as mcolors
 
-from .utils import dag_rescale_bw
+from dag_prf_utils.utils import dag_rescale_bw
 
 # Load custom color maps
 path_to_utils = os.path.abspath(os.path.dirname(__file__))

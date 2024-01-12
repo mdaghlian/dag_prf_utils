@@ -9,8 +9,8 @@ import os
 opj = os.path.join
 
 
-from .utils import *
-from .cmap_functions import *
+from dag_prf_utils.utils import *
+from dag_prf_utils.cmap_functions import *
 
 # Default bounds for visual field plotting
 default_ecc_bounds =  np.linspace(0, 5, 7)
@@ -496,7 +496,7 @@ def dag_plot_bin_line(ax, X,Y, bin_using, **kwargs):
             Y_mid,
             color=line_col,
             label=line_label,
-            alpha=0.5,
+            # alpha=0.5,
             lw=lw,
             **line_kwargs,
             )
@@ -970,9 +970,7 @@ def dag_add_square_axis(main_obj, width_ratio, position_ratio):
         ax.remove()
     return square_ax
     
-def dag_add_compass(main_ax, width_ratio=0.5, position_ratio=[1,1], **kwargs):
-
-    
+def dag_add_compass(main_ax, width_ratio=0.5, position_ratio=[1,1], **kwargs):    
     # Set everything up
     pol_type = kwargs.get("pol_type", "radians")
     n_pol    = kwargs.get("n_pol", 9)     
@@ -1055,4 +1053,34 @@ def dag_add_compass(main_ax, width_ratio=0.5, position_ratio=[1,1], **kwargs):
     ax.scatter(x=xs,y=ys,c=pol,cmap=cmap, s=250)
     # Also scatter dots, for sanity check on pie...
 
+
+def dag_box_around_ax_list(fig, ax_list, **kwargs):
+    '''
+    Add a rectangle around a set of axes    
+
+    '''    
+    pad     = kwargs.pop('pad', 0)
+    padX    = kwargs.pop('padX', 0) + pad 
+    padY    = kwargs.pop('padY', 0) + pad
+    padX0   =-kwargs.pop('padX0', 0) - padX
+    padX1   = kwargs.pop('padX1', 0)  + padX
+    padY0   =-kwargs.pop('padY0', 0) - padY
+    padY1   = kwargs.pop('padY1', 0)  + padY
     
+    # Calculate the coordinates of the box
+    x0 = min(ax.get_position().x0 for ax in ax_list) + padX0
+    y0 = min(ax.get_position().y0 for ax in ax_list) + padY0
+    x1 = max(ax.get_position().x1 for ax in ax_list) + padX1
+    y1 = max(ax.get_position().y1 for ax in ax_list) + padY1
+
+    kwargs['linewidth'] = kwargs.get('linewidth', 2)
+    kwargs['edgecolor'] = kwargs.get('edgecolor', 'r')
+    kwargs['facecolor'] = kwargs.get('facecolor', 'none')
+    # Create a rectangle patch
+    rect = mpl.patches.Rectangle(
+        (x0, y0), x1 - x0, y1 - y0, 
+        **kwargs,
+        )
+    fig.add_artist(rect)
+
+

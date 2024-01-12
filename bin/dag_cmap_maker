@@ -2,6 +2,7 @@
 #$ -j Y
 #$ -cwd
 #$ -V
+
 import sys
 import getopt
 
@@ -9,7 +10,6 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 from dag_prf_utils.plot_functions import *
-import dag_prf_utils as dpu
 # Load custom color maps
 # path_to_utils = os.path.abspath(os.path.dirname(dpu.__file__))
 # custom_col_path = opj(path_to_utils, 'cmaps.json')

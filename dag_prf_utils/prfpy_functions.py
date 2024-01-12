@@ -312,6 +312,7 @@ class Prf1T1M(object):
         if self.model=='csf':
             self.params_dd['log10_SFp'] = np.log10(self.params_dd['SFp'])
             self.params_dd['log10_CSp'] = np.log10(self.params_dd['CSp'])
+            self.params_dd['log10_crf_exp'] = np.log10(self.params_dd['crf_exp'])
             self.params_dd['sfmax'] = np.nan_to_num(
                 10**(np.sqrt(self.params_dd['log10_CSp']/(self.params_dd['width_r']**2)) + \
                                             self.params_dd['log10_SFp']))            
@@ -379,21 +380,35 @@ class Prf1T1M(object):
 
         return vx_mask
     
-    def return_th_param(self, param, vx_mask=None):
+    # def return_th_param(self, param, vx_mask=None):
+    #     '''return_th_param
+    #     return all the parameters listed, masked by vx_mask        
+    #     '''
+    #     if vx_mask is None:
+    #         vx_mask = np.ones(self.n_vox, dtype=bool)
+    #     if not isinstance(param, list):
+    #         param = [param]        
+    #     param_out = []
+    #     for i_param in param:
+    #         # this_task = i_param.split('-')[0]
+    #         # this_param = i_param.split('-')[1]
+    #         param_out.append(self.pd_params[i_param][vx_mask].to_numpy())
+
+    #     return param_out
+    def return_th_params(self, px_list=None, th={}, **kwargs):
         '''return_th_param
         return all the parameters listed, masked by vx_mask        
         '''
-        if vx_mask is None:
-            vx_mask = np.ones(self.n_vox, dtype=bool)
-        if not isinstance(param, list):
-            param = [param]        
-        param_out = []
-        for i_param in param:
-            # this_task = i_param.split('-')[0]
-            # this_param = i_param.split('-')[1]
-            param_out.append(self.pd_params[i_param][vx_mask].to_numpy())
-
-        return param_out
+        if px_list is None:
+            px_list = list(self.pd_params.keys())
+                
+        # relevant mask 
+        vx_mask = self.return_vx_mask(th)
+        # create tmp dict with relevant stuff...
+        tmp_dict = {}
+        for i_px in px_list:
+            tmp_dict[i_px] = self.pd_params[i_px][vx_mask].to_numpy()
+        return tmp_dict    
     
     def hist(self, param, th={'min-rsq':.1}, ax=None, **kwargs):
         '''hist: Plot a histogram of a parameter, masked by th'''
@@ -701,10 +716,12 @@ class PrfMulti(object):
             vx_mask = vx_mask.to_numpy()
         return vx_mask
     
-    def return_th_params(self, px_list, th=None, **kwargs):
+    def return_th_params(self, px_list=None, th=None, **kwargs):
         '''return_th_param
         return all the parameters listed, masked by vx_mask        
         '''
+        if px_list is None:
+            px_list = list(self.pd_params.keys())
         px_id = [None] * len(px_list)
         px_p = [None] * len(px_list)
         for i,p in enumerate(px_list):

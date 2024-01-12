@@ -4,6 +4,8 @@ setup(
     packages=find_packages(),
     install_requires=[
         'plotly',  # Add Plotly as a dependency
+        'reportlab',
+        'PIL',
         # other dependencies...
     ],    
 )

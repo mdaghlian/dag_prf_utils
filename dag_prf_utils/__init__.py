@@ -9,7 +9,7 @@ for cmd in fs_cmd_list:
         print(f'Could not find path for {cmd}, is freesurfer accessible from here?')
 
 # ************************** SPECIFY FS_LICENSE HERE **************************
-os.environ['FS_LICENSE'] = '/data1/projects/dumoulinlab/Lab_members/Marcus/programs/linescanning/misc/license.txt'
+# os.environ['FS_LICENSE'] = '/data1/projects/dumoulinlab/Lab_members/Marcus/programs/linescanning/misc/license.txt'
 if 'FS_LICENSE' in os.environ.keys():
     if not os.path.exists(os.environ['FS_LICENSE']):
         print('Could not find FS_LICENSE, set using os.environ above')
@@ -32,7 +32,7 @@ except ImportError:
 
 
 # ************************** SPECIFY BLENDER PATH HERE **************************
-os.environ['BLENDER'] = '/data1/projects/dumoulinlab/Lab_members/Marcus/programs/blender-3.5.1-linux-x64/blender'
+# os.environ['BLENDER'] = '/data1/projects/dumoulinlab/Lab_members/Marcus/programs/blender-3.5.1-linux-x64/blender'
 if not 'BLENDER' in os.environ.keys():
     # Check for command:
     blender_cmd = subprocess.getstatusoutput(f"command -v blender")[1]

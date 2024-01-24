@@ -147,8 +147,6 @@ def main(argv):
                 to_show += [surf_list[surf_num]]
             else:
                 print('Invalid input')
-            
-
 
     fs.open_fs_surface(to_show, **kwargs)
 

@@ -67,10 +67,24 @@ class BlendMaker(object):
                 dag_str2file(filename=ply_surf_file, txt=ply_str)
                 # For cleanness remove the .srf file too...
                 os.system(f'rm {srf_surf_file}')
-        
+        # Load inflated surface
+        self.mesh_info = {}
+        for mesh_name in mesh_list:
+            self.mesh_info[mesh_name] = {}
+            for hemi in ['lh', 'rh']:
+                this_mesh_info = dag_read_fs_mesh(opj(self.sub_surf_dir, f'{hemi}.{mesh_name}'))
+                # Put it into x,y,z, i,j,k format. Plus add offset to x
+                self.mesh_info[mesh_name][hemi] = {}                                    
+                self.mesh_info[mesh_name][hemi]['x']=this_mesh_info['coords'][:,0]
+                self.mesh_info[mesh_name][hemi]['x'] += 50 if hemi=='rh' else -50
+                self.mesh_info[mesh_name][hemi]['y']=this_mesh_info['coords'][:,1]
+                self.mesh_info[mesh_name][hemi]['z']=this_mesh_info['coords'][:,2]
+                self.mesh_info[mesh_name][hemi]['i']=this_mesh_info['faces'][:,0]
+                self.mesh_info[mesh_name][hemi]['j']=this_mesh_info['faces'][:,1]
+                self.mesh_info[mesh_name][hemi]['k']=this_mesh_info['faces'][:,2]        
         # [2] Make rgb files for curvature and depth (under_surfs / us)
         # [-> curvature]
-        for us_name in ['curv', 'thickness']:
+        for us_name in ['curv']: # , 'thickness']:
             self.surf_names.append(us_name)
             for i_hemi in ['lh', 'rh']:
                 rgb_us_file = opj(self.out_dir,f'{i_hemi}.{us_name}_rgb.csv')
@@ -146,16 +160,104 @@ class BlendMaker(object):
             rgb_str = dag_get_rgb_str(rgb_vals=rgb_vals)
             
             dag_str2file(filename=rgb_file, txt=rgb_str)
-    
-    def add_roi(self, roi):
+
+
+    def add_roi_outlines(self, roi_list, **kwargs):
         '''
-        Save a numpy array of 
+        Add roi outlines
         '''
-        self.roi_names.append(roi)
-        roi_LR = dag_load_roi(self.sub, roi, self.fs_dir, split_LR=True)
-        for i_hemi in ['lh', 'rh']:
-            roi_file = opj(self.out_dir,f'{i_hemi}.{roi}_roi.npy')
-            np.save(roi_file, roi_LR[i_hemi])
+        if not isinstance(roi_list, list):
+            roi_list = [roi_list]
+        full_roi_list = {
+            'lh' : [],
+            'rh' : [],
+        }
+
+        roi_exclude = kwargs.get('roi_exclude', [])
+        for roi in roi_list:
+            for hemi in ['lh', 'rh']:
+                this_roi_list = dag_find_file_in_folder(
+                    filt = [roi, hemi],
+                    path=opj(self.fs_dir, self.sub, 'label'),
+                    exclude = roi_exclude , # exclude right hemisphere 
+                    recursive=True,
+                    return_msg=None
+                )
+                if this_roi_list is None: 
+                    print('No ROIs found')
+                    continue
+
+                if isinstance(this_roi_list, str):
+                    this_roi_list = [this_roi_list]
+                this_roi_list = [roi.split('/')[-1] for roi in this_roi_list]
+                this_roi_list = [roi.replace(f'{hemi}.', '') for roi in this_roi_list]            
+                this_roi_list = [roi.replace('label', '') for roi in this_roi_list]            
+                full_roi_list[hemi] += this_roi_list
+
+        hemi_list = kwargs.get('hemi_list', ['lh', 'rh'])
+        if not isinstance(hemi_list, list):
+            hemi_list = [hemi_list]
+        mesh_name = kwargs.get('mesh_name', 'inflated')
+        # marker_kwargs = kwargs.get()
+        # roi_cols = dag_get_col_vals(
+        #     np.arange(len(roi_list)),
+        #     vmin = -1, vmax=7, cmap='jet'
+        # )
+        # roi_col = 'w'
+        roi_outline = {}
+        roi_outline['lh'] = np.zeros(self.n_vx['lh'])
+        roi_outline['rh'] = np.zeros(self.n_vx['rh'])
+        for hemi in hemi_list:
+            for i_roi,roi in enumerate(full_roi_list[hemi]):
+                # Load roi index:
+                roi_bool = dag_load_roi(self.sub, roi, fs_dir=self.fs_dir, split_LR=True)[hemi]
+                border_vx_list = dag_get_roi_border_vx_in_order(
+                    roi_bool=roi_bool, 
+                    mesh_info=self.mesh_info[mesh_name][hemi], 
+                    return_coords=False,
+                    )
+                
+                # If more than one closed path (e.g., v2v and v2d)...
+                for border_vx in border_vx_list:
+                    roi_outline[hemi][border_vx] += 1
+        roi_outline_full = np.hstack([roi_outline['lh'], roi_outline['rh']])
+        self.add_cmap(
+            data=(roi_outline_full!=0)*1.0,
+            data_mask=roi_outline_full!=0,
+            surf_name='rois_outline', 
+            us_name='curv', 
+            cmap='Greys', 
+            vmin=0, vmax=1,            
+            **kwargs
+            )
+        self.add_cmap(
+            data=(roi_outline_full!=0)*1.0,
+            surf_name='rois_outline_full', 
+            us_name='curv', 
+            cmap='Greys',
+            vmin=0, vmax=1,             
+            **kwargs
+            )        
+
+        return 
+
+    # def add_roi(self, roi):
+    #     '''
+    #     Save a numpy array of 
+    #     '''
+    #     self.roi_names.append(roi)
+    #     roi_LR = dag_load_roi(self.sub, roi, self.fs_dir, split_LR=True)
+    #     for i_hemi in ['lh', 'rh']:
+    #         roi_file = opj(self.out_dir,f'{i_hemi}.{roi}_roi.npy')
+    #         np.save(roi_file, roi_LR[i_hemi])
+
+    # def add_roi_borders(self, roi_list, roi_list_excl=None):
+    #     lr_roi_list = self.get_lr_roi_list(roi_list, roi_list_excl)
+
+    #     roi_data = np.zeros(self.n_vx['lh'] + self.n_vx['rh'])
+    #     for ih,hemi in enumerate(['lh', 'rh']):
+    #         for i_roi,roi in enumerate(roi_list):
+
 
     def launch_blender(self, **kwargs):
         '''
@@ -165,6 +267,7 @@ class BlendMaker(object):
         load_all_surf   loads all surfaces in the file (ignores surf_list)
         surf_list       which surfaces to load
         hemi_list       which hemispheres to load
+        run_blender         
         '''
         mesh_list = kwargs.get('mesh_list', ['pial', 'inflated', 'sphere'])
         if not isinstance(mesh_list, list):
@@ -184,6 +287,7 @@ class BlendMaker(object):
         if not isinstance(hemi_list, list):
             hemi_list = [hemi_list]        
 
+        run_blender = kwargs.get('run_blender', False)
         save_blender = kwargs.get('save_blender', False)
         close_blender = kwargs.get('save_blender', False)
 
@@ -217,8 +321,8 @@ class BlendMaker(object):
             os.system(f'rm {self.blender_script}')
         
         dag_str2file(filename=self.blender_script, txt=blender_script_str)
-
-        os.system(f'{blender_init} --python {self.blender_script}')
+        if run_blender:
+            os.system(f'{blender_init} --python {self.blender_script}')
 
 
 
@@ -291,7 +395,7 @@ bscript_load_rgb = '''
 # Before this - have you specified load_all_surf (all rgb files in folder)
 # Or surf_list (only load these specified surfaces)
 rgb_files = {'lh':[], 'rh':[]}
-rgb_col_bars = []
+#rgb_col_bars = []
 if load_all_surf:
     file_list = os.listdir(mesh_dir)
     for i in file_list:
@@ -303,9 +407,9 @@ if load_all_surf:
             hemi = None
         if 'rgb.csv' in i:
             rgb_files[hemi].append(i)
-        if 'rgb.png' in i:
-            rgb_col_bars.append(i)
-    rgb_col_bars.sort()
+    #     if 'rgb.png' in i:
+    #         rgb_col_bars.append(i)
+    # rgb_col_bars.sort()
     for ih in hemi_list:
         rgb_files[ih].sort()
 else: # else, load specified surf..
@@ -313,8 +417,8 @@ else: # else, load specified surf..
         for i_surf in surf_list:
             rgb_files[hemi].append(f'{hemi}.{i_surf}_rgb.csv')
         rgb_files[hemi].sort()
-    for i_surf in surf_list:
-        rgb_col_bars.append(f'{i_surf}_rgb.png')
+    # for i_surf in surf_list:
+    #     rgb_col_bars.append(f'{i_surf}_rgb.png')
     
 for ih,hemi in enumerate(hemi_list):
     # bpy.data.objects[ih].name = hemi

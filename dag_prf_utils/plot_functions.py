@@ -435,6 +435,7 @@ def dag_plot_bin_line(ax, X,Y, bin_using, **kwargs):
     line_kwargs = kwargs.get('line_kwargs', {})
     n_bins = kwargs.get('n_bins', 10)
     bins = kwargs.get('bins', None)
+    do_not_bin_X = kwargs.get('do_not_bin_X', False)
     do_basics = kwargs.get('do_basics', False)
     if not isinstance(bins, (np.ndarray, list)):
         bins = n_bins    
@@ -445,6 +446,9 @@ def dag_plot_bin_line(ax, X,Y, bin_using, **kwargs):
     err_type = kwargs.get("err_type", None)
     # Do the binning
     X_mean = binned_statistic(bin_using, X, bins=bins, statistic=summary_type)[0]
+    if do_not_bin_X:
+        X_mean = (bins[:-1] + bins[1:]) / 2
+        
     X_std = binned_statistic(bin_using, X, bins=bins, statistic='std')[0]
     # count = binned_statistic(bin_using, X, bins=bins, statistic='count')[0]
     Y_mean = binned_statistic(bin_using, Y, bins=bins, statistic=summary_type)[0]  

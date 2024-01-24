@@ -11,6 +11,11 @@ from dag_prf_utils.plot_functions import *
 from dag_prf_utils.mesh_format import *
 
 import plotly.graph_objects as go
+try: 
+    from dash import Dash, dcc, html, Input, Output, State
+    import dash
+except:
+    print('no dash..')
 
 path_to_utils = os.path.abspath(os.path.dirname(__file__))
 
@@ -174,6 +179,49 @@ class GenMeshMaker(object):
             ply_file_2open
         ]
 
+    def ply_add_roi(self, roi_list, **kwargs):
+        '''
+        Return a plotly object for a given roi
+        '''
+        roi_list_excl = kwargs.get('roi_list_excl', None)
+        lr_roi_list = dag_get_lr_roi_list(self.sub_label_dir, roi_list, roi_list_excl)        
+        hemi_list = kwargs.get('hemi_list', ['lh', 'rh'])        
+        if not isinstance(hemi_list, list):
+            hemi_list = [hemi_list]            
+        mesh_name = kwargs.get('mesh_name', 'inflated')
+        # marker_kwargs = kwargs.get()
+        # roi_cols = dag_get_col_vals(
+        #     np.arange(len(roi_list)),
+        #     vmin = -1, vmax=7, cmap='jet'
+        # )
+        # roi_col = 'w'
+        roi_outline = {}
+        roi_outline['lh'] = np.zeros(self.n_vx['lh'])
+        roi_outline['rh'] = np.zeros(self.n_vx['rh'])
+        for hemi in hemi_list:
+            for i_roi,roi in enumerate(lr_roi_list[hemi]):
+                # Load roi index:
+
+                roi_bool = dag_load_roi(self.sub, roi, fs_dir=self.fs_dir, split_LR=True)[hemi]
+                border_vx_list = dag_get_roi_border_vx_in_order(
+                    roi_bool=roi_bool, 
+                    mesh_info=self.mesh_info[mesh_name][hemi], 
+                    return_coords=False,
+                    )
+                
+                # If more than one closed path (e.g., v2v and v2d)...
+                for border_vx in border_vx_list:
+                    roi_outline[hemi][border_vx] += 1
+        roi_outline_full = np.hstack([roi_outline['lh'], roi_outline['rh']])
+        self.add_ply_surface(
+            surf_name='rois_outline',
+            data=roi_outline_full!=0,
+            data_mask=roi_outline_full!=0,
+            data_cmap='greys',
+            **kwargs,
+        )
+
+        return 
 
     def open_surfaces_mlab(self):
         os.chdir(self.output_dir)
@@ -450,8 +498,99 @@ class GenMeshMaker(object):
         )        
         return fig
 
+    def web_launch_with_dash(self, fig):
+        # Create a Dash app
+        app = Dash(__name__)
 
+        # Define the layout of the app
+        app.layout = html.Div([
+            dcc.Graph(id='graph', figure=fig), #go.Figure(mesh)),
+            html.Label('eye-x'),
+            dcc.Input(id='eye-x', type='number', value=0),
+            html.Label('eye-y'),
+            dcc.Input(id='eye-y', type='number', value=1),
+            html.Label('eye-z'),
+            dcc.Input(id='eye-z', type='number', value=1)    
+        ])
 
+        # Set initial values for eye position
+        initial_eye_x, initial_eye_y, initial_eye_z = 0, 1, 1
+
+        fig.update_layout(
+            # scene=dict(aspectmode="cube"), 
+            scene_camera=dict(eye=dict(x=initial_eye_x, y=initial_eye_y, z=initial_eye_z))
+            )
+
+        # Define a callback to update the 3D scene when the camera position changes
+        @app.callback(
+            [
+                Output('eye-x', 'value'),
+                Output('eye-y', 'value'),
+                Output('eye-z', 'value')
+            ],
+            [
+                Input('graph', 'relayoutData')
+            ],
+            [
+                State('eye-x', 'value'),
+                State('eye-y', 'value'),
+                State('eye-z', 'value')
+            ]            
+        )
+
+        def update_input_fields(relayoutData, eye_x, eye_y, eye_z):
+            ctx = dash.callback_context
+            if not ctx.triggered_id:
+                input_id = 'No Input'
+            else:
+                input_id = ctx.triggered_id
+            print(f'Triggered by {input_id}')
+            
+            if 'scene.camera' in relayoutData:
+                camera_data = relayoutData['scene.camera']
+                new_eye_x, new_eye_y, new_eye_z = camera_data['eye']['x'], camera_data['eye']['y'], camera_data['eye']['z']
+                
+                # Check if the changes are significant
+                if (new_eye_x, new_eye_y, new_eye_z) != (eye_x, eye_y, eye_z):
+                    return new_eye_x, new_eye_y, new_eye_z
+            # If the keys are not present or the changes are not significant, return the current values
+            return eye_x, eye_y, eye_z        
+        # def update_input_fields(relayoutData):
+        #     if 'scene.camera' in relayoutData:
+        #         camera_data = relayoutData['scene.camera']
+        #         eye_x, eye_y, eye_z = camera_data['eye']['x'], camera_data['eye']['y'], camera_data['eye']['z']
+        #         print(camera_data)
+        #         # el = 
+        #         return eye_x, eye_y, eye_z
+        #     else:
+        #         # If the keys are not present, return the initial values
+        #         return initial_eye_x, initial_eye_y, initial_eye_z
+
+        # Define a callback to update the 3D scene when the input values change
+        @app.callback(
+            Output('graph', 'figure'),
+            [
+                Input('eye-x', 'value'),
+                Input('eye-y', 'value'),
+                Input('eye-z', 'value'),
+            ]
+        )
+        def update_eye(eye_x, eye_y, eye_z):
+            # eye_x,eye_y,eye_z = dag_plotly_eye(eye_x, eye_y, eye_z)
+            fig.update_layout(
+                # scene=dict(aspectmode="cube"),
+                scene_camera=dict(eye=dict(x=eye_x, y=eye_y, z=eye_z))
+            )
+            return fig
+
+        # Run the app
+        app.run_server(
+            host='0.0.0.0',
+            port=8082,
+            open_browser=True,
+        )
+
+    # def add_pyctx_surface()
 
 
 def dag_plotly_eye(el, az, zoom):
@@ -462,11 +601,11 @@ def dag_plotly_eye(el, az, zoom):
     x = zoom*np.cos(np.deg2rad(el))*np.cos(np.deg2rad(az))
     y = zoom*np.cos(np.deg2rad(el))*np.sin(np.deg2rad(az))
     z = zoom*np.sin(np.deg2rad(el))    
-
+    return x,y,z
     # fig.update_layout(scene_camera=dict(eye=dict(x=x, y=y, z=z)))
-    return dict(
-        eye=dict(x=x, y=y, z=z),        
-        )
+    # return dict(
+    #     eye=dict(x=x, y=y, z=z),        
+    #     )
 
 def dag_get_roi_border_vx(roi_bool, mesh_info, return_coords=False):
     '''
@@ -684,3 +823,31 @@ def dag_find_vx_border_on_sphere(vx_idx, sphere_mesh_info):
 
 
 
+def dag_get_lr_roi_list(sub_label_dir, roi_list, roi_list_excl):
+    '''
+    Sort out the list of rois... per hemi
+    Include make it capable of dealing with missing rois
+    And fining matching ones
+    '''
+    sorted_roi_list = {
+        'lh':[],
+        'rh':[],
+    }
+    if not isinstance(roi_list, list):
+        roi_list = [roi_list]
+    for roi_name in roi_list:
+        for hemi in ['lh', 'rh']:
+            this_roi_path = dag_find_file_in_folder(
+                filt=[roi_name, hemi],
+                path=sub_label_dir,
+                recursive=True,
+                exclude=['._', '.thresh'] + list(roi_list_excl),
+                return_msg=None,
+                )
+            if this_roi_path is not None:
+                if isinstance(this_roi_path, list):
+                    sorted_roi_list[hemi] += this_roi_path
+                else:
+                    sorted_roi_list[hemi].append(this_roi_path)
+
+    return sorted_roi_list

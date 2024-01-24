@@ -84,7 +84,7 @@ class FSMaker(object):
         self.surf_list.append(surf_name)
 
 
-    def open_fs_surface(self, surf_name=None, **kwargs):
+    def open_fs_surface(self, surf_name=[], **kwargs):
         # surf name - which surface to load...        
         os.chdir(self.sub_surf_dir) # move to freeview dir        
         fs_cmd = self.write_fs_cmd(surf_name=surf_name, **kwargs)
@@ -105,13 +105,13 @@ class FSMaker(object):
         os.system(fs_cmd)        
 
 
-    def save_fs_cmd(self, surf_name=None, **kwargs):
+    def save_fs_cmd(self, surf_name=[], **kwargs):
         cmd_name = kwargs.get('cmd_name', f'{surf_name}_cmd.txt')
         print(f'Custom overlay string saved here: ({opj(self.custom_surf_dir, cmd_name)})')
         fs_cmd = self.write_fs_cmd(surf_name=surf_name, **kwargs)
         dag_str2file(filename=opj(self.custom_surf_dir, cmd_name),txt=fs_cmd)
         
-    def write_fs_cmd(self, surf_name=None, **kwargs):
+    def write_fs_cmd(self, surf_name=[], **kwargs):
         '''
         Write the bash command to open the specific surface with the overlay
 
@@ -157,7 +157,9 @@ class FSMaker(object):
         do_col_bar  = kwargs.get('do_col_bar', True)
 
         do_surf = True
-        if surf_name is None:
+        if isinstance(surf_name, str):
+            surf_name=[surf_name]         
+        if len(surf_name)==0:
             do_surf = False
 
         if not isinstance(mesh_list, list):
@@ -212,15 +214,17 @@ class FSMaker(object):
                         this_overlay_str = self.get_overlay_str(this_surf_name, **kwargs)
                         fs_cmd += f':overlay={this_surf_path}:{this_overlay_str}'                        
                         fs_cmd += shading_off_str
-                        print(this_overlay_str)
                         if roi_mask is not None:
                             this_roi_path = self.get_roi_file(roi, this_hemi)
-                            fs_cmd += f':overlay_mask={this_roi_path}'
+                            fs_cmd += f':overlay_mask={this_roi_path}'       
+                else:
+                    fs_cmd += f':curvature_method=binary'
         fs_cmd +=  f' --camera Azimuth {cam_azimuth} Zoom {cam_zoom} Elevation {cam_elevation} Roll {cam_roll} '
         fs_cmd += f'{col_bar_flag} {scr_shot_flag}'
         fs_cmd += ' --verbose'        
         if keep_running:
             fs_cmd += ' &'
+        print(fs_cmd)
         return fs_cmd 
 
     def get_lr_roi_list(self, roi_list, roi_list_excl):
@@ -282,6 +286,11 @@ class FSMaker(object):
         return this_surf_path
     
     def get_overlay_str(self, surf_name, overlay_cmap=None, **kwargs):
+        overlay_str_ow = kwargs.get('overlay_str', None)
+        if overlay_str_ow is not None:
+            # :colormap=grayscale
+            return overlay_str_ow
+        
         if overlay_cmap is not None:
             overlay_str, _ = dag_make_overlay_str(cmap=overlay_cmap, **kwargs)
             return overlay_str

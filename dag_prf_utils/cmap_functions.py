@@ -16,8 +16,9 @@ with open(custom_col_path, 'r') as fp:
     custom_col_dict = json.load(fp)
 
 def dag_get_col_vals(col_vals, cmap, vmin=None, vmax=None):
-    # cmap = dag_get_cmap(cmap)
-    cmap = mpl.cm.__dict__[cmap]
+    cmap = dag_get_cmap(cmap)
+    # cmap = mpl.cm.__dict__[cmap]
+
     cnorm = mpl.colors.Normalize()
     if vmin is not None:
         cnorm.vmin = vmin

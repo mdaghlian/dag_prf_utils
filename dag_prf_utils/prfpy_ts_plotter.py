@@ -9,8 +9,8 @@ import matplotlib.pyplot as plt
 # import pandas as pd
 # from scipy.stats import binned_statistic
 
-from prfpy.rf import gauss2D_iso_cart
-from prfpy.model import CSenFModel, Iso2DGaussianModel, Norm_Iso2DGaussianModel, DoG_Iso2DGaussianModel, CSS_Iso2DGaussianModel
+from prfpy_csenf.rf import gauss2D_iso_cart
+from prfpy_csenf.model import CSenFModel, Iso2DGaussianModel, Norm_Iso2DGaussianModel, DoG_Iso2DGaussianModel, CSS_Iso2DGaussianModel
 from prfpy_csenf.rf import csenf_exponential
 
 from dag_prf_utils.plot_functions import *
@@ -177,9 +177,10 @@ class TSPlotter(Prf1T1M):
             self.prfpy_stim.SF_seq, 100/self.prfpy_stim.CON_seq, color='r', alpha=0.8
         )
         # Plot the CSF curve
-        ax[i][0].plot(
-            self.prfpy_stim.SFs, 
-            GT_info['csf_curve'][:,i], 
+        ax[i][0].plot(            
+            # self.prfpy_stim.SFs, 
+            # GT_info['csf_curve'][:,i], 
+            GT_info['full_csf_info']['']
             color='g', linewidth=5)
 
         # Plot the full CSF 
@@ -447,7 +448,7 @@ def get_ncsf_info(ncsf_params, csenf_model):
     # sf_grid = np.logspace(np.log10(.25),np.log10(20), 50)
     # con_grid = np.logspace(np.log10(.1),np.log10(500), 50)    
     sf_grid, con_grid = np.meshgrid(sf_grid,con_grid)
-    full_csf = csenf_exponential(
+    full_csf,full_csf_curve = csenf_exponential(
         log_SF_grid = np.log10(sf_grid), 
         CON_S_grid = con_grid, 
         width_r     = ncsf_params['width_r'], 
@@ -455,11 +456,12 @@ def get_ncsf_info(ncsf_params, csenf_model):
         CSp        = ncsf_params['CSp'], 
         width_l     = ncsf_params['width_l'], 
         crf_exp     = ncsf_params['crf_exp'],
-        return_curve = False)
+        return_curve = True)
     full_csf_info = {
         'sf_grid'   : sf_grid,
         'con_grid'  : con_grid,
         'full_csf'  : full_csf,
+        'full_csf_curve' : full_csf_curve,
     }
 
     # crf_curve

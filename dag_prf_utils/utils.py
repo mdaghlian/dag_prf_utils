@@ -330,7 +330,7 @@ def dag_pol_difference(pol, ref_pol):
     abs_diff = np.min(abs_diff, 2*np.pi-abs_diff)
     return abs_diff
 
-def dag_merid_idx(x, y, wedge_angle=10, angle_type='rad'):
+def dag_merid_idx(x, y, wedge_angle=10, angle_type='deg'):
     """
     Categorize points based on their position relative to specified meridians.
 
@@ -358,6 +358,12 @@ def dag_merid_idx(x, y, wedge_angle=10, angle_type='rad'):
         abs_diff = np.min([abs_diff, 2*np.pi-abs_diff], axis=0)
         # print(abs_diff.shape)
         merid_idx[merid] = abs_diff <= wedge_angle
+
+    merid_label = np.full(x.shape[0], 'na', dtype='object')
+    
+    for m, m_idx in merid_idx.items():
+        merid_label[m_idx] = m      
+    merid_idx['label'] = merid_label
     return merid_idx
 
 

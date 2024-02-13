@@ -129,12 +129,17 @@ def dag_add_ax_basics(ax, **kwargs):
     title = kwargs.get("title", None)
     x_lim = kwargs.get("x_lim", None)
     y_lim = kwargs.get("y_lim", None)
+    despine = kwargs.get('despine', True)
     ax.set_xlabel(xlabel)
     ax.set_ylabel(ylabel)
     ax.set_title(title)
     ax.set_xlim(x_lim)
     ax.set_ylim(y_lim)
     ax.legend()
+    if despine:
+        ax.spines['right'].set_visible(False)
+        ax.spines['top'].set_visible(False)        
+
 
 def dag_update_fig_fontsize(fig, new_font_size):
     '''dag_update_fig_fontsize
@@ -237,6 +242,51 @@ def dag_update_fig_dotsize(fig, new_dot_size):
         elif isinstance(i_kid, mpl.figure.SubFigure):
             dag_update_fig_dotsize(i_kid, new_dot_size)
 
+
+def dag_return_ecc_pol_bin_mid_pts(ecc4bin, pol4bin, **kwargs):
+    ecc_bounds = kwargs.get("ecc_bounds", default_ecc_bounds)
+    pol_bounds = kwargs.get("pol_bounds", default_pol_bounds)            
+
+    bin_mid_x = np.zeros((len(ecc_bounds)-1, len(pol_bounds)-1)) 
+    bin_mid_y = np.zeros((len(ecc_bounds)-1, len(pol_bounds)-1)) 
+    total_n_bins = (len(ecc_bounds)-1) * (len(pol_bounds)-1) 
+    for i_ecc in range(len(ecc_bounds)-1):
+        for i_pol in range(len(pol_bounds)-1):
+            ecc_lower = ecc_bounds[i_ecc]
+            ecc_upper = ecc_bounds[i_ecc + 1]
+
+            pol_lower = pol_bounds[i_pol]
+            pol_upper = pol_bounds[i_pol + 1]            
+
+            ecc_idx =(ecc4bin >= ecc_lower) & (ecc4bin <=ecc_upper)
+            pol_idx =(pol4bin >= pol_lower) & (pol4bin <=pol_upper)        
+            bin_idx = pol_idx & ecc_idx
+            # Calculate midpoints
+            ecc_mid = (ecc_lower + ecc_upper) / 2
+            pol_mid = (pol_lower + pol_upper) / 2
+
+            # Ensure the polar angle stays within the range [-π, π]
+            pol_mid = (pol_mid + np.pi) % (2 * np.pi) - np.pi
+
+            ecc_mid = (ecc_lower + ecc_upper) / 2                    
+            pol_mid = (pol_lower + pol_upper) / 2
+            mid_x, mid_y = dag_coord_convert(ecc_mid, pol_mid, 'pol2cart')
+            if bin_idx.sum()==0:
+                bin_mid_x[i_ecc, i_pol] = np.nan
+                bin_mid_y[i_ecc, i_pol] = np.nan
+            else:
+                bin_mid_x[i_ecc, i_pol] = mid_x
+                bin_mid_y[i_ecc, i_pol] = mid_y
+
+
+    bin_mid_x = np.reshape(bin_mid_x, total_n_bins)
+    bin_mid_y = np.reshape(bin_mid_y, total_n_bins)
+    # REMOVE ANY NANS
+    bin_mid_x = bin_mid_x[~np.isnan(bin_mid_x)]
+    bin_mid_y = bin_mid_y[~np.isnan(bin_mid_y)]
+
+    return bin_mid_x, bin_mid_y
+
 def dag_return_ecc_pol_bin(params2bin, ecc4bin, pol4bin, bin_weight=None, **kwargs):
     '''dag_return_ecc_pol_bin
     Description:
@@ -301,6 +351,7 @@ def dag_visual_field_scatter(dot_x, dot_y, **kwargs):
         *Optional*
         ax              matplotlib axes
         do_binning      bool            Whether to bin the points
+        fix_bin_xy      bool            Use the middle pt of the bins for xy? 
         bin_weight      np.ndarray      Weighted mean in each bin, not just the average
         ecc_bounds      np.ndarray      eccentricity bounds
         pol_bounds      np.ndarray      polar angle bounds
@@ -318,66 +369,67 @@ def dag_visual_field_scatter(dot_x, dot_y, **kwargs):
     '''
     ax = kwargs.get('ax', plt.gca())
     do_binning = kwargs.get("do_binning", False)
-    # -> add option for dot size scaling... ( & alpha scaling) ??
     bin_weight = kwargs.get("bin_weight", None)
+    fix_bin_xy = kwargs.get("fix_bin_xy", False)
+    # -> add option for dot size scaling... ( & alpha scaling) ??
     ecc_bounds = kwargs.get("ecc_bounds", np.linspace(0, 5, 7) )
     pol_bounds = kwargs.get("pol_bounds", np.linspace(-np.pi, np.pi, 13))            
-    dot_alpha = kwargs.get("alpha", 0.5)
-    dot_size = kwargs.get("dot_size",200)
-    dot_col = kwargs.get("dot_col", 'k')   
-    dot_vmin =  kwargs.get("dot_vmin", None)   
-    dot_vmax =  kwargs.get("dot_vmax", None)   
-    dot_cmap =  kwargs.get("dot_cmap", None)   
+    # Extra dot properties:
     
-    if isinstance(dot_col, np.ndarray) & (dot_cmap==None):
-        dot_cmap = 'viridis'
-    if dot_cmap != None:
-        dot_cmap = dag_get_cmap(dot_cmap)
+    dot_props = {
+        'dot_alpha' : kwargs.get("dot_alpha", 0.5),
+        'dot_size'  : kwargs.get("dot_size",200),
+        'dot_col'   : kwargs.get("dot_col", 'k') ,  
+        'dot_vmin'  : kwargs.get("dot_vmin", None),   
+        'dot_vmax'  : kwargs.get("dot_vmax", None),   
+        'dot_cmap'  : kwargs.get("dot_cmap", None),   
+    }
+    
+    if (len(dot_props['dot_col'])==len(dot_x)) & (dot_props['dot_cmap']==None):
+        dot_props['dot_cmap'] = 'viridis'
+    if dot_props['dot_cmap'] != None:
+        dot_props['dot_cmap'] = dag_get_cmap(dot_props['dot_cmap'])
 
+    bin_dot_props = {}
     if do_binning:
         dot_ecc, dot_pol = dag_coord_convert(dot_x,dot_y,old2new="cart2pol")
-        total_n_bins = (len(ecc_bounds)-1) * (len(pol_bounds)-1)
-        bin_x, bin_y = dag_return_ecc_pol_bin(params2bin=[dot_x, dot_y], 
-                            ecc4bin=dot_ecc, 
-                            pol4bin=dot_pol, 
-                            bin_weight=bin_weight,
-                            ecc_bounds=ecc_bounds, pol_bounds=pol_bounds)
-
-        # if isinstance(dot_col, np.ndarray):
-        if not isinstance(dot_col, str):
-            bin_col = dag_return_ecc_pol_bin(params2bin=dot_col, 
-                                ecc4bin=dot_ecc, 
-                                pol4bin=dot_pol, 
-                                bin_weight=bin_weight,
-                                ecc_bounds=ecc_bounds, pol_bounds=pol_bounds)   
+        if fix_bin_xy:
+            bin_x, bin_y = dag_return_ecc_pol_bin_mid_pts(
+                ecc4bin=dot_ecc, 
+                pol4bin=dot_pol, 
+                ecc_bounds=ecc_bounds, 
+                pol_bounds=pol_bounds,
+            )
         else:
-            bin_col = dot_col
-        # if isinstance(dot_size, np.ndarray):
-        if hasattr(dot_size, 'len'):
-            bin_size = dag_return_ecc_pol_bin(params2bin=dot_size, 
-                                ecc4bin=dot_ecc, 
-                                pol4bin=dot_pol, 
-                                bin_weight=bin_weight,
-                                ecc_bounds=ecc_bounds, pol_bounds=pol_bounds)            
-        else:
-            bin_size = dot_size
-        # if isinstance(dot_alpha, np.ndarray):
-        if hasattr(dot_size, 'len'):            
-            bin_alpha = dag_return_ecc_pol_bin(params2bin=dot_alpha, 
-                                ecc4bin=dot_ecc, 
-                                pol4bin=dot_pol, 
-                                bin_weight=bin_weight,
-                                ecc_bounds=ecc_bounds, pol_bounds=pol_bounds)            
-        else:
-            bin_alpha = dot_alpha
+            bin_x, bin_y = dag_return_ecc_pol_bin(
+                params2bin=[dot_x, dot_y], 
+                ecc4bin=dot_ecc, 
+                pol4bin=dot_pol, 
+                bin_weight=bin_weight,
+                ecc_bounds=ecc_bounds, 
+                pol_bounds=pol_bounds
+                )        
+        for p in ['dot_col', 'dot_size', 'dot_alpha']:
+            if not hasattr(dot_props[p], 'shape'):
+                bin_dot_props[p] = dot_props[p]
+            elif len(dot_props[p])!=len(dot_x):
+                bin_dot_props[p] = dot_props[p]
+            else:
+                bin_dot_props[p] = dag_return_ecc_pol_bin(
+                    params2bin=dot_props[p], 
+                    ecc4bin=dot_ecc, 
+                    pol4bin=dot_pol, 
+                    bin_weight=bin_weight,
+                    ecc_bounds=ecc_bounds, 
+                    pol_bounds=pol_bounds,
+                    )   
 
     else:
         bin_x = dot_x
         bin_y = dot_y
-        bin_col = dot_col
-        bin_size = dot_size
-        bin_alpha = dot_alpha
-    
+        for p in ['dot_col', 'dot_size', 'dot_alpha']:
+            bin_dot_props[p] = dot_props[p]
+
     # max_dot_size = 200
     # min_dot_size = 5
     # if scale_dot_size==True:
@@ -389,10 +441,19 @@ def dag_visual_field_scatter(dot_x, dot_y, **kwargs):
     #     dot_sizes = ecc_norm * (max_dot_size-min_dot_size) + min_dot_size
     # else:
     #     dot_sizes = np.ones_like(x_bin)*max_dot_size
-    
-    scat_col = ax.scatter(bin_x, bin_y, c=bin_col, s=bin_size, alpha=bin_alpha, cmap=dot_cmap, vmin=dot_vmin, vmax=dot_vmax)
+
+    scat_col = ax.scatter(
+        bin_x, 
+        bin_y, 
+        c       = bin_dot_props['dot_col'], 
+        s       = bin_dot_props['dot_size'], 
+        alpha   = bin_dot_props['dot_alpha'], 
+        cmap    = dot_props['dot_cmap'], 
+        vmin    = dot_props['dot_vmin'], 
+        vmax    = dot_props['dot_vmax']
+        )
     cb = None
-    if not isinstance(bin_col, str):
+    if not isinstance(bin_dot_props['dot_col'], str):
         fig = plt.gcf()
         cb = fig.colorbar(scat_col, ax=ax)        
     dag_add_ecc_pol_lines(ax, ecc_bounds=ecc_bounds, pol_bounds=pol_bounds)    
@@ -479,7 +540,6 @@ def dag_plot_bin_line(ax, X,Y, bin_using, **kwargs):
 
     elif do_shade:
         
-        X_mid_pt = (bins[:-1] + bins[1:]) / 2
         if 'pc' in err_type:            
             Y_mid = binned_statistic(bin_using, Y, bins=bins, statistic=np.median)[0]                      
             pc_lower = float(err_type.split('-')[-1])
@@ -489,10 +549,17 @@ def dag_plot_bin_line(ax, X,Y, bin_using, **kwargs):
             pcUPPER_lambda = lambda data: np.percentile(data, pc_upper)
             Y_lower = binned_statistic(bin_using, Y, bins=bins, statistic=pcLOWER_lambda)[0]              
             Y_upper = binned_statistic(bin_using, Y, bins=bins, statistic=pcUPPER_lambda)[0]              
+            
+            #
+            X_mid_pt = binned_statistic(bin_using, X, bins=bins, statistic=np.median)[0]                      
+
         if err_type=='mean':
             Y_mid = Y_mean
             Y_lower = Y_mean - Y_std
             Y_upper = Y_mean + Y_std
+
+        if do_not_bin_X:
+            X_mid_pt = (bins[:-1] + bins[1:]) / 2
             
 
         ax.plot(
@@ -597,7 +664,6 @@ def dag_arrow_plot(ax, old_x, old_y, new_x, new_y, **kwargs):
     if do_binning:
         # print("DOING BINNING") 
         old_ecc, old_pol = dag_coord_convert(old_x, old_y,old2new="cart2pol")
-        total_n_bins = (len(ecc_bounds)-1) * (len(pol_bounds)-1)
         old_bin_x, old_bin_y, new_bin_x, new_bin_y = dag_return_ecc_pol_bin(
             params2bin=[old_x, old_y, new_x, new_y], 
             ecc4bin=old_ecc, 
@@ -873,7 +939,47 @@ def dag_add_axis_to_xtick(fig, ax, dx_axs=1, **kwargs):
         xtick_out.append(xticks[i_tick])
     return xtick_out, xticks_axs
 
-
+def dag_add_dm_to_x(dm, xtick_out, xtick_axs, xtick_axs_idx=None, **kwargs):
+    '''add_dm_to_x
+    Description:
+        Adds a design matrix to a set of axes
+    Inputs:
+        dm   np.ndarray design matrix
+        xtick_out: xtick values that were used
+        xtick_axs: list of new axes
+    Returns:
+        None
+    '''
+    kwargs['cmap'] = kwargs.get('cmap', 'Greys')
+    kwargs['alpha'] = kwargs.get('alpha', 0.3)
+    
+    max_t = dm.shape[-1]
+    for i,xtick in enumerate(xtick_out): 
+        if xtick_axs_idx is None:
+            dm_idx = int(xtick)
+        else:
+            dm_idx = xtick_axs_idx[i]
+        if dm_idx>max_t:
+            xtick_axs[i].axis('off')
+        elif dm_idx==max_t:
+            xtick_axs[i].imshow(
+                dm[:,:,dm_idx-1], 
+                vmin=-1, vmax=1,
+                extent=[-5,5,-5,5], 
+                **kwargs
+                # cmap='Greys', 
+                # alpha=0.8
+                )
+        else:
+            xtick_axs[i].imshow(
+                dm[:,:,dm_idx], 
+                vmin=-1, vmax=1,
+                extent=[-5,5,-5,5], 
+                **kwargs
+                # cmap='Greys', 
+                # alpha=0.8
+                )
+        # xtick_axs[i].patch.set_alpha(0.5)
 
 def dag_change_fig_item_col(fig_item, old_col, new_col, depth=0):
     '''
@@ -1088,3 +1194,116 @@ def dag_box_around_ax_list(fig, ax_list, **kwargs):
     fig.add_artist(rect)
 
 
+def dag_shaded_line(line_data, xdata, **kwargs):
+    """
+    Plot the mean CSF curves with optional error shading or error bars.
+
+    Parameters:
+    - line_data
+    - ax (matplotlib.axes._subplots.AxesSubplot): The subplot on which to create the plot.
+    - line_col (str, optional): Color of the CSF curve. Default is 'g'.
+    - lw (float): width of csf plot
+    - line_alpha: alpha of line
+    - shade_alpha: alpha of shade
+    - error_version (str, optional): Type of error to be used ('pc-5', 'iqr', 'bound', 'std', 'ste').
+    - error_bar (str, optional): Type of error representation ('shade', 'none'). Default is 'shade'.
+    Returns:
+    None
+    """ 
+    # Kwargs
+    ax = kwargs.get('ax', plt.gca())
+    line_col         = kwargs.get('line_col', None)
+    lw              = kwargs.get('lw', 1)
+    line_alpha      = kwargs.get('line_alpha', 1)
+    line_label      = kwargs.get('line_label', '_')
+    shade_alpha     = kwargs.get('shade_alpha', 0.5)
+    error_version   = kwargs.get('error_version', 'iqr')
+    error_bar       = kwargs.get('error_bar', 'shade')
+    line_kwargs     = kwargs.get('line_kwargs', {})
+    shade_kwargs     = kwargs.get('shade_kwargs', {})
+    # 
+    m_line = np.median(line_data, axis=1)
+
+    # Color shading for error
+    if 'pc' in error_version:
+        pc_lower = float(error_version.split('-')[-1])
+        pc_upper = 100 - pc_lower
+        lower_line = np.percentile(line_data, pc_lower, axis=1) 
+        upper_line = np.percentile(line_data, pc_upper, axis=1) 
+    elif 'iqr' in error_version:
+        lower_line = np.percentile(line_data, 25, axis=1) 
+        upper_line = np.percentile(line_data, 75, axis=1) 
+    elif 'bound' in error_version:
+        lower_line = np.min(line_data, axis=1)
+        upper_line = np.max(line_data, axis=1)
+    elif 'std' in error_version:
+        line_std = np.nanstd(line_data, axis=1)
+        lower_line = m_line - line_std
+        upper_line = m_line + line_std
+    elif 'ste' in error_version:
+        line_ste = np.nanstd(line_data, axis=1) / np.sqrt(line_data.shape[1])
+        lower_line = m_line - line_ste
+        upper_line = m_line + line_ste
+
+    ax.plot(
+        xdata, 
+        m_line, 
+        alpha=line_alpha,
+        color=line_col, 
+        lw=lw,
+        label=line_label,
+        **line_kwargs,
+        )
+    # print(shade_kwargs)
+    if error_bar=='shade':
+        ax.fill_between(
+            xdata, 
+            lower_line,
+            upper_line,
+            alpha=shade_alpha,
+            color=line_col,
+            label='_',
+            lw=0,
+            **shade_kwargs,                    
+            )
+
+
+
+def dag_add_all_subfig_labels(axs, **kwargs):
+    i_row, i_col = axs.shape    
+    num_labels = (i_row+1) * (i_col+1) 
+    labels = []
+    if num_labels<=26:
+        for i in range(num_labels):
+            labels.append(
+                string.ascii_uppercase[i]
+            )
+    else:
+        for iR in range(i_row):
+            for iC in range(i_col):
+                labels.append(
+                    string.ascii_uppercase[iR] + \
+                    string.ascii_uppercase[iC]
+                )   
+
+    for iR in range(i_row):
+        for iC in range(i_col):
+            label = labels[iR * i_col + iC]
+            dag_add_subfig_labels(
+                ax=axs[iR,iC],
+                label=label,
+                **kwargs
+            )
+
+def dag_add_subfig_labels(ax, label, **kwargs):
+    x=kwargs.pop('x', -0.15)
+    y=kwargs.pop('y',  1.1)
+    kwargs['fontsize'] = kwargs.get('fontsize', 12)
+    kwargs['va'] = kwargs.get('va', 'top')
+    kwargs['ha'] = kwargs.get('ha', 'right')
+    ax.text(
+        x=x,y=y,
+        s=label, 
+        transform=ax.transAxes,
+        **kwargs
+    )

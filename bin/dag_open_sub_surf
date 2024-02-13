@@ -43,6 +43,7 @@ def main(argv):
     do_search = False
     search_incl = []
     search_excl = []
+    fs_dir=os.environ['SUBJECTS_DIR']
     kwargs = {}
     for i,arg in enumerate(argv):
         if '--sub' in arg:
@@ -71,7 +72,8 @@ def main(argv):
                 search_excl = [search_excl]
         elif '--custom_only' in arg:
             custom_only = True
-
+        elif '--fs_dir' in arg:
+            fs_dir = argv[i+1]
         elif '-h' == arg:
             print(main.__doc__)
             sys.exit()
@@ -96,7 +98,7 @@ def main(argv):
         raise ValueError('Subject number not specified')
     
     # Make fs object
-    fs = FSMaker(sub)
+    fs = FSMaker(sub, fs_dir=fs_dir)
     
     if print_overlay:
         if to_show is []:

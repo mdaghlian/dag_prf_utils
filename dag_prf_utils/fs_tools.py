@@ -27,8 +27,9 @@ class FSMaker(object):
         self.sub_surf_dir = opj(fs_dir, sub, 'surf')
         self.sub_label_dir = opj(fs_dir, sub, 'label')
         self.custom_surf_dir = opj(self.sub_surf_dir, 'custom')
-        if not os.path.exists(self.custom_surf_dir):
-            os.mkdir(self.custom_surf_dir)        
+        # if not os.path.exists(self.custom_surf_dir):
+        #     print('making a custom dir')
+        #     os.mkdir(self.custom_surf_dir)        
         n_vx = dag_load_nverts(self.sub, self.fs_dir)
         self.n_vx = {'lh':n_vx[0], 'rh':n_vx[1]}
         self.overlay_str = {}
@@ -41,7 +42,7 @@ class FSMaker(object):
         surf_name       str             what are we calling the file
 
         '''
-
+        exclude_as_nan = kwargs.get("exclude_as_nan", False) # Set masked values to NAN
         data_mask = kwargs.get('data_mask', np.ones_like(data, dtype=bool))
         # Load colormap properties: (cmap, vmin, vmax)
         # vmin = kwargs.get('vmin', np.percentile(data[data_mask], 10))
@@ -53,6 +54,9 @@ class FSMaker(object):
         data_masked[data_mask] = data[data_mask]
         exclude_min_val = vmin - 1
         data_masked[~data_mask] = exclude_min_val
+        if exclude_as_nan:
+            data_masked[~data_mask] = np.nan
+
 
         # SAVE masked data AS A CURVE FILE
         lh_masked_param = data_masked[:self.n_vx['lh']]
@@ -127,12 +131,15 @@ class FSMaker(object):
         shading_off     Turn of shading? i.e., don't make it darker underneath. Default is false        
         do_scr_shot     bool            take a screenshot of the surface when it is loaded?
         scr_shot_file   str             Where to put the screenshot. If not specified goes in custom surface dir
+        ss_mag          int             Magnification factor for screenshot (i.e., quality)
+        ss_trim         bool            Autotrim the image 
         azimuth         float           camera angle(0-360) Default: 0
         zoom            float           camera zoom         Default: 1.00
         elevation       float           camera angle(0-360) Default: 0
         roll            float           camera angle(0-360) Default: 0        
         do_col_bar      bool            show color bar at the end. Default is true
-        TODO: add argument 'extra_kwargs'. Dict which gives custom kwargs...
+        extra_args      str             Extra arguments added at the end... 
+        f_extra_args    str             Extra arguments added at after loading surface... 
         '''
         mesh_list = kwargs.get('mesh_list', ['inflated'])
         hemi_list = kwargs.get('hemi_list', ['lh', 'rh'])
@@ -148,6 +155,8 @@ class FSMaker(object):
 
         do_scr_shot     = kwargs.get('do_scr_shot', False)
         scr_shot_file   = kwargs.get('scr_shot_file', None)
+        ss_mag          = kwargs.get('ss_mag', 5)
+        ss_trim         = kwargs.get('ss_trim', True)
         # *** CAMERA ANGLE ***
         cam_azimuth     = kwargs.get('azimuth', 90)
         cam_zoom        = kwargs.get('zoom', 1)
@@ -155,10 +164,14 @@ class FSMaker(object):
         cam_roll        = kwargs.get('roll', 0)
         # *** COLOR BAR ***
         do_col_bar  = kwargs.get('do_col_bar', True)
+        # extra args
+        extra_args = kwargs.get('extra_args', '')       # Extra commands at the end
+        f_extra_args = kwargs.get('f_extra_args', '')   # Extra commands after a surface (-f)
+
 
         do_surf = True
         if isinstance(surf_name, str):
-            surf_name=[surf_name]         
+            surf_name=[surf_name]                 
         if len(surf_name)==0:
             do_surf = False
 
@@ -175,16 +188,25 @@ class FSMaker(object):
             do_rois = True
             sorted_roi_list = self.get_lr_roi_list(roi_list, roi_list_excl)
 
-        if do_scr_shot:         
+        if do_scr_shot:     
             if scr_shot_file is None:
                 # Not specified -save in custom surf dir
-                scr_shot_file = opj(self.custom_surf_dir, f'{surf_name[0]}_az{cam_azimuth}_z{cam_zoom}_e{cam_elevation}_r{cam_roll}')
+                this_sname = 'ss' if len(surf_name)==0 else surf_name[0]
+                scr_shot_file = opj(self.custom_surf_dir, f'{this_sname}_az{cam_azimuth}_z{cam_zoom}_e{cam_elevation}_r{cam_roll}.png')
             if os.path.isdir(scr_shot_file):
                 # Folder specified, add the name...
-                scr_shot_flag = f"--ss {opj(scr_shot_file, surf_name[0])}"
+                full_ss_file = opj(scr_shot_file, surf_name[0])
             else:
                 # Specific file specified
-                scr_shot_flag = f"--ss {scr_shot_file}"
+                full_ss_file = scr_shot_file
+            # MAKE SURE IT ENDS WITH .png
+            if not full_ss_file.endswith('.png'):
+                full_ss_file += '.png'
+            # Add the file + the magnification and the autotrim
+            auto_trim = 'autotrim ' if ss_trim else ' '
+            scr_shot_flag = f"--ss {full_ss_file} {ss_mag} {auto_trim}" #{int(ss_trim)} "
+            # print(scr_shot_flag)
+            # bloyp
         else:
             scr_shot_flag = ""
 
@@ -198,6 +220,7 @@ class FSMaker(object):
         for mesh in mesh_list:
             for this_hemi in hemi_list:
                 fs_cmd += f' {this_hemi}.{mesh}'
+                fs_cmd += f_extra_args
                 if do_rois:
                     for i_roi, roi in enumerate(sorted_roi_list[this_hemi]):
                         if roi_col_spec is None:
@@ -221,7 +244,8 @@ class FSMaker(object):
                     fs_cmd += f':curvature_method=binary'
         fs_cmd +=  f' --camera Azimuth {cam_azimuth} Zoom {cam_zoom} Elevation {cam_elevation} Roll {cam_roll} '
         fs_cmd += f'{col_bar_flag} {scr_shot_flag}'
-        fs_cmd += ' --verbose'        
+        fs_cmd += ' --verbose  --viewport 3d --viewsize 99999 99999'        
+        fs_cmd += extra_args
         if keep_running:
             fs_cmd += ' &'
         print(fs_cmd)

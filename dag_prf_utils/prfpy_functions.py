@@ -776,8 +776,10 @@ class PrfMulti(object):
                 self.prf_obj[id1], self.prf_obj[id2], diff_id=new_id,
             )
             self.id_list += [new_id]
-    # TODO - add_prf_mean    
-
+    # TODO - add_prf_mean?    
+    
+    # ***************** OBJECT PLOT FUNCTIONS ***************** # 
+    # ***************** OBJECT PLOT FUNCTIONS ***************** # 
     def hist(self, px, th=None, ax=None, **kwargs):
         '''hist: Plot a histogram of a parameter, masked by th'''
         if ax==None:
@@ -869,6 +871,48 @@ class PrfMulti(object):
             # arrow_col='angle', 
             **kwargs
             )
+
+    def visual_field(self, vf_obj, col_obj_p, th=None, **kwargs):
+        '''Visual field scatter
+        As with Prf1T1M -> but specify which object has the x,y, coordinates (vf_obj)
+        And specify the object for color, and the parameter
+        e.g., 
+        prf_multi.visual_field(
+            vf_obj = 'gauss_obj',
+            col_obj_p = 'csf_obj-SFp'
+        )
+        '''
+        col_obj, col_p = col_obj_p.split('-')
+        if th is None:
+            rsq_th = kwargs.get('rsq_th', 0.1)
+            th = {
+                f'{vf_obj}-min-rsq':rsq_th,
+                f'{vf_obj}-max-ecc': 5,
+                f'{col_obj}-min-rsq':rsq_th,
+                }        
+        th_plus = kwargs.get('th_plus', {})
+        th = dict(**th, **th_plus)        
+        kwargs['title'] = kwargs.get('title', f'vf={vf_obj}: col={col_obj_p}')            
+        vx_mask = self.return_vx_mask(th)        
+        rsq_weight = kwargs.get('rsq_weight', False) 
+        if rsq_weight:
+            kwargs['bin_weight'] = self.prf_obj[col_obj].pd_params['rsq'][vx_mask]
+        
+        for p in ['dot_size', 'dot_alpha']:
+            if p not in kwargs.keys():
+                continue
+            if isinstance(kwargs[p], str):
+                # bloop
+                kwargs[p] = self.pd_params[kwargs[p]][vx_mask]
+
+        dag_visual_field_scatter(
+            dot_x   = self.prf_obj[vf_obj].pd_params['x'][vx_mask],
+            dot_y   = self.prf_obj[vf_obj].pd_params['y'][vx_mask],
+            dot_col = self.prf_obj[col_obj].pd_params[col_p][vx_mask],
+            **kwargs
+        )           
+
+
 
 
 class PrfDiff(object):

@@ -29,7 +29,7 @@ class TSPlotter(Prf1T1M):
         self.real_tc = real_tc
         self.prf_model = prf_model
         self.prfpy_stim = prf_model.stimulus
-        # # self.prfpy_stim = prfpy_stim
+        # # # self.prfpy_stim = prfpy_stim
         # if model=='gauss':
         #     self.prf_model = Iso2DGaussianModel(stimulus=self.prfpy_stim)
         # elif model=='norm':
@@ -97,182 +97,248 @@ class TSPlotter(Prf1T1M):
             return fig
         return
 
-    def csf_tc_plot(self, idx, time_pt=None, return_fig=False, **kwargs):
-        time_pt_col = '#42eff5'
-        GT_params = self.pd_params.iloc[idx]
-        # Load the specified info 
-        GT_info = get_ncsf_info(GT_params, csenf_model=self.prf_model)
+    def csf_tc_plot(self, idx, time_pt=None, return_fig=True, **kwargs):
+        '''csf_tc_plot
+        Do a nice representation of the CSF timeseries model
+        '''
+        TR_in_s = kwargs.get('TR_in_s', 1.5)
+        do_corr = kwargs.get('do_corr', False)        
+        do_dm_space = kwargs.get('do_dm_space', False)
+        do_text     = kwargs.get('do_text', True)
+        do_crf_plot = kwargs.get('do_crf_plot', True)
+        do_stim_info = kwargs.get('do_stim_info', True)
+        time_pt_col = kwargs.get('time_pt_col', '#42eff5')
         
-        do_corr = kwargs.get('do_corr', False)
+        # Load the specified info 
+        GT_params = self.pd_params.iloc[idx]
+        GT_info = get_ncsf_info(GT_params, csenf_model=self.prf_model)        
+        ts_x = np.arange(0, GT_info['ts'].shape[-1]) * TR_in_s
         # Set up figure
+        # nrows = 2
+        # ncols = 4
+        # width_ratios = [2,1,1,6]
+        # if do_corr:
+        #     height_ratios = [2,1+1] # 2 for each GT model, 1 for stim info
+        #     fig_height = 2 + 4 + 2 # extra plus 2
+        # else:
+        #     height_ratios = [2,1]
+        #     fig_height = 2 + 4 # extra plus 2
+        # fig_size = (21,fig_height) # height depends on number of GT models
         nrows = 2
-        ncols = 4
-        width_ratios = [2,1,1,6]
-        if do_corr:
-            height_ratios = [2,1+1] # 2 for each GT model, 1 for stim info
-            fig_height = 2 + 4 + 2 # extra plus 2
-        else:
-            height_ratios = [2,1]
-            fig_height = 2 + 4 # extra plus 2
-        fig_size = (21,fig_height) # height depends on number of GT models
+        ncols = 3
+        width_ratios = [2,2,6]
+        height_ratios = [2,1]
+        fig_size = [sum(width_ratios)*1.1, sum(height_ratios)*1.1]
 
         fig, ax = plt.subplots(
-        nrows, ncols,
-        gridspec_kw={'width_ratios': width_ratios, 'height_ratios':height_ratios},
-        figsize=fig_size,
+            nrows, ncols,
+            gridspec_kw={'width_ratios': width_ratios, 'height_ratios':height_ratios},
+            figsize=fig_size,
         )   
-        # Turn off unwanted axes
-        ax[-1][0].axis('off')
-        ax[-1][1].axis('off')   
-        corr_ax = ax[-1][1]
-        ax[-1][2].axis('off')
+        # Axes
+        csf_ax  = ax[0][0]
+        crf_ax  = ax[0][1]
+        ts_ax   = ax[0][2]  
+        SF_ax   = ax[1][2]
+        ax[1][0].axis('off')
+        ax[1][1].axis('off')
         
         # *********** ax -1,2: Stimulus info ***********
-        # Add the stimulus plots (independent of number of GT models)
-        # -> SF sequence
-        SF_seq = self.prfpy_stim.SF_seq.copy()
-        SF_seq[SF_seq==0] = np.nan
+        if do_stim_info:
+            # Add the stimulus plots (independent of number of GT models)
+            SF_ax.set_yscale('log')
+            SF_ax.set_xlabel('time (s)')
+            SF_ax.set_ylabel('SF') # log SF', color='black')
+            SF_ax.yaxis.set_label_position('right')
+            SF_ax.set_yticks([])
+            # -> SF sequence
+            SF_seq = self.prfpy_stim.SF_seq.copy()
+            # SF_seq[SF_seq==0] = np.nan
+            # Find indices where the values change ( & are not to 0)
+            change_indices = np.where((np.diff(SF_seq) != 0) & (SF_seq[1:] != 0))[0]
+            # Create a list of labels corresponding to the changed values
+            labels = [f'{value:0.1f}' for value in SF_seq[change_indices+1]]
+            labels = [value.split('.0')[0] for value in labels]
+            # Add text labels at the change points on the plot
+            for idx, label in zip(change_indices + 1, labels):
+                SF_ax.text(
+                    idx*TR_in_s+3*TR_in_s, 
+                    SF_seq[idx], 
+                    label, ha='center', va='bottom', ) #color=sf_cols[label]) #rotation=45)
 
-        SF_ax = ax[-1][-1]
-        SF_ax.set_yscale('log')
-        SF_ax.plot(SF_seq, '*k')                
-        SF_ax.set_xlabel('time (s)')
-        SF_ax.set_ylabel('log SF', color='black')
+            SF_ax.plot(ts_x, SF_seq, 'k', linestyle='', marker='_')                
+            # SF_ax.spines['right'].set_visible(False)
+            SF_ax.spines['top'].set_visible(False)
 
-        # -> 100/Contrast seq
-        con_s_seq = self.prfpy_stim.CON_S_seq.copy()
-        con_s_seq[con_s_seq==np.inf] = np.nan
-        con_s_ax = SF_ax.twinx()                        
-        con_s_ax.plot(con_s_seq, 'r')
-        # set ylabel to red, also yticks
-        con_s_ax.set_ylabel('100/Contrast', color='red')
-        con_s_ax.tick_params(axis='y', colors='red')
 
-        # Add grey patches corresponding to the nan values in con_s_seq
-        x = np.arange(len(con_s_seq))
-        y1 = np.ones_like(x)*np.nanmin(con_s_seq)
-        y2 = np.ones_like(x)*np.nanmax(con_s_seq)
-        con_s_ax.fill_between(x, y1, y2, where=np.isnan(con_s_seq), facecolor='grey', alpha=0.5)
-        # set xlim
-        con_s_ax.set_xlim(0, len(con_s_seq))    
-        if time_pt is not None:
-            con_s_ax.plot(
-                (time_pt, time_pt), (y1[0], y2[0]),
-                color=time_pt_col, linewidth=5, alpha=0.8)
+            # -> contrast
+            con_seq = self.prfpy_stim.CON_seq.copy()
+            con_seq[con_seq==0] = np.nan
+            con_ax = SF_ax.twinx()                        
+            con_ax.plot(ts_x, con_seq, 'r')
+            # set ylabel to red, also yticks
+            con_ax.set_ylabel('contrast ', color='red', alpha=0.5)        
+            con_ax.set_yscale('log')
+            con_ax.tick_params(axis='y', colors='red')
+            con_ax.spines['right'].set_visible(False)
+            con_ax.spines['top'].set_visible(False)
+            con_ax.yaxis.set_label_position('left')
+            con_ax.yaxis.set_ticks_position('left')
+            # Add grey patches corresponding to the nan values in con_s_seq
+            y1 = np.ones_like(ts_x)*np.nanmin(con_seq)
+            y2 = np.ones_like(ts_x)*np.nanmax(con_seq)
+            con_ax.fill_between(ts_x, y1, y2, where=np.isnan(con_seq), facecolor='grey', alpha=0.5)
+            # set xlim
+            con_ax.set_xlim(0, ts_x[-1])    
+            if time_pt is not None:
+                con_ax.plot(
+                    (time_pt*TR_in_s, time_pt*TR_in_s), (y1[0], y2[0]),
+                    color=time_pt_col, linewidth=5, alpha=0.8)
 
-        # put x axis for con_s_ax and SF_ax at the top of the axis
-        # SF_ax.xaxis.tick_top()
+            # put x axis for con_s_ax and SF_ax at the top of the axis
+            # SF_ax.xaxis.tick_top()
+        else:
+            ax[-1][-1].axis('off')
         # ***********************************************************************
+        # ***********************************************************************
+        
+        
         i = 0
         
         # *********** ax 0,0: CSF curve + with imshow to display CRF curve ***********
-        # ax.set_title(f'CSF curve')    
-        ax[i][0].set_xlabel('SF (c/deg)')
-        ax[i][0].set_ylabel('100/Contrast')
-        ax[i][0].set_xscale('log')
-        ax[i][0].set_yscale('log')
-
         # Scatter the points sampled
-        ax[i][0].scatter(
-            self.prfpy_stim.SF_seq, 100/self.prfpy_stim.CON_seq, color='r', alpha=0.8
+        # csf_ax.scatter(
+        #     self.prfpy_stim.SF_seq, 100/self.prfpy_stim.CON_seq, color='r', alpha=0.8
+        # )
+        csf_ax.plot(
+            GT_info['full_csf_info']['sf_grid'][0,:],
+            GT_info['full_csf_info']['full_csf_curve'][:,0],
+            lw=5, color='g',
         )
-        # Plot the CSF curve
-        ax[i][0].plot(            
-            # self.prfpy_stim.SFs, 
-            # GT_info['csf_curve'][:,i], 
-            GT_info['full_csf_info']['']
-            color='g', linewidth=5)
 
-        # Plot the full CSF 
-        ax[i][0].scatter(
+        csf_ax.scatter(
             GT_info['full_csf_info']['sf_grid'].ravel(),
             GT_info['full_csf_info']['con_grid'].ravel(),
             c=GT_info['full_csf_info']['full_csf'].ravel(),
             vmin=0, vmax=1,
             alpha=.1,
             cmap='magma'
-        )        
+        )   
         if time_pt is not None:
-            ax[i][0].plot(
+            csf_ax.plot(
                 self.prfpy_stim.SF_seq[time_pt],
                 100/self.prfpy_stim.CON_seq[time_pt],
                 color=time_pt_col, marker='*', markersize=20,
             )
-        # Put a grid on the axis (only the major ones)
-        ax[i][0].grid(which='both', axis='both', linestyle='--', alpha=0.5)
-        # Make the axis square
-        ax[i][0].set_aspect('equal', 'box') 
-        ax[i][0].set_xticks([.1, 1,10,100])
-        ax[i][0].set_yticks([.1, 1,10,100, 1000])
-        ax[i][0].set_xlim([0.25, 50]) # [0.1, 100])
-        ax[i][0].set_ylim([1, 500]) # [0.1, 1000])
-        ax[i][0].legend()
+
+        csf_ax.set_xlabel('SF (c/deg)')
+        csf_ax.set_ylabel('contrast')
+        csf_ax.set_xscale('log')
+        csf_ax.set_yscale('log')  
+        xticklabels = ['0.5', '1', '10', '50']
+        xticks = [float(i) for i in xticklabels]
+        xlim = [xticks[0], xticks[-1]]
+        yticklabels = ['0.1', '1', '10', '100']
+        yticks = [float(i) for i in yticklabels]
+        ylim = [0.1, 500]
+        csf_ax.set_xticks(xticks) 
+        csf_ax.set_xticklabels(xticklabels) 
+        csf_ax.set_xlim(xlim) 
+        csf_ax.set_yticks(yticks)
+        csf_ax.set_yticklabels(yticklabels)
+        csf_ax.set_ylim(ylim)
+        csf_ax.spines['right'].set_visible(False)
+        csf_ax.spines['top'].set_visible(False)
+
         # ***********************************************************************
         
 
         # *********** ax 0,1: CSF in DM space ***********
-        # RF - in DM space:
-        ax[i][1].imshow(GT_info['csf_mat'][0,:,:], vmin=0, vmax=1, cmap='magma')#, alpha=.5)        
-        # Add dm representing the times series
-        # Add grids to show the "matrix" aspect
-        ax[i][1].set_xticks(np.arange(len(self.prfpy_stim.SFs))-.5)
-        # ax[i][1].set_xticklabels(self.prfpy_stim.SFs)
-        ax[i][1].set_xticklabels([])
-        ax[i][1].set_yticks(np.arange(len(self.prfpy_stim.CON_Ss))-.5)
-        # ax[i][1].set_yticklabels(np.round(self.prfpy_stim.CON_Ss,2))
-        ax[i][1].set_yticklabels([])
-        # Grids, thick red lines
-        ax[i][1].grid(which='major', axis='both', linestyle='-', color='r', linewidth=2)
-        ax[i][1].set_title('CSF-DM space')
-        if time_pt is not None:
-            if self.prfpy_stim.SF_seq_id[time_pt]!=0:
-                ax[i][1].plot(
-                    self.prfpy_stim.SF_seq_id[time_pt]-1,  # -1 for indexing...
-                    self.prfpy_stim.CON_seq_id[time_pt]-1, # -1 for indexing...
-                    color=time_pt_col, marker='s', markersize=15,
-                )        
+        # if do_dm_space:
+        #     # RF - in DM space:
+        #     ax[i][1].imshow(GT_info['csf_mat'][0,:,:], vmin=0, vmax=1, cmap='magma')#, alpha=.5)        
+        #     # Add dm representing the times series
+        #     # Add grids to show the "matrix" aspect
+        #     ax[i][1].set_xticks(np.arange(len(self.prfpy_stim.SFs))-.5)
+        #     # ax[i][1].set_xticklabels(self.prfpy_stim.SFs)
+        #     ax[i][1].set_xticklabels([])
+        #     ax[i][1].set_yticks(np.arange(len(self.prfpy_stim.CON_Ss))-.5)
+        #     # ax[i][1].set_yticklabels(np.round(self.prfpy_stim.CON_Ss,2))
+        #     ax[i][1].set_yticklabels([])
+        #     # Grids, thick red lines
+        #     ax[i][1].grid(which='major', axis='both', linestyle='-', color='r', linewidth=2)
+        #     ax[i][1].set_title('CSF-DM space')
+        #     if time_pt is not None:
+        #         if self.prfpy_stim.SF_seq_id[time_pt]!=0:
+        #             ax[i][1].plot(
+        #                 self.prfpy_stim.SF_seq_id[time_pt]-1,  # -1 for indexing...
+        #                 self.prfpy_stim.CON_seq_id[time_pt]-1, # -1 for indexing...
+        #                 color=time_pt_col, marker='s', markersize=15,
+        #             )   
+        # else:
+        #     ax[i][1].axis('off')
         # ***********************************************************************
 
 
         # *********** ax 0,2: CRF  ***********
-        ax[i][2].set_title(f'CRF')    
-        ax[i][2].set_xlabel('contrast (%)')
-        ax[i][2].set_ylabel('fMRI Response')
-        ax[i][2].plot(
-            np.linspace(0,100, 100), 
-            GT_info['crf_curve'][0,:], 
-            color='g', linewidth=5)
-        # Put a grid on the axis (only the major ones)
-        ax[i][2].grid(which='both', axis='both', linestyle='--', alpha=0.5)
-        # Make the axis square
-        # ax.set_aspect('equal', 'box') 
-        ax[i][2].set_xticks([0, 50,100])
-        ax[i][2].set_yticks([0, 0.5, 1.0])
-        ax[i][2].set_xlim([0, 100])
-        ax[i][2].set_ylim([0, 1])
-        ax[i][2].legend()
+        if do_crf_plot:
+            crf_ax.set_title(f'CRF')    
+            crf_ax.set_xlabel('contrast (%)')
+            crf_ax.set_ylabel('fMRI Response')
+            crf_ax.plot(
+                np.linspace(0,100, 100), 
+                GT_info['crf_curve'][0,:], 
+                color='g', linewidth=5)
+            # Put a grid on the axis (only the major ones)
+            crf_ax.grid(which='both', axis='both', linestyle='--', alpha=0.5)
+            # Make the axis square
+            # ax.set_aspect('equal', 'box') 
+            crf_ax.set_xticks([0, 50,100])
+            crf_ax.set_yticks([0, 0.5, 1.0])
+            crf_ax.set_xlim([0, 100])
+            crf_ax.set_ylim([0, 1])
+            crf_ax.legend()
+
+            # Put a grid on the axis (only the major ones)
+            crf_ax.grid(which='both', axis='both', linestyle='--', alpha=0.5)
+            # ax.set_xscale('log')
+            # Make the axis square
+            crf_ax.set_box_aspect(1) 
+            # ax.set_title('CRF')
+            crf_ax.set_xticks([0, 50,100])
+            crf_ax.set_yticks([0, 0.5, 1.0])
+            crf_ax.set_xlim([0, 100]) # ax.set_xlim([0, 100])
+            crf_ax.set_ylim([0, 1])
+            crf_ax.set_xlabel('contrast (%)')
+            crf_ax.set_ylabel('fMRI response (a.u.)')
+            # 
+            crf_ax.spines['right'].set_visible(False)
+            crf_ax.spines['top'].set_visible(False)            
+        else:
+            ax[i][2].axis('off')
         # ***********************************************************************
 
 
+
         # *********** ax 0,3: Time series ***********
-        ax[i][-1].plot(GT_info['ts'][0,:time_pt], color='g', marker="*", markersize=2, linewidth=5, alpha=0.8)        
-        ax[i][-1].plot(self.real_tc[idx,:time_pt], color='k', linestyle=':', marker='^', linewidth=3, alpha=0.8)
-        ax[i][-1].set_xlim(0, GT_info['ts'].shape[-1])
-        ax[i][-1].set_title('Time series')
-        ax[i][-1].plot((0,GT_info['ts'].shape[-1]), (0,0), 'k')   
+        ts_ax.plot(GT_info['ts'][0,:time_pt], color='g', marker="*", markersize=2, linewidth=5, alpha=0.8)        
+        ts_ax.plot(self.real_tc[idx,:time_pt], color='k', linestyle=':', marker='^', linewidth=3, alpha=0.8)
+        ts_ax.set_xlim(0, GT_info['ts'].shape[-1])
+        ts_ax.set_title('Time series')
+        ts_ax.plot((0,GT_info['ts'].shape[-1]), (0,0), 'k')   
         # Find the time for 0 stimulation, add grey patches
         id_no_stim = self.prfpy_stim.SF_seq==0.0
         x = np.arange(len(id_no_stim))
         y1 = np.ones_like(x)*np.nanmin(GT_info['ts'])
         y2 = np.ones_like(x)*np.nanmax(GT_info['ts'])
-        ax[i][-1].fill_between(x, y1, y2, where=id_no_stim, facecolor='grey', alpha=0.5)    
+        ts_ax.fill_between(x, y1, y2, where=id_no_stim, facecolor='grey', alpha=0.5)    
         if time_pt is not None:
-            ax[i][-1].plot(
+            ts_ax.plot(
                 (time_pt, time_pt), (y1[0], y2[0]),
-                color=time_pt_col, linewidth=5, alpha=0.8)    
+                color=time_pt_col, linewidth=2, alpha=0.8)    
             # also plot a full invisible version, to keep ax dim...
-            ax[i][-1].plot(GT_info['ts'][0,:], alpha=0)
-            ax[i][-1].plot(self.real_tc[idx,:], alpha=0)
+            ts_ax.plot(GT_info['ts'][0,:], alpha=0)
+            ts_ax.plot(self.real_tc[idx,:], alpha=0)
 
         # ***********************************************************************
         # Calculate rsq
@@ -282,60 +348,61 @@ class TSPlotter(Prf1T1M):
         # ))
 
         # *********** DM CORRELATION ***********
-        if do_corr:
-            og_dm = self.prfpy_stim.design_matrix.copy()
-            reshaped_dm = og_dm.reshape(-1, 214)
-            # -> convolve with hrf
-            conv_rs_dm = self.prf_model.convolve_timecourse_hrf(
-                reshaped_dm, 
-                self.prf_model.hrf
-            )
-            # -> correlate with ts
-            corr = np.zeros(conv_rs_dm.shape[0])
-            for i_dm in range(conv_rs_dm.shape[0]):
-                corr[i_dm] = np.corrcoef(conv_rs_dm[i_dm,:], self.real_tc[idx,:])[0,1]        
+        # if do_corr:
+        #     og_dm = self.prfpy_stim.design_matrix.copy()
+        #     reshaped_dm = og_dm.reshape(-1, 214)
+        #     # -> convolve with hrf
+        #     conv_rs_dm = self.prf_model.convolve_timecourse_hrf(
+        #         reshaped_dm, 
+        #         self.prf_model.hrf
+        #     )
+        #     # -> correlate with ts
+        #     corr = np.zeros(conv_rs_dm.shape[0])
+        #     for i_dm in range(conv_rs_dm.shape[0]):
+        #         corr[i_dm] = np.corrcoef(conv_rs_dm[i_dm,:], self.real_tc[idx,:])[0,1]        
 
-            # -> reshape back to [14 x 6 x 214]
-            corr_dm = corr.reshape(14, 6)
-            # -> plot
-            corr_ax.imshow(corr_dm, vmin=-.5, vmax=.5, cmap='RdBu_r')
-            # Add grids to show the "matrix" aspect
-            corr_ax.set_xticks(np.arange(len(self.prfpy_stim.SFs))-.5)
-            # ax[i][1].set_xticklabels(csenf_stim.SFs)
-            corr_ax.set_xticklabels([])
-            corr_ax.set_yticks(np.arange(len(self.prfpy_stim.CON_Ss))-.5)
-            # ax[i][1].set_yticklabels(np.round(csenf_stim.CON_Ss,2))
-            corr_ax.set_yticklabels([])
-            # Grids, thick red lines
-            corr_ax.grid(which='major', axis='both', linestyle='-', color='r', linewidth=2)
-            corr_ax.set_title('TS - DM correlation')
-            # Add a colorbar to the right of corr_ax
-            cbar = fig.colorbar(corr_ax.images[0], ax=corr_ax, location='right')
+        #     # -> reshape back to [14 x 6 x 214]
+        #     corr_dm = corr.reshape(14, 6)
+        #     # -> plot
+        #     corr_ax.imshow(corr_dm, vmin=-.5, vmax=.5, cmap='RdBu_r')
+        #     # Add grids to show the "matrix" aspect
+        #     corr_ax.set_xticks(np.arange(len(self.prfpy_stim.SFs))-.5)
+        #     # ax[i][1].set_xticklabels(csenf_stim.SFs)
+        #     corr_ax.set_xticklabels([])
+        #     corr_ax.set_yticks(np.arange(len(self.prfpy_stim.CON_Ss))-.5)
+        #     # ax[i][1].set_yticklabels(np.round(csenf_stim.CON_Ss,2))
+        #     corr_ax.set_yticklabels([])
+        #     # Grids, thick red lines
+        #     corr_ax.grid(which='major', axis='both', linestyle='-', color='r', linewidth=2)
+        #     corr_ax.set_title('TS - DM correlation')
+        #     # Add a colorbar to the right of corr_ax
+        #     cbar = fig.colorbar(corr_ax.images[0], ax=corr_ax, location='right')
         # ***********************************************************************
 
         # *********** Bottom left Text ***********
-        gt_txt = f'width_r={GT_info["width_r"]:>8.2f}, \n' + \
-            f'SFp={GT_info["SFp"]:>8.2f}, \n' + \
-            f'CSp={GT_info["CSp"]:>8.2f}, \n' + \
-            f'width_l={GT_info["width_l"]:>8.2f}, \n' + \
-            f'crf_exp={GT_info["crf_exp"]:>8.2f}, \n' + \
-            f'sfmax={GT_info["sfmax"]:>8.2f}, \n' + \
-            f'rsq={GT_info["rsq"]:>8.2f}, \n' #+ \
-            # f'aulcsf={GT_info["aulcsf"][i]:>8.2f}, \n' + \
-            # f'ncsf_volume={GT_info["ncsf_volume"][i]:>8.2f}, \n' 
+        if do_text:
+            gt_txt = f'width_r={GT_info["width_r"]:>8.2f}, \n' + \
+                f'SFp={GT_info["SFp"]:>8.2f}, \n' + \
+                f'CSp={GT_info["CSp"]:>8.2f}, \n' + \
+                f'width_l={GT_info["width_l"]:>8.2f}, \n' + \
+                f'crf_exp={GT_info["crf_exp"]:>8.2f}, \n' + \
+                f'sfmax={GT_info["sfmax"]:>8.2f}, \n' + \
+                f'rsq={GT_info["rsq"]:>8.2f}, \n' #+ \
+                # f'aulcsf={GT_info["aulcsf"][i]:>8.2f}, \n' + \
+                # f'ncsf_volume={GT_info["ncsf_volume"][i]:>8.2f}, \n' 
 
-        # gt_txt = f'width_r={GT_info["width_r"][0]:>8.2f}, \n' + \
-        #     f'SFp={GT_info["SFp"][0]:>8.2f}, \n' + \
-        #     f'CSp={GT_info["CSp"][0]:>8.2f}, \n' + \
-        #     f'width_l={GT_info["width_l"][0]:>8.2f}, \n' + \
-        #     f'crf_exp={GT_info["crf_exp"][0]:>8.2f}, \n' + \
-        #     f'sfmax={GT_info["sfmax"][0]:>8.2f}, \n' + \
-        #     f'rsq={GT_info["rsq"][0]:>8.2f}, \n' #+ \
-        #     # f'aulcsf={GT_info["aulcsf"][i]:>8.2f}, \n' + \
-        #     # f'ncsf_volume={GT_info["ncsf_volume"][i]:>8.2f}, \n' 
-        # Add the text to the right of the time series figure
-        # Ax is in axis coordinates, so 0,0 is bottom left, 1,1 is top right
-        ax[i][-1].text(1.35, 0.20, gt_txt, transform=ax[i][-1].transAxes, fontsize=20, va='center', ha='right', family='monospace',)
+            # gt_txt = f'width_r={GT_info["width_r"][0]:>8.2f}, \n' + \
+            #     f'SFp={GT_info["SFp"][0]:>8.2f}, \n' + \
+            #     f'CSp={GT_info["CSp"][0]:>8.2f}, \n' + \
+            #     f'width_l={GT_info["width_l"][0]:>8.2f}, \n' + \
+            #     f'crf_exp={GT_info["crf_exp"][0]:>8.2f}, \n' + \
+            #     f'sfmax={GT_info["sfmax"][0]:>8.2f}, \n' + \
+            #     f'rsq={GT_info["rsq"][0]:>8.2f}, \n' #+ \
+            #     # f'aulcsf={GT_info["aulcsf"][i]:>8.2f}, \n' + \
+            #     # f'ncsf_volume={GT_info["ncsf_volume"][i]:>8.2f}, \n' 
+            # Add the text to the right of the time series figure
+            # Ax is in axis coordinates, so 0,0 is bottom left, 1,1 is top right
+            ts_ax.text(1.35, 0.20, gt_txt, transform=ts_ax.transAxes, fontsize=10, va='center', ha='right', family='monospace',)
         # ***********************************************************************
 
         fig.set_tight_layout(True)
@@ -443,10 +510,9 @@ def get_ncsf_info(ncsf_params, csenf_model):
         )    
     
     # Full RF (same as above, but we sample more densly, for plotting) i.e., not in DM space
-    sf_grid = np.logspace(np.log10(csenf_stim.SFs[0]),np.log10(csenf_stim.SFs[-1]), 50)
-    con_grid = np.logspace(np.log10(csenf_stim.CON_Ss[-1]),np.log10(csenf_stim.CON_Ss[0]), 50)
-    # sf_grid = np.logspace(np.log10(.25),np.log10(20), 50)
-    # con_grid = np.logspace(np.log10(.1),np.log10(500), 50)    
+    sf_grid = np.logspace(np.log10(csenf_stim.SFs[0]),np.log10(50), 50)
+    # con_grid = np.logspace(np.log10(csenf_stim.CON_Ss[-1]),np.log10(csenf_stim.CON_Ss[0]), 50)
+    con_grid = np.logspace(np.log10(.1),np.log10(csenf_stim.CON_Ss[0]), 50)
     sf_grid, con_grid = np.meshgrid(sf_grid,con_grid)
     full_csf,full_csf_curve = csenf_exponential(
         log_SF_grid = np.log10(sf_grid), 

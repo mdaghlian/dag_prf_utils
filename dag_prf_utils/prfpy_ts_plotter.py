@@ -2,12 +2,6 @@ import numpy as np
 import sys
 import matplotlib.pyplot as plt
 
-# import matplotlib as mpl
-# from matplotlib import patches
-# from mpl_toolkits.axes_grid1 import make_axes_locatable
-# import linescanning.plotting as lsplt
-# import pandas as pd
-# from scipy.stats import binned_statistic
 
 from prfpy_csenf.rf import gauss2D_iso_cart
 from prfpy_csenf.model import CSenFModel, Iso2DGaussianModel, Norm_Iso2DGaussianModel, DoG_Iso2DGaussianModel, CSS_Iso2DGaussianModel
@@ -17,7 +11,6 @@ from dag_prf_utils.plot_functions import *
 from dag_prf_utils.prfpy_functions import *
 
 from .utils import *
-# from .load_saved_info import *
 from .plot_functions import *
 
 
@@ -61,7 +54,7 @@ class TSPlotter(Prf1T1M):
         
         '''
 
-        # [1] Create csf_curve, pred_tc & rf
+        # [1] 
         this_rf = np.rot90(gauss2D_iso_cart(
                 x=self.prfpy_stim.x_coordinates[...,np.newaxis],
                 y=self.prfpy_stim.y_coordinates[...,np.newaxis],
@@ -97,6 +90,63 @@ class TSPlotter(Prf1T1M):
             return fig
         return
 
+
+    def norm_tc_plot(self, idx, time_pt=None, return_fig=False):
+        '''
+        
+        '''
+
+        # [1]
+        this_arf = np.rot90(gauss2D_iso_cart(
+                x=self.prfpy_stim.x_coordinates[...,np.newaxis],
+                y=self.prfpy_stim.y_coordinates[...,np.newaxis],
+                mu=(self.pd_params['x'][idx], self.pd_params['y'][idx]),
+                sigma=self.pd_params['size_1'][idx],
+                normalize_RFs=False).T,axes=(1,2))
+        this_arf = np.squeeze(this_arf)
+        this_srf = np.rot90(gauss2D_iso_cart(
+                x=self.prfpy_stim.x_coordinates[...,np.newaxis],
+                y=self.prfpy_stim.y_coordinates[...,np.newaxis],
+                mu=(self.pd_params['x'][idx], self.pd_params['y'][idx]),
+                sigma=self.pd_params['size_2'][idx],
+                normalize_RFs=False).T,axes=(1,2))
+        this_srf = np.squeeze(this_srf)
+        this_rf = [this_arf, this_srf]
+
+        this_pred_tc = np.squeeze(self.prf_model.return_prediction(*list(self.prf_params_np[idx,:-1])))
+        this_real_tc = self.real_tc[idx,:]
+        
+        # Plotting stimuli?
+        # do_current_stim = True
+        fig  = plt.figure()
+        fig.set_size_inches(15,5)
+        gspec_rf = fig.add_gridspec(2,2,width_ratios=[1,5])
+        gspec_ts = fig.add_gridspec(1,2,width_ratios=[1,5])
+        rf_ax = []
+        rf_ax.append(fig.add_subplot(gspec_rf[0]))
+        rf_ax.append(fig.add_subplot(gspec_rf[2]))
+        ts_ax = fig.add_subplot(gspec_ts[1])
+
+        # Setup ax 0
+        for i in range(2):
+            rf_ax[i].set_aspect('equal')
+            # rf_ax[i].set_title(f'PRF, vx={idx}')
+            rf_ax[i].imshow(this_rf[i], cmap='magma', vmin=0, vmax=1) # 
+            rf_ax[i].axis('off')
+
+        param_text = self.make_prf_str(idx)
+
+        # TC
+        tc_x = np.arange(this_pred_tc.shape[-1]) * 1.5        
+        ts_ax.plot(tc_x,this_pred_tc, '-', markersize=10, lw=5, alpha=.5) # color=self.plot_cols[eye]        
+        ts_ax.plot(tc_x,this_real_tc, ':^', color='k', markersize=5, lw=2, alpha=.5)
+        ts_ax.plot((0,tc_x[-1]), (0,0), 'k')   
+        ts_ax.set_title(param_text)
+
+        dag_update_fig_fontsize(fig, 15)        
+        if return_fig:
+            return fig
+        return
     def csf_tc_plot(self, idx, time_pt=None, return_fig=True, **kwargs):
         '''csf_tc_plot
         Do a nice representation of the CSF timeseries model
@@ -113,19 +163,10 @@ class TSPlotter(Prf1T1M):
         GT_params = self.pd_params.iloc[idx]
         GT_info = get_ncsf_info(GT_params, csenf_model=self.prf_model)        
         ts_x = np.arange(0, GT_info['ts'].shape[-1]) * TR_in_s
+        
         # Set up figure
-        # nrows = 2
-        # ncols = 4
-        # width_ratios = [2,1,1,6]
-        # if do_corr:
-        #     height_ratios = [2,1+1] # 2 for each GT model, 1 for stim info
-        #     fig_height = 2 + 4 + 2 # extra plus 2
-        # else:
-        #     height_ratios = [2,1]
-        #     fig_height = 2 + 4 # extra plus 2
-        # fig_size = (21,fig_height) # height depends on number of GT models
         nrows = 2
-        ncols = 3
+        ncols = 3        
         width_ratios = [2,2,6]
         height_ratios = [2,1]
         fig_size = [sum(width_ratios)*1.1, sum(height_ratios)*1.1]
@@ -140,8 +181,8 @@ class TSPlotter(Prf1T1M):
         crf_ax  = ax[0][1]
         ts_ax   = ax[0][2]  
         SF_ax   = ax[1][2]
-        ax[1][0].axis('off')
-        ax[1][1].axis('off')
+        dm_ax = ax[1][0]
+        corr_ax = ax[1][1]
         
         # *********** ax -1,2: Stimulus info ***********
         if do_stim_info:
@@ -254,29 +295,29 @@ class TSPlotter(Prf1T1M):
         
 
         # *********** ax 0,1: CSF in DM space ***********
-        # if do_dm_space:
-        #     # RF - in DM space:
-        #     ax[i][1].imshow(GT_info['csf_mat'][0,:,:], vmin=0, vmax=1, cmap='magma')#, alpha=.5)        
-        #     # Add dm representing the times series
-        #     # Add grids to show the "matrix" aspect
-        #     ax[i][1].set_xticks(np.arange(len(self.prfpy_stim.SFs))-.5)
-        #     # ax[i][1].set_xticklabels(self.prfpy_stim.SFs)
-        #     ax[i][1].set_xticklabels([])
-        #     ax[i][1].set_yticks(np.arange(len(self.prfpy_stim.CON_Ss))-.5)
-        #     # ax[i][1].set_yticklabels(np.round(self.prfpy_stim.CON_Ss,2))
-        #     ax[i][1].set_yticklabels([])
-        #     # Grids, thick red lines
-        #     ax[i][1].grid(which='major', axis='both', linestyle='-', color='r', linewidth=2)
-        #     ax[i][1].set_title('CSF-DM space')
-        #     if time_pt is not None:
-        #         if self.prfpy_stim.SF_seq_id[time_pt]!=0:
-        #             ax[i][1].plot(
-        #                 self.prfpy_stim.SF_seq_id[time_pt]-1,  # -1 for indexing...
-        #                 self.prfpy_stim.CON_seq_id[time_pt]-1, # -1 for indexing...
-        #                 color=time_pt_col, marker='s', markersize=15,
-        #             )   
-        # else:
-        #     ax[i][1].axis('off')
+        if do_dm_space:
+            # RF - in DM space:
+            dm_ax.imshow(GT_info['csf_mat'][0,:,:], vmin=0, vmax=1, cmap='magma')#, alpha=.5)        
+            # Add dm representing the times series
+            # Add grids to show the "matrix" aspect
+            dm_ax.set_xticks(np.arange(len(self.prfpy_stim.SFs))-.5)
+            # ax[i][1].set_xticklabels(self.prfpy_stim.SFs)
+            dm_ax.set_xticklabels([])
+            dm_ax.set_yticks(np.arange(len(self.prfpy_stim.CON_Ss))-.5)
+            # ax[i][1].set_yticklabels(np.round(self.prfpy_stim.CON_Ss,2))
+            dm_ax.set_yticklabels([])
+            # Grids, thick red lines
+            dm_ax.grid(which='major', axis='both', linestyle='-', color='r', linewidth=.5)
+            dm_ax.set_title('CSF-DM space')
+            if time_pt is not None:
+                if self.prfpy_stim.SF_seq_id[time_pt]!=0:
+                    dm_ax.plot(
+                        self.prfpy_stim.SF_seq_id[time_pt]-1,  # -1 for indexing...
+                        self.prfpy_stim.CON_seq_id[time_pt]-1, # -1 for indexing...
+                        color=time_pt_col, marker='s', markersize=15,
+                    )   
+        else:
+            dm_ax.axis('off')
         # ***********************************************************************
 
 
@@ -348,35 +389,35 @@ class TSPlotter(Prf1T1M):
         # ))
 
         # *********** DM CORRELATION ***********
-        # if do_corr:
-        #     og_dm = self.prfpy_stim.design_matrix.copy()
-        #     reshaped_dm = og_dm.reshape(-1, 214)
-        #     # -> convolve with hrf
-        #     conv_rs_dm = self.prf_model.convolve_timecourse_hrf(
-        #         reshaped_dm, 
-        #         self.prf_model.hrf
-        #     )
-        #     # -> correlate with ts
-        #     corr = np.zeros(conv_rs_dm.shape[0])
-        #     for i_dm in range(conv_rs_dm.shape[0]):
-        #         corr[i_dm] = np.corrcoef(conv_rs_dm[i_dm,:], self.real_tc[idx,:])[0,1]        
+        if do_corr:
+            og_dm = self.prfpy_stim.design_matrix.copy()
+            reshaped_dm = og_dm.reshape(-1, 214)
+            # -> convolve with hrf
+            conv_rs_dm = self.prf_model.convolve_timecourse_hrf(
+                reshaped_dm, 
+                self.prf_model.hrf
+            )
+            # -> correlate with ts
+            corr = np.zeros(conv_rs_dm.shape[0])
+            for i_dm in range(conv_rs_dm.shape[0]):
+                corr[i_dm] = np.corrcoef(conv_rs_dm[i_dm,:], self.real_tc[idx,:])[0,1]        
 
-        #     # -> reshape back to [14 x 6 x 214]
-        #     corr_dm = corr.reshape(14, 6)
-        #     # -> plot
-        #     corr_ax.imshow(corr_dm, vmin=-.5, vmax=.5, cmap='RdBu_r')
-        #     # Add grids to show the "matrix" aspect
-        #     corr_ax.set_xticks(np.arange(len(self.prfpy_stim.SFs))-.5)
-        #     # ax[i][1].set_xticklabels(csenf_stim.SFs)
-        #     corr_ax.set_xticklabels([])
-        #     corr_ax.set_yticks(np.arange(len(self.prfpy_stim.CON_Ss))-.5)
-        #     # ax[i][1].set_yticklabels(np.round(csenf_stim.CON_Ss,2))
-        #     corr_ax.set_yticklabels([])
-        #     # Grids, thick red lines
-        #     corr_ax.grid(which='major', axis='both', linestyle='-', color='r', linewidth=2)
-        #     corr_ax.set_title('TS - DM correlation')
-        #     # Add a colorbar to the right of corr_ax
-        #     cbar = fig.colorbar(corr_ax.images[0], ax=corr_ax, location='right')
+            # -> reshape back to [14 x 6 x 214]
+            corr_dm = corr.reshape(14, 6)
+            # -> plot
+            corr_ax.imshow(corr_dm, vmin=-.5, vmax=.5, cmap='RdBu_r')
+            # Add grids to show the "matrix" aspect
+            corr_ax.set_xticks(np.arange(len(self.prfpy_stim.SFs))-.5)
+            # ax[i][1].set_xticklabels(csenf_stim.SFs)
+            corr_ax.set_xticklabels([])
+            corr_ax.set_yticks(np.arange(len(self.prfpy_stim.CON_Ss))-.5)
+            # ax[i][1].set_yticklabels(np.round(csenf_stim.CON_Ss,2))
+            corr_ax.set_yticklabels([])
+            # Grids, thick red lines
+            corr_ax.grid(which='major', axis='both', linestyle='-', color='r', linewidth=2)
+            corr_ax.set_title('TS - DM correlation')
+            # Add a colorbar to the right of corr_ax
+            cbar = fig.colorbar(corr_ax.images[0], ax=corr_ax, location='right')
         # ***********************************************************************
 
         # *********** Bottom left Text ***********

@@ -1307,3 +1307,121 @@ def dag_add_subfig_labels(ax, label, **kwargs):
         transform=ax.transAxes,
         **kwargs
     )
+
+
+def dag_sub_categories_xvalues(i_sub, n_category, n_sub, **kwargs):
+    '''
+    Returns the x coordinates for subcategories within a category.
+    
+    Parameters:
+        i_sub (int): Index of the current subcategory.
+        n_category (int): Total number of categories.
+        n_sub (int): Total number of subcategories.
+        **kwargs: Additional keyword arguments:
+            i_sub_sub (int, optional): Index of the current sub-subcategory. Default is None.
+            n_sub_sub (int, optional): Total number of sub-subcategories. Default is None.
+            group_distance (float, optional): Distance between subgroups. 
+            sub_distance (float, optional): Distance within each subgroup
+            sub_sub_distance (float, optional): Distance within each sub-subgroup
+        
+    Returns:
+        list: List of x coordinates for subcategories.
+    '''
+    
+    x_values = []  # List to store x-coordinates
+    
+    # Extracting kwargs
+    i_sub_sub = kwargs.get('i_sub_sub', None)
+    n_sub_sub = kwargs.get('n_sub_sub', None)
+    
+    # Default values for optional parameters
+    group_distance = kwargs.get('group_distance', 1)
+    sub_prop = kwargs.get('sub_prop', 1.5)
+    sub_distance = kwargs.get(
+        'sub_distance',
+        group_distance / (n_sub*sub_prop)
+    )
+    sub_sub_prop = kwargs.get('sub_sub_prop', 1.5)
+    sub_sub_distance = kwargs.get(
+        'sub_sub_distance',
+        sub_distance / (n_sub_sub*sub_sub_prop)
+        )
+
+    # Iterate over each category
+    for iC in range(n_category):
+        # Calculate the offset for the current subgroup within the category
+        subgroup_offset = sub_distance * (i_sub - (n_sub - 1) / 2)
+        
+        # Calculate the x-coordinate for the current subcategory,
+        # taking into account the subgroup distance and offset
+        x = group_distance * iC + subgroup_offset
+        
+        # If there are sub-subcategories
+        if i_sub_sub is not None:
+            # Calculate the offset for the current sub-subcategory within the subgroup
+            sub_subgroup_offset = sub_sub_distance * (i_sub_sub - (n_sub_sub - 1) / 2)
+            x += sub_subgroup_offset
+
+        # Append the x-coordinate for the subcategory
+        x_values.append(x)
+    
+    return x_values    
+
+
+def dag_draw_significance_bar(ax, text, i_sub1, i_sub2, y_value=None, **kwargs):
+    '''
+    Draws a significance bar connecting two subgroups within different categories on the given axis.
+
+    Parameters:
+        ax (matplotlib.axes.Axes): The axis to draw the significance bar on.
+        text (str): The text to display near the significance bar.
+        i_sub1 (dict): Dictionary specifying the indices for the first subgroup.
+            Example: {'i_category': 1, 'i_sub': 0, 'i_sub_sub': 0} for category 1, subgroup 0, sub-subgroup 0.
+        i_sub2 (dict): Dictionary specifying the indices for the second subgroup.
+            Example: {'i_category': 1, 'i_sub': 1, 'i_sub_sub': 0} for category 1, subgroup 1, sub-subgroup 0.
+        y_value (float, optional): The y-coordinate where the significance bar should be drawn. If not provided, it's set to 90% of the upper limit of the y-axis.
+        **kwargs: Additional keyword arguments for customizing the bar and text appearance.
+            bar_color (str): Color of the significance bar (Default: 'black').
+            bar_width (float): Width of the significance bar (Default: 0.5).
+            text_color (str): Color of the text (Default: 'black').
+            text_size (float): Size of the text (Default: 12).
+            extend_by (float): Extend bars either side by... 
+
+    Returns:
+        None
+    '''
+    if y_value is None:
+        y_value = ax.get_ylim()[-1] * .9
+    bar_color = kwargs.get('bar_color', 'black')
+    do_tails = kwargs.get('do_tails', True)
+    tails_depth = kwargs.get('tails_depth', None)    
+
+    text_color = kwargs.get('text_color', 'black')
+    text_size = kwargs.get('text_size', 12)
+    extend_by = kwargs.get('extend_by', 0) 
+    lw = kwargs.get('lw', 1)
+    # Get x-coordinates for the two subgroups
+    x_values1 = dag_sub_categories_xvalues(**i_sub1, **kwargs)
+    x1 = x_values1[i_sub1['i_category']]
+    x_values2 = dag_sub_categories_xvalues(**i_sub2, **kwargs)
+    x2 = x_values2[i_sub2['i_category']]
+    xmid = (x1+x2)/2     
+    bar_width = np.abs(x1 - x2)+extend_by
+    x1 = xmid-(bar_width/2)
+    x2 = xmid+(bar_width/2)
+    # Draw the significance bar
+    ax.plot([x1, x2], [y_value, y_value], color=bar_color, lw=lw)
+    if do_tails:
+        if tails_depth is None:
+            tails_depth = [bar_width * .2]
+        elif not isinstance(tails_depth, list):
+            tails_depth = [tails_depth]
+
+        if len(tails_depth)==1:
+            tails_depth += tails_depth
+        ax.plot([x1, x1], [y_value, y_value-tails_depth[0]], color=bar_color, lw=lw)
+        ax.plot([x2, x2], [y_value, y_value-tails_depth[1]], color=bar_color, lw=lw)
+
+
+    # Add text near the significance bar
+    ax.text(xmid, y_value, text, color=text_color, size=text_size, ha='center', va='bottom')

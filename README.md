@@ -2,7 +2,7 @@
 This repository is a collection of useful tools (mainly) for analysing and visualising PRF data. It is designed to work with prfpy https://github.com/VU-Cog-Sci/prfpy, but some of the tools are general purpose.
 Other potentially useful repos:
 https://github.com/gallantlab/pycortex
-https://github.com/gjheij/linescanning
+https://github.com/gjheij/linescanning (much has been stolen from here!!! Thanks Jurjen, you are an angel)
 
 
 ## In active development

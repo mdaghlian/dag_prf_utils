@@ -194,53 +194,6 @@ def make_vx_wise_bounds(n_vx, bounds_in, **kwargs):
 
     return vx_wise_bounds
 
-def load_params_generic(params_file, load_all=False, load_var=[]):
-    """Load in a numpy array into the class; allows for quick plotting of voxel timecourses"""
-
-    if isinstance(params_file, str):
-        if params_file.endswith('npy'):
-            params = np.load(params_file)
-        elif params_file.endswith('pkl'):
-            with open(params_file, 'rb') as input:
-                data = pickle.load(input)
-            
-            if len(load_var)==1:
-                params = data[load_var[0]]
-            elif len(load_var)>1:
-                params = {}
-                # Load the specified variables
-                for this_var in load_var:
-                    params[this_var] = data[this_var]
-            elif load_all:
-                params = {}
-                for this_var in data.keys():
-                    params[this_var] = data[this_var]
-            else:
-                params = data['pars']
-
-    elif isinstance(params_file, np.ndarray):
-        params = params_file.copy()
-    elif isinstance(params_file, pd.DataFrame):
-        dict_keys = list(params_file.keys())
-        if not "hemi" in dict_keys:
-            # got normalization parameter file
-            params = np.array((params_file['x'][0],
-                                params_file['y'][0],
-                                params_file['prf_size'][0],
-                                params_file['A'][0],
-                                params_file['bold_bsl'][0],
-                                params_file['B'][0],
-                                params_file['C'][0],
-                                params_file['surr_size'][0],
-                                params_file['D'][0],
-                                params_file['r2'][0]))
-        else:
-            raise NotImplementedError()
-    else:
-        raise ValueError(f"Unrecognized input type for '{params_file}'")
-
-    return params
-
 # ********** PRF OBJECTS
 class Prf1T1M(object):
     '''Prf1T1M
@@ -269,16 +222,16 @@ class Prf1T1M(object):
         prf_params     np.ndarray, of all the parameters, i.e., output from prfpy        
         model          str, model: e.g., gauss or norm
         Optional:
-        fixed_hrf      bool, if True, then the hrf parameters are not included
-        incl_rsq       bool, if False, then the rsq is not included
-        task           str, task name
+        incl_hrf        bool, if True, then the hrf parameters are included
+        incl_rsq        bool, if True, then the rsq is included
+        task            str, task name
 
         '''
         self.model = model        
         self.model_labels = prfpy_params_dict()[self.model] # Get names for different model parameters...
         self.prf_params_np = prf_params
         self.saved_kwargs = kwargs
-        self.fixed_hrf = kwargs.get('fixed_hrf', False)
+        self.incl_hrf = kwargs.get('incl_hrf', True)
         self.incl_rsq = kwargs.get('incl_rsq', True)
         #
         self.task = kwargs.get('task', None)
@@ -287,9 +240,9 @@ class Prf1T1M(object):
         self.params_dd = {}
         mod_labels = prfpy_params_dict()[f'{model}'] 
         for key in mod_labels.keys():
-            if ('hrf' in key) and self.fixed_hrf:
+            if ('hrf' in key) and self.incl_hrf:
                 continue
-            if ('rsq' in key) and not self.incl_rsq:
+            if ('rsq' in key) and self.incl_rsq:
                 continue                    
             self.params_dd[key] = self.prf_params_np[:,mod_labels[key]]
         
@@ -313,11 +266,17 @@ class Prf1T1M(object):
             self.params_dd['log10_SFp'] = np.log10(self.params_dd['SFp'])
             self.params_dd['log10_CSp'] = np.log10(self.params_dd['CSp'])
             self.params_dd['log10_crf_exp'] = np.log10(self.params_dd['crf_exp'])
-            self.params_dd['sfmax'] = np.nan_to_num(
-                10**(np.sqrt(self.params_dd['log10_CSp']/(self.params_dd['width_r']**2)) + \
-                                            self.params_dd['log10_SFp']))            
-            self.params_dd['sfmax'][self.params_dd['sfmax']>50] = 50 # MAX VALUE
+            self.params_dd['sfmax'] = ncsf_calculate_sfmax(
+                self.params_dd['width_r'],
+                self.params_dd['SFp'],
+                self.params_dd['CSp'],
+            )
             self.params_dd['log10_sfmax'] = np.log10(self.params_dd['sfmax'])
+            self.params_dd['aulcsf'] = ncsf_calculate_aulcsf(
+                self.params_dd['width_r'],
+                self.params_dd['SFp'],
+                self.params_dd['CSp'],                
+            )
 
         # Convert to PD           
         self.pd_params = pd.DataFrame(self.params_dd)
@@ -380,21 +339,6 @@ class Prf1T1M(object):
 
         return vx_mask
     
-    # def return_th_param(self, param, vx_mask=None):
-    #     '''return_th_param
-    #     return all the parameters listed, masked by vx_mask        
-    #     '''
-    #     if vx_mask is None:
-    #         vx_mask = np.ones(self.n_vox, dtype=bool)
-    #     if not isinstance(param, list):
-    #         param = [param]        
-    #     param_out = []
-    #     for i_param in param:
-    #         # this_task = i_param.split('-')[0]
-    #         # this_param = i_param.split('-')[1]
-    #         param_out.append(self.pd_params[i_param][vx_mask].to_numpy())
-
-    #     return param_out
     def return_th_params(self, px_list=None, th={}, **kwargs):
         '''return_th_param
         return all the parameters listed, masked by vx_mask        
@@ -472,27 +416,9 @@ class Prf1T1M(object):
         kwargs      dict, kwargs for dag_scatter
 
         '''
-
-        # dot_col = kwargs.get('dot_col', 'k')
-        # dot_alpha = kwargs.get('dot_alpha', None)
         if ax==None:
             ax = plt.axes()
         vx_mask = self.return_vx_mask(th)
-        # ax.scatter(
-        #     self.pd_params[px][vx_mask],
-        #     self.pd_params[py][vx_mask],
-        #     c = dot_col,
-        #     alpha=dot_alpha,
-        # )
-        # corr_xy = np.corrcoef(
-        #     self.pd_params[px][vx_mask],
-        #     self.pd_params[py][vx_mask],
-        #     )[0,1]
-        
-        # ax.set_title(f'corr {px}, {py} = {corr_xy:.3f}')
-        # ax.set_xlabel(px)        
-        # ax.set_ylabel(py)        
-        # # dag_add_ax_basics(ax=plt.gca(), **kwargs)
         pc = kwargs.get('pc', None)        
         if pc is not None:
             kwargs['dot_col'] = self.pd_params[pc][vx_mask]
@@ -502,71 +428,28 @@ class Prf1T1M(object):
             Y=self.pd_params[py][vx_mask],
             **kwargs
         )        
-    
-    def plot_ts(self, ts, idx, ax=None, **kwargs):
-        '''plot_ts
-        Plot the time series of a voxel 
 
-        Input:
-        ----------
-        ts          np.ndarray, time series, n_vx x n_time
-        idx         int, which voxel to plot
-        Optional:
-        ax          matplotlib.axes, if None, then plt.axes() is used
-        kwargs      dict, kwargs for plt.plot
-        '''
-        if ax==None:
-            ax = plt.axes()
-        context_str = self.make_context_str(idx)
-        prf_str = self.make_prf_str(idx)
-
-        kwargs['label'] = kwargs.get('label', context_str)
-        ax.plot(ts[idx,:], **kwargs)
-        ow = kwargs.get('ow', False)
-        if not ow:
-            old_str = ax.get_title()
-            if old_str!='':
-                prf_str = old_str + '\n' + prf_str
-        ax.set_title(prf_str)
-
-    def make_prf_str(self, idx, pid_list=None, add_context=False):
+    def make_prf_str(self, idx, pid_list=None):
         '''make_prf_str
         Make a string of the parameters for a voxel
 
         Input:
         ----------
         idx         int, which voxel to plot
-        Optional:
-        add_context bool, if True, then add the task, model, and voxel index
 
         Output:
         ----------
         prf_str     str, string of the parameters for a voxel
         '''
-        prf_str = ''
-        if add_context:
-            prf_str += self.make_context_str(idx=idx)
+        prf_str = f'vx_id={idx},\n '
         param_count = 0
         if pid_list is None:
             pid_list = self.model_labels
         for param_key in pid_list:
             if param_key in self.pd_params.keys():
                 param_count += 1
-                prf_str += f'{param_key}= {self.pd_params[param_key][idx]:.2f}; '
-            if param_count > 3:
-                prf_str += '\n'
-                param_count = 0
+                prf_str += f'{param_key}= {self.pd_params[param_key][idx]:8.2f};\n '
         return prf_str
-    
-    def make_context_str(self, idx):
-        '''make_context_str: add task, model to the string'''
-        if self.task is None:
-            ctxt_task = ''
-        else:
-            ctxt_task = self.task        
-
-        context_str = f'{ctxt_task}, {self.model},vx={idx}\n'
-        return context_str
     
     def rsq_w_mean(self, pid_list, th={'min-rsq':.1}):
         '''rsq_w_mean
@@ -592,9 +475,7 @@ class Prf1T1M(object):
                 w=self.pd_params['rsq'][vx_mask].copy(),
                 x=self.pd_params[i_param][vx_mask].copy(),
             )
-            # if np.isnan(wm_param[i_param]):
-            #     print('bloop')
-            #     print(vx_mask.sum())
+
         self.wm_param = wm_param
         return wm_param
     

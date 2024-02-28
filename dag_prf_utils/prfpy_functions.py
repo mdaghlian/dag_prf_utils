@@ -6,8 +6,14 @@ import pickle
 import sys
 opj = os.path.join
 
-from .utils import *
-from .plot_functions import *
+try:
+    from prfpy_csenf.csenf_plot_functions import *
+except:
+    print('')
+
+
+from dag_prf_utils.utils import *
+from dag_prf_utils.plot_functions import *
 
 def prfpy_params_dict():
     '''
@@ -233,6 +239,9 @@ class Prf1T1M(object):
         self.saved_kwargs = kwargs
         self.incl_hrf = kwargs.get('incl_hrf', True)
         self.incl_rsq = kwargs.get('incl_rsq', True)
+        print(f'prf_params.shape[-1]={prf_params.shape[-1]}')
+        print(f'include hrf = {self.incl_hrf}')
+        print(f'include rsq = {self.incl_rsq}')
         #
         self.task = kwargs.get('task', None)
         self.n_vox = self.prf_params_np.shape[0]
@@ -240,9 +249,9 @@ class Prf1T1M(object):
         self.params_dd = {}
         mod_labels = prfpy_params_dict()[f'{model}'] 
         for key in mod_labels.keys():
-            if ('hrf' in key) and self.incl_hrf:
+            if ('hrf' in key) and not self.incl_hrf:
                 continue
-            if ('rsq' in key) and self.incl_rsq:
+            if ('rsq' in key) and not self.incl_rsq:
                 continue                    
             self.params_dd[key] = self.prf_params_np[:,mod_labels[key]]
         

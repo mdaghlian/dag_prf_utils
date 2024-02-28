@@ -37,20 +37,29 @@ class GenMeshMaker(object):
         self.n_vx = {'lh':n_vx[0], 'rh':n_vx[1]}
         self.total_n_vx = sum(n_vx)
         self.ply_files = {}
-        # Load the 'under surface' (i.e., the curvature)
-        self.us_values = []
-        for hemi in ['lh', 'rh']:
-            with open(opj(self.sub_surf_dir,f'{hemi}.curv'), 'rb') as h_us:
-                h_us.seek(15)
-                this_us_vals = np.fromstring(h_us.read(), dtype='>f4').byteswap().newbyteorder()
-                self.us_values.append(this_us_vals)
-        # us cmap
-        self.us_values = np.concatenate(self.us_values)    
-        self.us_cmap = mpl.cm.__dict__['Greys'] # Always grey underneath
-        self.us_norm = mpl.colors.Normalize()
-        self.us_norm.vmin = -1 # Always -1,1 range...
-        self.us_norm.vmax = 1  
-        self.us_col = self.us_cmap(self.us_norm(self.us_values))
+        # Load the 'under surfaces' (i.e., the curvature and thickness)
+        self.us_values = {}
+        self.us_cmap = {}
+        self.us_norm = {}
+        self.us_col = {}
+        for us in ['curv', 'thickness']:
+            self.us_values[us] = []
+            for hemi in ['lh', 'rh']:
+                with open(opj(self.sub_surf_dir,f'{hemi}.{us}'), 'rb') as h_us:
+                    h_us.seek(15)
+                    this_us_vals = np.fromstring(h_us.read(), dtype='>f4').byteswap().newbyteorder()
+                    self.us_values[us].append(this_us_vals)
+            
+            self.us_values[us] = np.concatenate(self.us_values[us])    
+            self.us_cmap[us] = mpl.cm.__dict__['Greys_r'] # Always grey underneath
+            self.us_norm[us] = mpl.colors.Normalize()
+            if us=='curv':
+                self.us_norm[us].vmin = -1 # Always -1,1 range...
+                self.us_norm[us].vmax = 1  
+            elif us=='thickness':
+                self.us_norm[us].vmin = 0 # Always -1,1 range...
+                self.us_norm[us].vmax = 5  
+            self.us_col[us] = self.us_cmap[us](self.us_norm[us](self.us_values[us]))
         # Load inflated surface
         self.mesh_info = {}
         mesh_list = ['inflated', 'sphere', 'pial', ] # 'white', 'orig']
@@ -97,6 +106,7 @@ class GenMeshMaker(object):
         '''
         overwrite = kwargs.get('ow', True)
         mesh_name = kwargs.get('mesh_name', 'inflated')
+        under_surf = kwargs.get('under_surf', 'curv')
         print(f'File to be named: {surf_name}')        
         if (os.path.exists(opj(self.output_dir, f'lh.{surf_name}'))) & (not overwrite) :
             print(f'{surf_name} already exists for {self.sub}, not overwriting surf files...')
@@ -131,7 +141,7 @@ class GenMeshMaker(object):
 
 
         display_rgb = (data_col * data_alpha[...,np.newaxis]) + \
-            (self.us_col * (1-data_alpha[...,np.newaxis]))
+            (self.us_col[under_surf] * (1-data_alpha[...,np.newaxis]))
         # Save the mesh files first as .asc, then .srf, then .obj
         # Then save them as .ply files, with the display rgb data for each voxel
         ply_file_2open = []
@@ -178,6 +188,72 @@ class GenMeshMaker(object):
         self.ply_files[surf_name] = [
             ply_file_2open
         ]
+
+    def get_display_rgb(self, data=None, **kwargs):
+        '''Per vertex rgb values
+            data            np.ndarray      What are we plotting on the surface? 1D array, same length as the number of vertices in subject surface.
+            under_surf      str             What is going underneath the data (e.g., what is the background)?
+                                            default is curv. Could also be thick, (maybe smoothwm) 
+        **kwargs:
+            data_mask       bool array      Mask to hide certain values (e.g., where rsquared is not a good fit)
+            data_alpha      np.ndarray      Alpha values for plotting. Where this is specified the undersurf is used instead
+            *** COLOR
+            cmap            str             Which colormap to use https://matplotlib.org/stable/gallery/color/colormap_reference.html
+                                                                Default: viridis
+            vmin            float           Minimum value for colormap
+                                                                Default: min in data
+            vmax            float           Max value for colormap
+                                                                Default: max in data
+            return_cmap_dict bool                                                                 
+        '''
+        split_hemi = kwargs.get('split_hemi', False)
+        unit_rgb = kwargs.get('unit_rgb', True)
+        return_cmap_dict = kwargs.get('return_cmap_dict', False)
+        under_surf = kwargs.get('under_surf', 'curv')
+        # Load mask for data to be plotted on surface
+        data_mask = kwargs.get('data_mask', np.ones(self.total_n_vx, dtype=bool))
+        data_alpha = kwargs.get('data_alpha', np.ones(self.total_n_vx))
+        data_alpha[~data_mask] = 0 # Make values to be masked have alpha=0
+        if not isinstance(data, np.ndarray):
+            print(f'Just creating curv file..')
+            data = np.zeros(self.total_n_vx)
+            data_alpha = np.zeros(self.total_n_vx)        
+        
+        # Load colormap properties: (cmap, vmin, vmax)
+        cmap = kwargs.get('cmap', 'viridis')    
+        vmin = kwargs.get('vmin', np.nanmin(data[data_mask]))
+        vmax = kwargs.get('vmax', np.nanmax(data[data_mask]))
+        # By default use vmin as mask...
+        data_alpha[data<vmin] = 0
+                
+        # Create rgb values mapping from data to cmap
+        data_cmap = dag_get_cmap(cmap)
+        data_norm = mpl.colors.Normalize()
+        data_norm.vmin = vmin
+        data_norm.vmax = vmax
+        data_col = data_cmap(data_norm(data))
+
+        display_rgb = (data_col * data_alpha[...,np.newaxis]) + \
+            (self.us_col[under_surf] * (1-data_alpha[...,np.newaxis]))
+        if not unit_rgb:
+            display_rgb = (display_rgb * 255).astype(np.uint8)
+        display_rgb_dict = {
+            'lh' : display_rgb[:self.n_vx['lh'],:],
+            'rh' : display_rgb[self.n_vx['lh']:,:],
+        }
+
+        if split_hemi:
+            display_rgb = display_rgb_dict
+        cmap_dict = {
+            'cmap' : cmap, 
+            'vmin' : vmin, 
+            'vmax' : vmax,             
+        }
+
+        if return_cmap_dict:
+            return display_rgb, cmap_dict
+        else:
+            return display_rgb
 
     def ply_add_roi(self, roi_list, **kwargs):
         '''
@@ -290,6 +366,7 @@ class GenMeshMaker(object):
         do_vertexcolor = kwargs.get('do_vertexcolor', True)
         mesh_name = kwargs.get('mesh_name', 'inflated')
         hemi_list = kwargs.get('hemi_list', ['lh', 'rh'])
+        under_surf = kwargs.get('under_surf', 'curv')
         if not isinstance(hemi_list, list):
             hemi_list = [hemi_list]
         
@@ -317,7 +394,7 @@ class GenMeshMaker(object):
 
 
         display_rgb = (data_col * data_alpha[...,np.newaxis]) + \
-            (self.us_col * (1-data_alpha[...,np.newaxis]))        
+            (self.us_col[under_surf] * (1-data_alpha[...,np.newaxis]))        
         
         disp_rgb = {
             'lh' : display_rgb[:self.n_vx['lh'],:],

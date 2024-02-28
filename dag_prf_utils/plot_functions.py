@@ -21,6 +21,21 @@ default_pol_bounds = np.linspace(-np.pi, np.pi, 13)
 #     for cm_name in custom_col_dict.keys():
 #         plt.unregister_cmap(cm_name)
 
+def dag_cmap_plotter(cmap, vmin=None, vmax=None, title='', **kwargs):
+    ax = kwargs.get('ax', None)
+    return_ax = kwargs.get('return_ax', False)
+    if ax is None:
+        figsize = kwargs.get('figsize', (10,2))
+        fig, ax = plt.subplots(figsize=figsize)        
+    cmap = dag_get_cmap(cmap)
+    mpl.colorbar.ColorbarBase(
+        ax, orientation='horizontal', cmap=cmap, 
+        norm=mpl.colors.Normalize(vmin, vmax)
+        )
+    ax.set_title(title)
+    dag_update_ax_fontsize(ax, 20)
+    if return_ax:
+        return ax
 
 def dag_add_dag_cmaps_to_mpl():
     # Add to matplotlib cmaps?

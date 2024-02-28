@@ -5,6 +5,7 @@ import numpy as np
 
 import matplotlib as mpl
 import matplotlib.colors as mcolors
+import matplotlib.pyplot as plt
 
 from dag_prf_utils.utils import dag_rescale_bw
 

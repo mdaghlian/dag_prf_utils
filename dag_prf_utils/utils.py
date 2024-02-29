@@ -97,10 +97,13 @@ def dag_load_roi(sub, roi, fs_dir=os.environ['SUBJECTS_DIR'], split_LR=False, do
 
     TODO - hemi specific idx...
     '''
+    need_both_hemis = kwargs.get('need_both_hemis', False) # Need ROI in both hemispheres to return true
     # Get number of vx in each hemi, and total overall...
     n_verts = dag_load_nverts(sub=sub, fs_dir=fs_dir)
     total_num_vx = np.sum(n_verts)
     
+    # ****************************************
+    # SPECIAL CASES [all, occ, demo]
     if 'all' in roi :        
         if split_LR:
             roi_idx = {}
@@ -132,7 +135,8 @@ def dag_load_roi(sub, roi, fs_dir=os.environ['SUBJECTS_DIR'], split_LR=False, do
     
     elif '+' in roi:
         roi = roi.split('+')
-
+    # ****************************************
+        
     # Else look for rois in subs freesurfer label folder
     roi_dir = opj(fs_dir, sub, 'label')    
     if not isinstance(roi, list): # roi can be a list 
@@ -148,39 +152,51 @@ def dag_load_roi(sub, roi, fs_dir=os.environ['SUBJECTS_DIR'], split_LR=False, do
         else:
             do_not = False
         roi_file = {}
-        try:
-            roi_file['lh'] = dag_find_file_in_folder([this_roi, '.thresh', '.label', 'lh'], roi_dir, recursive=True)    
-            roi_file['rh'] = dag_find_file_in_folder([this_roi, '.thresh', '.label', 'rh'], roi_dir, recursive=True)    
-        except:
-            roi_file['lh'] = dag_find_file_in_folder([this_roi, '.label', 'lh'], roi_dir,exclude='._', recursive=True)    
-            roi_file['rh'] = dag_find_file_in_folder([this_roi, '.label', 'rh'], roi_dir,exclude='._', recursive=True)    
-            # bloop
-
-        # If more than 1 match print the matches and raise error
-        if isinstance(roi_file['lh'], list):
-            print(f'Multiple matches for {this_roi} in {roi_dir}')
-            print(roi_file['lh'])
+        # try:
+        #     roi_file['lh'] = dag_find_file_in_folder([this_roi, '.thresh', '.label', 'lh'], roi_dir, recursive=True)    
+        #     roi_file['rh'] = dag_find_file_in_folder([this_roi, '.thresh', '.label', 'rh'], roi_dir, recursive=True)    
+        # except:
+        #     roi_file['lh'] = dag_find_file_in_folder([this_roi, '.label', 'lh'], roi_dir,exclude='._', recursive=True)    
+        #     roi_file['rh'] = dag_find_file_in_folder([this_roi, '.label', 'rh'], roi_dir,exclude='._', recursive=True)    
+        missing_hemi = False # Do we have an ROI for both hemis? 
+        for hemi in ['lh', 'rh']:
+            roi_file[hemi] = dag_find_file_in_folder([this_roi, '.thresh', '.label', hemi], roi_dir, recursive=True, return_msg=None)
+            # Didn't find it? Try again without "thresh"
+            if roi_file[hemi] is None:
+                roi_file[hemi] = dag_find_file_in_folder([this_roi, '.label', hemi], roi_dir,exclude='._', recursive=True, return_msg = None)                
+            # Did we find it now? 
+            if roi_file[hemi] is None:
+                # If not make a note - no entry for this hemi
+                missing_hemi = True
+            else:        
+                # If more than 1 match print the matches and raise error
+                if isinstance(roi_file[hemi], list):
+                    print(f'Multiple matches for {this_roi} in {roi_dir}')
+                    print(roi_file[hemi])
+                    raise ValueError
+        if need_both_hemis and missing_hemi:
+            print(f'Missing ROI in one hemisphere')
+            print(roi_file)
             raise ValueError
-        if isinstance(roi_file['rh'], list):
-            print(f'Multiple matches for {this_roi} in {roi_dir}')
-            print(roi_file['rh'])
-            raise ValueError
-
 
         LR_bool = []
         for i,hemi in enumerate(['lh', 'rh']):
-            with open(roi_file[hemi]) as f:
-                contents = f.readlines()            
-            idx_str = [contents[i].split(' ')[0] for i in range(2,len(contents))]
-            idx_int = [int(idx_str[i]) for i in range(len(idx_str))]
-            val_str = [contents[i].split(' ')[-1].split('\n')[0] for i in range(2,len(contents))]
-            val_int = [int(float(val_str[i])) for i in range(len(val_str))]
+            if roi_file[hemi] is None:
+                idx_int = []
+            else:
+                with open(roi_file[hemi]) as f:
+                    contents = f.readlines()            
+                idx_str = [contents[i].split(' ')[0] for i in range(2,len(contents))]
+                idx_int = [int(idx_str[i]) for i in range(len(idx_str))]
+                # val_str = [contents[i].split(' ')[-1].split('\n')[0] for i in range(2,len(contents))]
+                # val_int = [int(float(val_str[i])) for i in range(len(val_str))]
+
             if do_bool:
                 this_bool = np.zeros(n_verts[i], dtype=int)
                 this_bool[idx_int] = True
-            else:
-                this_bool = np.zeros(n_verts[i], dtype=bool)
-                this_bool[idx_int] = val_int
+            # else:
+            #     this_bool = np.zeros(n_verts[i], dtype=bool)
+            #     this_bool[idx_int] = val_int
             if do_not:            
                 this_bool = ~this_bool
 

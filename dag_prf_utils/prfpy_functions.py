@@ -284,7 +284,8 @@ class Prf1T1M(object):
             self.params_dd['aulcsf'] = ncsf_calculate_aulcsf(
                 self.params_dd['width_r'],
                 self.params_dd['SFp'],
-                self.params_dd['CSp'],                
+                self.params_dd['CSp'],    
+                self.params_dd['width_l'],            
             )
 
         # Convert to PD           

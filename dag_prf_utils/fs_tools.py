@@ -4,10 +4,7 @@ import matplotlib as mpl
 from datetime import datetime
 import os
 opj = os.path.join
-# try:
-#     from nibabel.freesurfer.io import write_morph_data
-# except ImportError:
-#     raise ImportError('Error importing nibabel... Not a problem unless you want to use FSMaker')
+
 from dag_prf_utils.utils import *
 from dag_prf_utils.plot_functions import *
 
@@ -20,18 +17,16 @@ class FSMaker(object):
     Will create a curv file in subjects freesurfer dir, and load it a specific colormap 
     saved as the relevant command
     '''
-    def __init__(self, sub, fs_dir=os.environ['SUBJECTS_DIR']):
+    def __init__(self, sub, fs_dir=os.environ['SUBJECTS_DIR'], output_dir=[]):
         
         self.sub = sub        
         self.fs_dir = fs_dir        # Where the freesurfer files are        
         self.sub_surf_dir = opj(fs_dir, sub, 'surf')
         self.sub_label_dir = opj(fs_dir, sub, 'label')
-        self.custom_surf_dir = opj(self.sub_surf_dir, 'custom')
-        # if not os.path.exists(self.custom_surf_dir):
-        #     print('making a custom dir')
-        #     os.mkdir(self.custom_surf_dir)        
         n_vx = dag_load_nverts(self.sub, self.fs_dir)
         self.n_vx = {'lh':n_vx[0], 'rh':n_vx[1]}
+        #
+        self.custom_surf_dir = opj(self.sub_surf_dir, 'custom')
         self.overlay_str = {}
         self.open_surf_cmds = {}
         self.surf_list = []
@@ -42,6 +37,10 @@ class FSMaker(object):
         surf_name       str             what are we calling the file
 
         '''
+        if not os.path.exists(self.custom_surf_dir):
+            print('making a custom dir')
+            os.mkdir(self.custom_surf_dir)        
+
         exclude_as_nan = kwargs.get("exclude_as_nan", False) # Set masked values to NAN
         data_mask = kwargs.get('data_mask', np.ones_like(data, dtype=bool))
         # Load colormap properties: (cmap, vmin, vmax)

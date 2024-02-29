@@ -9,8 +9,11 @@ opj = os.path.join
 from dag_prf_utils.utils import *
 from dag_prf_utils.plot_functions import *
 from dag_prf_utils.mesh_format import *
+try:
+    import plotly.graph_objects as go
+except:
+    print('No plotly')
 
-import plotly.graph_objects as go
 try: 
     from dash import Dash, dcc, html, Input, Output, State
     import dash

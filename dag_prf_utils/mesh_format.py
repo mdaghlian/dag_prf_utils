@@ -9,23 +9,218 @@ opj = os.path.join
 from dag_prf_utils.utils import *
 from dag_prf_utils.plot_functions import *
 
+def dag_plotly_eye(el, az, zoom):
+    # x = zoom*np.cos(np.radians(el))*np.cos(np.radians(az))
+    # y = zoom*np.cos(np.radians(el))*np.sin(np.radians(az))
+    # z = zoom*np.sin(np.radians(el))
 
-def dag_srf_to_ply(srf_file, rgb_vals=None, hemi=None, values=None, incl_rgb=True, **kwargs):
+    x = zoom*np.cos(np.deg2rad(el))*np.cos(np.deg2rad(az))
+    y = zoom*np.cos(np.deg2rad(el))*np.sin(np.deg2rad(az))
+    z = zoom*np.sin(np.deg2rad(el))    
+    # fig.update_layout(scene_camera=dict(eye=dict(x=x, y=y, z=z)))
+    # return dict(
+    #     eye=dict(x=x, y=y, z=z),        
+    #     )
+    return x,y,z
+
+def dag_find_border_vx(roi_bool, mesh_info, return_type='bool'):
     '''
-    dag_srf_to_ply
-    Convert srf file to .ply
-    
+    Find those vx which are on a border... 
     '''
-    x_offset = kwargs.get('x_offset', None)
+    roi_idx = np.where(roi_bool)[0] # Which vx inside ROI
+    # Which faces have only 2 vx inside ROI?
+    in_face_x = {} 
+    for face_x in ['i', 'j', 'k']:
+        in_face_x[face_x] = np.isin(mesh_info[face_x], roi_idx) * 1.0
+    border_faces = (in_face_x['i'] + in_face_x['j'] + in_face_x['k']) >0
+    border_faces &= (in_face_x['i'] + in_face_x['j'] + in_face_x['k']) <= 2
+    border_vx = []
+    for face_x in ['i', 'j', 'k']:                    
+        border_vx.append(
+            mesh_info[face_x][(border_faces * in_face_x[face_x])==1]
+        )
+    border_vx = np.concatenate(border_vx)
+    border_vx = np.unique(border_vx) # Unique
+
+    if return_type=='bool':
+        border_vx_out = np.zeros_like(roi_bool)
+        border_vx_out[border_vx] = True
+    elif return_type=='idx':
+        border_vx_out = border_vx
+    elif return_type=='coord':
+        border_vx_out = [
+            mesh_info['x'][border_vx], 
+            mesh_info['y'][border_vx], 
+            mesh_info['z'][border_vx],                    
+            ]
+        
+    return border_vx_out
     
+
+def dag_find_border_vx_in_order(roi_bool, mesh_info, return_coords=False):
+    outer_edge_list = dag_get_roi_border_edge(roi_bool, mesh_info)
+    border_vx = dag_order_edges(outer_edge_list)
+    if not return_coords:
+        return border_vx
+    border_vx = sum(border_vx, []) # flatten list
+    border_vx_coords = [
+        mesh_info['x'][border_vx], 
+        mesh_info['y'][border_vx], 
+        mesh_info['z'][border_vx],                    
+    ]
+    return border_vx_coords
+
+
+def dag_get_roi_border_edge(roi_bool, mesh_info):
+    '''
+    Find those vx which are on a border... 
+    '''
+    roi_idx = np.where(roi_bool)[0]
+    in_face_x = {}
+    for face_x in ['i', 'j', 'k']:
+        in_face_x[face_x] = np.isin(mesh_info[face_x], roi_idx) * 1.0
+    f_w_outer_edge = (in_face_x['i'] + in_face_x['j'] + in_face_x['k']) == 2
+    f_w_outer_edge = np.where(f_w_outer_edge)[0]
+    ij_faces_match = (in_face_x['i'][f_w_outer_edge] + in_face_x['j'][f_w_outer_edge])==2
+    jk_faces_match = (in_face_x['j'][f_w_outer_edge] + in_face_x['k'][f_w_outer_edge])==2
+    ki_faces_match = (in_face_x['k'][f_w_outer_edge] + in_face_x['i'][f_w_outer_edge])==2
+
+    ij_faces_match = f_w_outer_edge[ij_faces_match]
+    jk_faces_match = f_w_outer_edge[jk_faces_match]
+    ki_faces_match = f_w_outer_edge[ki_faces_match]
+    
+    outer_edge_list = []
+    # ij
+    outer_edge_list.append(
+        np.vstack([mesh_info['i'][ij_faces_match],mesh_info['j'][ij_faces_match]]),
+    )
+    # jk
+    outer_edge_list.append(
+        np.vstack([mesh_info['j'][jk_faces_match],mesh_info['k'][jk_faces_match]]),
+    )
+    # ki     
+    outer_edge_list.append(
+        np.vstack([mesh_info['k'][ki_faces_match],mesh_info['i'][ki_faces_match]]),
+    )    
+    # for face in ij_faces_match:
+    #     outer_edge_list.append([
+    #         mesh_info['i'][face]
+    #     ])
+    outer_edge_list = np.hstack(outer_edge_list).T
+    return outer_edge_list
+
+def dag_order_edges(edges):
+    unique_vx = list(np.unique(edges.flatten()))
+
+    # Step 1: Create an adjacency list
+    adjacency_list = {}
+    for i_edge in range(edges.shape[0]):
+        u, v = edges[i_edge,0],edges[i_edge,1]
+        if u not in adjacency_list:
+            adjacency_list[u] = []
+        if v not in adjacency_list:
+            adjacency_list[v] = []
+        adjacency_list[u].append(v)
+        adjacency_list[v].append(u)
+
+    # Step 2: Choose a starting vertex
+    start_vertex = list(adjacency_list.keys())[0]
+
+    # There may be more than one closed path... (e.g., V2v V2d)
+    set_unordered = set(unique_vx)
+    ordered_list_multi = []
+    set_ordered = set(sum(ordered_list_multi, [])) # flatten list and make it a set
+    missing_vx = list(set_unordered - set_ordered)
+    while len(missing_vx)!=0:
+        start_vertex = missing_vx[0]
+        ordered_list = dag_traverse_graph(start_vertex, adjacency_list)
+        ordered_list_multi.append(ordered_list)
+        set_ordered = set(sum(ordered_list_multi, [])) # flatten list and make it a set
+        missing_vx = list(set_unordered - set_ordered)
+
+    # OPTION: Convert ordered list to edge list
+    # ordered_edges = [(ordered_list[i], ordered_list[(i + 1) % len(ordered_list)]) for i in range(len(ordered_list))]
+
+
+    return ordered_list_multi#np.array(ordered_list)
+
+
+def dag_traverse_graph(start_vertex, adjacency_list):
+    # Step 3 and 4: Traverse the graph and build the ordered list
+    ordered_list = []
+    stack = [start_vertex]
+    visited = set()
+
+    while stack:
+        current_vertex = stack.pop()
+        if current_vertex not in visited:
+            visited.add(current_vertex)
+            ordered_list.append(current_vertex)
+
+            # Visit neighbors in reverse order to maintain loop direction
+            stack.extend(reversed(adjacency_list[current_vertex]))
+    return ordered_list
+
+# ************************************************************************
+
+def dag_mesh_slice(mesh_info, **kwargs):
+    vx_to_remove = np.zeros_like(mesh_info['x'], dtype=bool)
+    for b in ['min', 'max']:
+        for c in ['x', 'y', 'z']:
+            this_bc = kwargs.get(f'{b}_{c}', None)
+            if this_bc is None:
+                continue
+            if b=='min':
+                vx_to_remove |= mesh_info[c]<this_bc
+            elif b=='max':
+                vx_to_remove |= mesh_info[c]>this_bc
+    if vx_to_remove.sum()==0:
+        print('No vx to mask')
+        return mesh_info
+    elif vx_to_remove.all():
+        print('Removing everything...')
+        return None
+    else:
+        print(f'{vx_to_remove.sum()} to remove')
+
+    # Create a mapping from old vx to new ones
+    
+    old_vx_idx = np.arange(mesh_info['x'].shape[0])
+    old_vx_idx = old_vx_idx[~vx_to_remove]
+    new_vx_idx = np.arange(old_vx_idx.shape[0])
+    vx_map = dict(zip(old_vx_idx, new_vx_idx))
+
+    
+    # face mask 
+    face_to_remove = np.zeros_like(mesh_info['i'], dtype=bool)
+    vx_to_remove_idx = np.where(vx_to_remove)[0]
+    for c in ['i', 'j', 'k']:
+        face_to_remove |= np.isin(mesh_info[c], vx_to_remove_idx)        
+
+    new_mesh_info = {}
+    # Sort out vertices
+    for c in mesh_info.keys():
+        if c in ['i', 'j', 'k']:
+            continue
+        new_mesh_info[c] = mesh_info[c][~vx_to_remove].copy()
+
+    # Sort out faces 
+    for c in ['i', 'j', 'k']:
+        # 1 remove faces 
+        face_w_old_idx = mesh_info[c][~face_to_remove].copy()
+        # 2 fix the ids.. 
+        new_mesh_info[c] = np.array([vx_map[old_idx] for old_idx in face_w_old_idx])
+
+    return new_mesh_info
+
+
+
+# ************************************************************************
+def dag_ply_write(mesh_info, diplay_rgb, hemi=None, values=None, incl_rgb=True, x_offset=None):
+    n_vx = mesh_info['x'].shape[0]
+    n_f = mesh_info['i'].shape[0]
     if not isinstance(values, np.ndarray):
-        values = np.ones(rgb_vals.shape[0])
-    with open(srf_file) as f:
-        srf_lines = f.readlines()
-    n_vx, n_f = srf_lines[1].split(' ')
-    n_vx, n_f = int(n_vx), int(n_f)
-    # Also creating an rgb str...
-    rgb_str = ''    
+        values = np.ones(n_vx)
     # Create the ply string -> following this format
     ply_str  = f'ply\n'
     ply_str += f'format ascii 1.0\n'
@@ -41,337 +236,29 @@ def dag_srf_to_ply(srf_file, rgb_vals=None, hemi=None, values=None, incl_rgb=Tru
     ply_str += f'element face {n_f}\n'
     ply_str += f'property list uchar int vertex_index\n'
     ply_str += f'end_header\n'
-
+    
     if x_offset is None:
         if hemi==None:
             x_offset = 0
         elif 'lh' in hemi:
             x_offset = -50
         elif 'rh' in hemi:
-            x_offset = 50
-    # Cycle through the lines of the obj file and add vx + coords + rgb
-    v_idx = 0 # Keep count of vertices     
-    for i in range(2,len(srf_lines)):
-        # If there is a '.' in the line then it is a vertex
-        if '.' in srf_lines[i]:
-            split_coord = srf_lines[i][:-2:].split(' ')                        
-            coord_count = 0
-            for coord in split_coord:
-                if ('.' in coord) & (coord_count==0): # Add x_offset
-                    ply_str += f'{float(coord)+x_offset:.6f} ' 
-                    coord_count += 1
-                elif '.' in coord:
-                    ply_str += f'{float(coord):.6f} ' 
-                    coord_count += 1                    
-            
-            # Now add the value of the parameters...
-            # Now add the rgb values. as integers between 0 and 255
-            if incl_rgb:
-                ply_str += f' {int(rgb_vals[v_idx][0]*255)} {int(rgb_vals[v_idx][1]*255)} {int(rgb_vals[v_idx][2]*255)} '
-                # ply_str += f' {rgb_vals[v_idx][0]} {rgb_vals[v_idx][1]} {rgb_vals[v_idx][2]} '
+            x_offset = 50    
+    for i_vx in range(n_vx):
+        ply_str += f'{float(mesh_info["x"][i_vx])+x_offset:.6f} ' 
+        ply_str += f'{float(mesh_info["y"][i_vx]):.6f} ' 
+        ply_str += f'{float(mesh_info["z"][i_vx]):.6f} ' 
+        if incl_rgb:
+            ply_str += f' {diplay_rgb[i_vx,0]} {diplay_rgb[i_vx,1]} {diplay_rgb[i_vx,2]} '
 
-            # RGB str
-            rgb_str += f'{int(rgb_vals[v_idx][0]*255)},{int(rgb_vals[v_idx][1]*255)},{int(rgb_vals[v_idx][2]*255)}\n'
-            
-            ply_str += f'{values[v_idx]:.3f}\n'
-            v_idx += 1 # next vertex
-        
-        else:
-            # After we finished all the vertices, we need to define the faces
-            # -> these are triangles (hence 3 at the beginning of each line)
-            # -> the index of the three vx is given
-            # For some reason the index is 1 less in .ply files vs .obj files
-            # ... i guess like the difference between matlab and python
-            ply_str += '3 ' 
-            split_idx = srf_lines[i][:-1:].split(' ')
-            ply_str += f'{int(split_idx[0])} '
-            ply_str += f'{int(split_idx[1])} '
-            ply_str += f'{int(split_idx[2])} '
-            ply_str += '\n'
-    return ply_str, rgb_str
-
-def dag_fs_to_ply(sub, data, fs_dir=os.environ['SUBJECTS_DIR'], mesh_name='inflated', out_dir=None, under_surf='curv', **kwargs):
-    '''
-    fs_to_ply:
-        Create surface files for a subject, and a specific parameter.                        
-        
-    Arguments:
-        sub             str             e.g. 'sub-01': Name of subject in freesurfer file
-        data            np.ndarray      What are we plotting on the surface? 1D array, same length as the number of vertices in subject surface.
-        fs_dir          str             Location of the Freesurfer folder
-        mesh_name      str              What kind of surface are we plotting on? e.g., pial, inflated...
-                                                            Default: inflated
-        under_surf      str             What is going underneath the data (e.g., what is the background)?
-                                        default is curv. Could also be thick, (maybe smoothwm) 
-        out_dir         str             Where to put the mesh files which are made
-    **kwargs:
-        data_mask       bool array      Mask to hide certain values (e.g., where rsquared is not a good fit)
-        data_alpha      np.ndarray      Alpha values for plotting. Where this is specified the undersurf is used instead
-        surf_name       str             Name of your surface e.g., 'polar', 'rsq'
-                                        *subject name is added to front of surf_name
-
-        ow              bool            Overwrite? If surface with same name already exists, do you want to overwrite it?
-                                        Default True
-        *** COLOR
-        cmap            str             Which colormap to use https://matplotlib.org/stable/gallery/color/colormap_reference.html
-                                                            Default: viridis
-        vmin            float           Minimum value for colormap
-                                                            Default: 10th percentile in data
-        vmax            float           Max value for colormap
-                                                            Default: 90th percentile in data
-                                                                
-        return_ply_file bool            Return the ply files which have been made
-        
-    '''
-    return_ply_file = kwargs.get('return_ply_file', False)    
-    # Get path to subjects surface file
-    path_to_sub_surf = opj(fs_dir, sub, 'surf')
-    # Check name for surface:
-    surf_name = kwargs.get('surf_name', None)
-    if surf_name==None:
-        print('surf_name not specified, using sub+date')
-        surf_name = sub + '_' + datetime.now().strftime('%Y-%m-%d_%H-%M')
-    else:
-        surf_name = sub + '_' + surf_name + '_' + mesh_name
-            
-    if not os.path.exists(out_dir):
-        os.mkdir(out_dir)
-
-    overwrite = kwargs.get('ow', True)
-    print(f'File to be named: {surf_name}')        
-    if (os.path.exists(opj(out_dir, f'lh.{surf_name}'))) & (not overwrite) :
-        print(f'{surf_name} already exists for {sub}, not overwriting surf files...')
-        return
-
-    if (os.path.exists(opj(path_to_sub_surf, f'lh.{surf_name}'))): 
-        print(f'Overwriting: {surf_name} for {sub}')
-    else:
-        print(f'Writing: {surf_name} for {sub}')
-
-    # load the undersurf file values, & get number of vx in each hemisphere
-    n_hemi_vx = []
-    us_values = []
-    for ih in ['lh.', 'rh.']:
-        with open(opj(path_to_sub_surf,f'{ih}{under_surf}'), 'rb') as h_us:
-            h_us.seek(15)
-            this_us_vals = np.fromstring(h_us.read(), dtype='>f4').byteswap().newbyteorder()
-            us_values.append(this_us_vals)
-            n_hemi_vx.append(this_us_vals.shape[0])    
-    n_vx = np.sum(n_hemi_vx)
-    us_values = np.concatenate(us_values)    
-    # Load mask for data to be plotted on surface
-    data_mask = kwargs.get('data_mask', np.ones(n_vx, dtype=bool))
-    data_alpha = kwargs.get('data_alpha', np.ones(n_vx))
-    data_alpha[~data_mask] = 0 # Make values to be masked have alpha=0
-    if not isinstance(data, np.ndarray):
-        print(f'Just creating {under_surf} file..')
-        surf_name = under_surf
-        data = np.zeros(n_vx)
-        data_alpha = np.zeros(n_vx)        
+        ply_str += f'{values[i_vx]:.3f}\n'
     
-    # Load colormap properties: (cmap, vmin, vmax)
-    cmap = kwargs.get('cmap', 'viridis')    
-    vmin = kwargs.get('vmin', np.nanmin(data[data_mask]))
-    vmax = kwargs.get('vmin', np.nanmax(data[data_mask]))
+    for i_f in range(n_f):
+        ply_str += f'3 {int(mesh_info["i"][i_f])} {int(mesh_info["j"][i_f])} {int(mesh_info["k"][i_f])} \n'
 
-    # vmin = kwargs.get('vmin', np.percentile(data[data_mask], 10))
-    # vmax = kwargs.get('vmax', np.percentile(data[data_mask], 90))
-
-
-    # Create rgb values mapping from data to cmap
-    data_cmap = dag_get_cmap(cmap)
-    # data_cmap = mpl.cm.__dict__[cmap] 
-    data_norm = mpl.colors.Normalize()
-    data_norm.vmin = vmin
-    data_norm.vmax = vmax
-    data_col = data_cmap(data_norm(data))
-    
-    # CHANGE FOR NAN
-    # data[~data_mask] = 0
-
-    # Create rgb values mapping from under_surf to grey cmap
-    us_cmap = mpl.cm.__dict__['Greys'] # Always grey underneath
-    us_norm = mpl.colors.Normalize()
-    if under_surf=='curv':
-        us_norm.vmin = -1 # Always -1,1 range...
-        us_norm.vmax = 1  
-    elif under_surf=='thickness':        
-        us_norm.vmin = 0 # Always -1,1 range...
-        us_norm.vmax = 5          
-    us_col = us_cmap(us_norm(us_values))
-
-
-    display_rgb = (data_col * data_alpha[...,np.newaxis]) + \
-        (us_col * (1-data_alpha[...,np.newaxis]))
-    # Save the mesh files first as .asc, then .srf, then .obj
-    # Then save them as .ply files, with the display rgb data for each voxel
-    ply_file_2open = []
-    for ih in ['lh.', 'rh.']:
-        mesh_name_file = opj(path_to_sub_surf, f'{ih}{mesh_name}')
-        asc_surf_file = opj(out_dir,f'{ih}{surf_name}.asc')
-        srf_surf_file = opj(out_dir,f'{ih}{surf_name}.srf')
-        # 
-        obj_surf_file = opj(out_dir,f'{ih}{surf_name}.obj')    
-        rgb_surf_file = opj(out_dir,f'{ih}{surf_name}_rgb.csv')    
-        #
-        ply_surf_file = opj(out_dir,f'{ih}{surf_name}.ply')
-        ply_file_2open.append(ply_surf_file)
-        # [1] Make asc file using freesurfer mris_convert command:
-        os.system(f'mris_convert {mesh_name_file} {asc_surf_file}')
-        # [2] Rename .asc as .srf file to avoid ambiguity (using "brainders" conversion tool)
-        os.system(f'mv {asc_surf_file} {srf_surf_file}')
-        
-        # *** EXTRA BITS... ****
-        # ***> keeping the option because maybe some people like .obj files?
-        # [*] Use brainder script to create .obj file    
-        # os.system(f'{srf2obj_path} {srf_surf_file} > {obj_surf_file}')
-        # ^^^  ^^^
-
-        # [4] Use my script to write a ply file...
-        if ih=='lh.':
-            # ply_str = obj_to_ply(obj_surf_file, display_rgb[:n_hemi_vx[0],:]) # lh
-            ply_str, rgb_str = dag_srf_to_ply(srf_surf_file, display_rgb[:n_hemi_vx[0],:], hemi=ih, values=data, **kwargs) # lh
-        else:
-            # ply_str = obj_to_ply(obj_surf_file, display_rgb[n_hemi_vx[0]:,:]) # rh
-            ply_str, rgb_str = dag_srf_to_ply(srf_surf_file, display_rgb[n_hemi_vx[0]:,:],hemi=ih, values=data, **kwargs) # rh
-        # Now save the ply file
-        ply_file_2write = open(ply_surf_file, "w")
-        ply_file_2write.write(ply_str)
-        ply_file_2write.close()       
-
-        # Remove the srf file
-        os.system(f'rm {srf_surf_file}')
-
-        # # Now save the rgb csv file
-        # rgb_file_2write = open(rgb_surf_file, "w")
-        # rgb_file_2write.write(rgb_str)
-        # rgb_file_2write.close()       
-        
-    # Return list of .ply files to open...
-    if return_ply_file:
-        return ply_file_2open
-
-def dag_srf_to_ply_basic(srf_file, hemi=None):
-    '''dag_srf_to_ply_basic
-    Convert srf file to .ply (not including values, or rgb stuff)
-    
-    '''
-    with open(srf_file) as f:
-        srf_lines = f.readlines()
-    n_vx, n_f = srf_lines[1].split(' ')
-    n_vx, n_f = int(n_vx), int(n_f)
-    # Create the ply string -> following this format
-    ply_str  = f'ply\n'
-    ply_str += f'format ascii 1.0\n'
-    ply_str += f'element vertex {n_vx}\n'
-    ply_str += f'property float x\n'
-    ply_str += f'property float y\n'
-    ply_str += f'property float z\n'
-    ply_str += f'property float quality\n'
-    ply_str += f'element face {n_f}\n'
-    ply_str += f'property list uchar int vertex_index\n'
-    ply_str += f'end_header\n'
-
-    if hemi==None:
-        x_offset = 0
-    elif 'lh' in hemi:
-        x_offset = -50
-    elif 'rh' in hemi:
-        x_offset = 50
-    # Cycle through the lines of the obj file and add vx + coords + rgb
-    v_idx = 0 # Keep count of vertices     
-    for i in range(2,len(srf_lines)):
-        # If there is a '.' in the line then it is a vertex
-        if '.' in srf_lines[i]:
-            split_coord = srf_lines[i][:-2:].split(' ')                        
-            coord_count = 0
-            for coord in split_coord:
-                if ('.' in coord) & (coord_count==0): # Add x_offset
-                    ply_str += f'{float(coord)+x_offset:.6f} ' 
-                    coord_count += 1
-                elif '.' in coord:
-                    ply_str += f'{float(coord):.6f} ' 
-                    coord_count += 1                    
-            ply_str += f'{0:.3f}\n'
-            v_idx += 1 # next vertex
-        
-        else:
-            # After we finished all the vertices, we need to define the faces
-            # -> these are triangles (hence 3 at the beginning of each line)
-            # -> the index of the three vx is given
-            # For some reason the index is 1 less in .ply files vs .obj files
-            # ... i guess like the difference between matlab and python
-            ply_str += '3 ' 
-            split_idx = srf_lines[i][:-1:].split(' ')
-            ply_str += f'{int(split_idx[0])} '
-            ply_str += f'{int(split_idx[1])} '
-            ply_str += f'{int(split_idx[2])} '
-            ply_str += '\n'
     return ply_str
 
-def dag_calculate_rgb_vals(data, **kwargs):
-    '''
-    dag_calculate_rgb_vals:
-        Create an array of RGB values to plot on the surface
 
-        
-    Arguments:
-        data            np.ndarray      What are we plotting on the surface? 1D array, same length as the number of vertices in subject surface.
-
-    **kwargs:
-        under_surf      np.ndarray      What is underlay of the data? i.e., going underneath the data (e.g., what is the background)?
-                                        could be the curvature...
-        data_mask       bool array      Mask to hide certain values (e.g., where rsquared is not a good fit)
-        data_alpha      np.ndarray      Alpha values for plotting. Where this is specified the undersurf is used instead
-
-        *** COLOR
-        cmap            str             Which colormap to use https://matplotlib.org/stable/gallery/color/colormap_reference.html
-                                                            Default: viridis
-        vmin            float           Minimum value for colormap
-                                                            Default: 10th percentile in data
-        vmax            float           Max value for colormap
-                                                            Default: 90th percentile in data
-                                                                
-    '''
-    under_surf = kwargs.get('under_surf', np.zeros((data.shape[0], 4)))
-    data_mask = kwargs.get('data_mask', np.ones_like(data, dtype=bool))
-    data_alpha = kwargs.get('data_alpha', np.ones_like(data, dtype=float))
-    data_alpha[~data_mask] = 0 # Make values to be masked have alpha = 0
-
-    # Load colormap properties: (cmap, vmin, vmax)
-    cmap = kwargs.get('cmap', 'viridis')    
-    vmin = kwargs.get('vmin', np.percentile(data[data_mask], 10))
-    vmax = kwargs.get('vmax', np.percentile(data[data_mask], 90))
-    
-    # Create rgb values mapping from data to cmap
-    data_cmap = dag_get_cmap(cmap)
-    # data_cmap = mpl.cm.__dict__[cmap] 
-    data_norm = mpl.colors.Normalize()
-    data_norm.vmin = vmin
-    data_norm.vmax = vmax
-    data_col = data_cmap(data_norm(data))
-
-    # Create a color bar...
-    plt.close('all')
-    plt.colorbar(mpl.cm.ScalarMappable(norm=data_norm, cmap=data_cmap))
-    data_col_bar = plt.gcf()
-    rgb_vals = (data_col * data_alpha[...,np.newaxis]) + \
-        (under_surf * (1-data_alpha[...,np.newaxis]))
-    
-    return rgb_vals, data_col_bar
-
-def dag_get_rgb_str(rgb_vals):
-    '''
-    dag_srf_to_ply
-    Convert srf file to .ply
-    
-    '''
-    n_vx = rgb_vals.shape[0]
-    # Also creating an rgb str...
-    rgb_str = ''    
-    for v_idx in range(n_vx):
-        rgb_str += f'{rgb_vals[v_idx][0]},{rgb_vals[v_idx][1]},{rgb_vals[v_idx][2]}\n'
-    return rgb_str    
 
 def dag_vtk_to_ply(vtk_file):
     '''

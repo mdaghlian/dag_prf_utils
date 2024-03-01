@@ -17,16 +17,19 @@ class FSMaker(object):
     Will create a curv file in subjects freesurfer dir, and load it a specific colormap 
     saved as the relevant command
     '''
-    def __init__(self, sub, fs_dir=os.environ['SUBJECTS_DIR'], output_dir=[]):
+    def __init__(self, sub, fs_dir=os.environ['SUBJECTS_DIR']):
         
         self.sub = sub        
         self.fs_dir = fs_dir        # Where the freesurfer files are        
         self.sub_surf_dir = opj(fs_dir, sub, 'surf')
         self.sub_label_dir = opj(fs_dir, sub, 'label')
-        n_vx = dag_load_nverts(self.sub, self.fs_dir)
-        self.n_vx = {'lh':n_vx[0], 'rh':n_vx[1]}
         #
         self.custom_surf_dir = opj(self.sub_surf_dir, 'custom')
+        n_vx, n_faces = dag_load_nfaces_nverts(self.sub, self.fs_dir)
+        self.n_vx = {'lh':n_vx[0], 'rh':n_vx[1]}
+        self.total_n_vx = sum(n_vx)
+        self.n_faces = {'lh':n_faces[0], 'rh':n_faces[1]}
+        self.total_n_faces = sum(n_faces)
         self.overlay_str = {}
         self.open_surf_cmds = {}
         self.surf_list = []

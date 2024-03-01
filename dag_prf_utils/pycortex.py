@@ -595,7 +595,7 @@ class PyctxMaker(GenMeshMaker):
         self.curv = cortex.db.get_surfinfo(self.sub)
 
     def add_vertex_obj(self, data, surf_name, **kwargs):
-        display_rgb,cmap_dict = self.get_display_rgb(
+        display_rgb,cmap_dict = self.return_display_rgb(
             data, 
             return_cmap_dict=True, 
             unit_rgb=False, 

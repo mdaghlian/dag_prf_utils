@@ -622,6 +622,27 @@ def dag_file_name_check(file_name, filt_incl, filt_excl):
         file_match = False
     return file_match
 
+def dag_merge_dicts(a: dict, b: dict, max_depth=3, path=[]):
+    '''
+    Merge two dictionaries recursively
+    Adapted from
+    https://stackoverflow.com/questions/7204805/how-to-merge-dictionaries-of-dictionaries    
+    '''    
+    merged_dict = a.copy()  # Create a copy of dictionary 'a' to start with
+    for key in b:
+        if key in merged_dict:
+            if isinstance(merged_dict[key], dict) and isinstance(b[key], dict):
+                if len(path) < max_depth:
+                    # Recursively merge dictionaries
+                    merged_dict[key] = dag_merge_dicts(merged_dict[key], b[key], max_depth, path + [str(key)])
+                else:
+                    raise Exception('Max depth reached at ' + '.'.join(path + [str(key)]))
+            elif merged_dict[key] != b[key]:
+                raise Exception('Conflict at ' + '.'.join(path + [str(key)]))
+        else:
+            merged_dict[key] = b[key]  # If the key is not in 'merged_dict', add it
+    return merged_dict    
+
 
 # ***********************************************************************************************************************
 # STUFF COPIED FROM NIBABEL
@@ -643,7 +664,7 @@ def dag_fread3(fobj):
     return (b1 << 16) + (b2 << 8) + b3
 
 
-def dag_read_fs_mesh(filepath):
+def dag_read_fs_mesh(filepath, return_xyz=False):
     """Adapted from https://github.com/nipy/nibabel/blob/master/nibabel/freesurfer/io.py
     ...
     Read a triangular format Freesurfer surface mesh.
@@ -680,25 +701,25 @@ def dag_read_fs_mesh(filepath):
         'coords' : coords,
         'faces' : faces,        
     }
-    return mesh_info
+    if return_xyz:
+        new_mesh_info = {}                                    
+        new_mesh_info['x']= mesh_info['coords'][:,0]
+        new_mesh_info['y']= mesh_info['coords'][:,1]
+        new_mesh_info['z']= mesh_info['coords'][:,2]
+        new_mesh_info['i']= mesh_info['faces'][:,0]
+        new_mesh_info['j']= mesh_info['faces'][:,1]
+        new_mesh_info['k']= mesh_info['faces'][:,2]        
+        mesh_info = new_mesh_info
 
-def dag_merge_dicts(a: dict, b: dict, max_depth=3, path=[]):
-    '''
-    Merge two dictionaries recursively
-    Adapted from
-    https://stackoverflow.com/questions/7204805/how-to-merge-dictionaries-of-dictionaries    
-    '''    
-    merged_dict = a.copy()  # Create a copy of dictionary 'a' to start with
-    for key in b:
-        if key in merged_dict:
-            if isinstance(merged_dict[key], dict) and isinstance(b[key], dict):
-                if len(path) < max_depth:
-                    # Recursively merge dictionaries
-                    merged_dict[key] = dag_merge_dicts(merged_dict[key], b[key], max_depth, path + [str(key)])
-                else:
-                    raise Exception('Max depth reached at ' + '.'.join(path + [str(key)]))
-            elif merged_dict[key] != b[key]:
-                raise Exception('Conflict at ' + '.'.join(path + [str(key)]))
-        else:
-            merged_dict[key] = b[key]  # If the key is not in 'merged_dict', add it
-    return merged_dict    
+    return mesh_info
+# ***
+
+
+def dag_read_fs_curv_file(curv_file):
+    with open(curv_file, 'rb') as h_us:
+        h_us.seek(15)
+        curv_vals = np.fromstring(h_us.read(), dtype='>f4').byteswap().newbyteorder()
+    return curv_vals
+
+# ***********************************************************************************************
+

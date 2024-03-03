@@ -5,6 +5,15 @@ export DPU_SETUP_FILE="${DPU_SETUP_DIR}/dpu_setup_full"  # copy to some location
 export DPU_REPO_DIR=$(dirname ${DPU_SETUP_DIR})         # point to repo (arbitrary)
 export DPU_PATH_HOME=$(dirname ${DPU_REPO_DIR})         # point to folder for temp/logs files
 
+function check_function {
+  FN=`type -t $1`
+
+  if [[ -z ${FN} ]]; then
+    echo 1
+  else
+    echo 0
+  fi
+}
 # source helper functions
 if [[ $1 == "setup" ]]; then
 

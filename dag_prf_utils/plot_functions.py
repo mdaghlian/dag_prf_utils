@@ -24,6 +24,7 @@ default_pol_bounds = np.linspace(-np.pi, np.pi, 13)
 def dag_cmap_plotter(cmap, vmin=None, vmax=None, title='', **kwargs):
     ax = kwargs.get('ax', None)
     return_ax = kwargs.get('return_ax', False)
+    return_fig = kwargs.get('return_fig', False)
     if ax is None:
         figsize = kwargs.get('figsize', (10,2))
         fig, ax = plt.subplots(figsize=figsize)        
@@ -36,6 +37,9 @@ def dag_cmap_plotter(cmap, vmin=None, vmax=None, title='', **kwargs):
     dag_update_ax_fontsize(ax, 20)
     if return_ax:
         return ax
+    if return_fig:
+        return fig
+    
 
 def dag_add_dag_cmaps_to_mpl():
     # Add to matplotlib cmaps?

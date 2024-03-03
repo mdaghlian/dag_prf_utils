@@ -4,6 +4,7 @@ import matplotlib as mpl
 from datetime import datetime
 import os
 from scipy.spatial import ConvexHull
+import subprocess
 opj = os.path.join
 
 from dag_prf_utils.utils import *
@@ -33,7 +34,7 @@ class GenMeshMaker(FSMaker):
     '''
     def __init__(self, sub, fs_dir=os.environ['SUBJECTS_DIR'], output_dir=[], **kwargs):
         super().__init__(sub, fs_dir)
-        self.output_dir = output_dir
+        self.output_dir = os.path.abspath(output_dir)
         if isinstance(output_dir, str):
             if not os.path.exists(self.output_dir):
                 os.mkdir(self.output_dir)                  
@@ -46,17 +47,16 @@ class GenMeshMaker(FSMaker):
         # [2] Load under surf values
         self.us_values = {}
         self.us_cols = {}
-        if self.do_fs_setup:
-            for us in ['curv', 'thickness']:
-                self.us_values[us] = self._return_fs_curv_vals_both_hemis(curv_name=us, return_type='concat',)            
-                if us=='curv':
-                    vmin,vmax=-1,1
-                elif us=='thickness':
-                    vmin,vmax=0,5
-                self.us_cols[us] = self._data_to_rgb(
-                    data=self.us_values[us], 
-                    vmin=vmin, vmax=vmax, cmap='Greys_r',
-                )
+        for us in ['curv', 'thickness']:
+            self.us_values[us] = self._return_fs_curv_vals_both_hemis(curv_name=us, return_type='concat',)            
+            if us=='curv':
+                vmin,vmax=-1,1
+            elif us=='thickness':
+                vmin,vmax=0,5
+            self.us_cols[us] = self._data_to_rgb(
+                data=self.us_values[us], 
+                vmin=vmin, vmax=vmax, cmap='Greys_r',
+            )
         # ... other
         self.ply_files = {}
     # *****************************************************************
@@ -308,13 +308,16 @@ class GenMeshMaker(FSMaker):
     # *****************************************************************
     # *****************************************************************
     # .ply code: make .ply files. Can be used with meshlab or blender
-    def add_ply_surface(self, data, surf_name, **kwargs):
+    def add_ply_surface(self, data=None, surf_name=None, **kwargs):
         '''
         Arguments:
         Specify surf_name to save
         '''
         overwrite = kwargs.get('ow', True)
         mesh_name = kwargs.get('mesh_name', 'inflated')
+        incl_rgb = kwargs.get('incl_rgb', True)
+        if data is None:
+            incl_rgb = False
         print(f'File to be named: {surf_name}')        
         if (os.path.exists(opj(self.output_dir, f'lh.{surf_name}'))) & (not overwrite) :
             print(f'{surf_name} already exists for {self.sub}, not overwriting surf files...')
@@ -326,34 +329,39 @@ class GenMeshMaker(FSMaker):
             print(f'Writing: {surf_name} for {self.sub}')
 
         # Load mask for data to be plotted on surface
-        display_rgb = self.return_display_rgb(data=data, split_hemi=True, unit_rgb=False, **kwargs)        
+        if incl_rgb: 
+            display_rgb = self.return_display_rgb(data=data, split_hemi=True, unit_rgb=False, **kwargs)        
+        else:
+            display_rgb = {'lh':None, 'rh':None}
+
         # Save the mesh files first as .asc, then .srf, then .obj
         # Then save them as .ply files, with the display rgb data for each voxel
         ply_file_2open = []
         for hemi in ['lh', 'rh']:
             ply_str = dag_ply_write(
-                mesh_info=self.mesh_info[mesh_name][hemi], 
-                diplay_rgb=display_rgb[hemi], 
-                hemi=hemi, values=data, 
-                incl_rgb=True
+                mesh_info   = self.mesh_info[mesh_name][hemi], 
+                diplay_rgb  = display_rgb[hemi], 
+                hemi        = hemi, 
+                values      = data, 
+                incl_rgb    = incl_rgb,
                 )
             ply_surf_file = opj(self.output_dir,f'{hemi}.{surf_name}.ply')
             with open(ply_surf_file, 'w') as file:
-                file.write(ply_str)                
+                file.write(ply_str)   
             ply_file_2open.append(ply_surf_file)
         # Return list of .ply files to open...
         self.ply_files[surf_name] = [
             ply_file_2open
         ]
     def open_ply_mlab(self):
-        os.chdir(self.output_dir)
         # mlab_cmd = 'meshlab '
         mlab_cmd = '/data1/projects/dumoulinlab/Lab_members/Marcus/programs/MeshLab2022.02-linux/AppRun '
         for key in self.ply_files.keys():            
             mlab_cmd += f' lh.{key}.ply'
             mlab_cmd += f' rh.{key}.ply'
-
-        os.system(mlab_cmd)
+        # os.chdir(self.output_dir)
+        # os.system(mlab_cmd)
+        subprocess.run(mlab_cmd, shell=True, cwd=self.output_dir)
 
 
     # *****************************************************************

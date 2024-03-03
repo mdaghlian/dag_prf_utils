@@ -2,6 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib as mpl
 from datetime import datetime
+import subprocess
 import os
 opj = os.path.join
 
@@ -92,10 +93,11 @@ class FSMaker(object):
 
     def open_fs_surface(self, surf_name=[], **kwargs):
         # surf name - which surface to load...        
-        os.chdir(self.sub_surf_dir) # move to freeview dir        
         fs_cmd = self.write_fs_cmd(surf_name=surf_name, **kwargs)
         # self.save_fs_cmd(surf_name, **kwargs)        
-        os.system(fs_cmd)        
+        # os.chdir(self.sub_surf_dir) # move to freeview dir        
+        # os.system(fs_cmd)     
+        subprocess.run(fs_cmd, shell=True, cwd=self.sub_surf_dir)   
 
     def open_fs_surface_FIND(self, include=[], exclude=[], **kwargs):
         surf_name = dag_find_file_in_folder(
@@ -105,11 +107,11 @@ class FSMaker(object):
         )
         print(surf_name)
         # surf name - which surface to load...        
-        os.chdir(self.sub_surf_dir) # move to freeview dir        
         fs_cmd = self.write_fs_cmd(surf_name=surf_name, **kwargs)
         # self.save_fs_cmd(surf_name, **kwargs)        
-        os.system(fs_cmd)        
-
+        # os.chdir(self.sub_surf_dir) # move to freeview dir        
+        # os.system(fs_cmd)        
+        subprocess.run(fs_cmd, shell=True, cwd=self.sub_surf_dir)
 
     def save_fs_cmd(self, surf_name=[], **kwargs):
         cmd_name = kwargs.get('cmd_name', f'{surf_name}_cmd.txt')
@@ -208,7 +210,6 @@ class FSMaker(object):
             auto_trim = 'autotrim ' if ss_trim else ' '
             scr_shot_flag = f"--ss {full_ss_file} {ss_mag} {auto_trim}" #{int(ss_trim)} "
             # print(scr_shot_flag)
-            # bloyp
         else:
             scr_shot_flag = ""
 

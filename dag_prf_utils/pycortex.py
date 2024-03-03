@@ -576,7 +576,13 @@ class PyctxMaker(GenMeshMaker):
         if not isinstance(self.sub, str):
             raise ValueError("Please specify the subject ID as per pycortex' filestore naming")
         self.subject =self.sub
-        self.ctx_path = opj(cortex.database.default_filestore, self.sub)
+        self.ctx_path = kwargs.get('ctx_path', None)
+        if self.ctx_path is not None:
+            set_ctx_path(self.ctx_path)
+            self.ctx_path = opj(self.ctx_path, self.subject)
+        else:
+            self.ctx_path = opj(cortex.database.default_filestore, self.sub)
+        print(self.ctx_path)
         self.vertex_dict = {} 
         self.cmap_dict = {}
         if not os.path.exists(self.ctx_path):
@@ -599,7 +605,8 @@ class PyctxMaker(GenMeshMaker):
             data, 
             return_cmap_dict=True, 
             unit_rgb=False, 
-            **kwargs)     
+            **kwargs)  
+            
         self.vertex_dict[surf_name] = cortex.VertexRGB(
             red=display_rgb[:,0], 
             green=display_rgb[:,1], 

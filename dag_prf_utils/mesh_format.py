@@ -303,3 +303,17 @@ def dag_vtk_to_ply(vtk_file):
     # save the ply file
     ply_file = vtk_file.replace('.vtk', '.ply')
     dag_str2file(filename=ply_file, txt=ply_str)
+
+
+def dag_get_rgb_str(rgb_vals):
+    '''
+    dag_srf_to_ply
+    Convert srf file to .ply
+    
+    '''
+    n_vx = rgb_vals.shape[0]
+    # Also creating an rgb str...
+    rgb_str = ''    
+    for v_idx in range(n_vx):
+        rgb_str += f'{rgb_vals[v_idx][0]},{rgb_vals[v_idx][1]},{rgb_vals[v_idx][2]}\n'
+    return rgb_str    

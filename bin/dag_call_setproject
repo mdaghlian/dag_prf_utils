@@ -1,0 +1,40 @@
+#!/usr/bin/env bash
+#$ -S /usr/bin/env bash
+#$ -cwd
+#$ -j Y
+#$ -V
+
+#---------------------------------------------------------------------------------------------------------
+# Create help text
+function Usage {
+    cat <<USAGE
+
+---------------------------------------------------------------------------------------------------
+call_setproject COPIED FROM JHeij 
+
+Quickly update the setup-file to a new project and refresh the environment. Updates the 
+PROJECT-variable in the setup-file.
+
+Args:
+  <project_name>  name of the project to set
+
+Usage:
+  dag_call_setproject <project_name>
+
+Example:
+  call_setproject VE-pRF
+
+---------------------------------------------------------------------------------------------------
+
+USAGE
+    exit 1
+}
+
+if [[ $# -lt 1 ]] ; then
+  Usage >&2
+  exit 1
+fi
+
+DPU_SETUP=${DPU_DIR_SCRIPTS}/shell/dpu_setup_full
+sed -i "s|PROJECT=.*|PROJECT=\"${1}\"|" ${DPU_SETUP}
+echo "now run \"source ~/.bash_profile\""

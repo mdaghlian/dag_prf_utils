@@ -1,0 +1,190 @@
+#!/usr/bin/env python
+#$ -j Y
+#$ -cwd
+#$ -V
+
+## qsub eg...
+import sys
+import getopt
+import os
+opj = os.path.join
+
+import numpy as np
+import nibabel as nib
+
+from dag_prf_utils.utils import *
+from dag_prf_utils.stats import *
+
+def main(argv):
+    '''
+    ---------------------------
+    * find .gii files in a path which match a certain pattern
+    * concatenate over hemispheres. save mean .npy
+    * save mean_EPI files
+    * average over all those matching and convert to psc
+    * if possible find an RSQ ceiling... (split half)
+    
+    Args:
+        --gii_file      folder with .gii files
+        --npy_file      where to put the numpy files
+        --mean_name     name of output files (i.e., mean_name.npy)
+        --include       comma separated list. things to include in file search
+        --exclude       [optional] comma separated list for things to exclude in file search        
+        --detrend       [optional] number of trends to remove. Default is false (just does PSC)
+    ---------------------------
+    '''
+    search_excl = None
+    detrend  = False
+    mean_name = 'mean-prf'
+    for i,arg in enumerate(argv):
+        if '--gii_file' in arg:
+            gii_file = argv[i+1]
+        elif '--npy_file' in arg:
+            npy_file = argv[i+1]        
+        elif '--mean_name' in arg:
+            mean_name = argv[i+1]                
+        elif '--include' in arg:
+            search_incl = argv[i+1]
+            if ',' in search_incl:
+                search_incl = search_incl.split(',')
+            if not isinstance(search_incl, list):
+                search_incl = [search_incl]
+        elif '--exclude' in arg:
+            search_excl = argv[i+1]
+            if ',' in search_excl:
+                search_excl = search_excl.split(',')
+            if not isinstance(search_excl, list):
+                search_excl = [search_excl]
+        elif '--detrend' in arg:
+            detrend = int(argv[i+1])
+    # [1] Load the data:
+    if not os.path.exists(npy_file):
+        os.makedirs(npy_file)
+
+    # -> get the list of files for this subject & task
+    lh_gii_files = dag_find_file_in_folder(
+        ['.gii', 'hemi-L', *search_incl],
+        gii_file,
+        exclude = search_excl,
+        return_msg=None,
+    )
+        
+    rh_gii_files = dag_find_file_in_folder(
+        ['.gii', 'hemi-R', *search_incl],
+        gii_file,
+        exclude = search_excl,
+        return_msg=None,
+    )
+    if lh_gii_files is None or rh_gii_files is None:
+        print(f'No .gii files found ')
+        print(lh_gii_files)
+        print(rh_gii_files)
+        return
+    if not isinstance(lh_gii_files, list):
+        lh_gii_files = [lh_gii_files]
+        rh_gii_files = [rh_gii_files]
+    # Should be the same length
+    assert len(lh_gii_files)==len(rh_gii_files)
+    # Sort them (by run number)
+    lh_gii_files.sort()
+    rh_gii_files.sort()
+    # -> load them
+    lh_gii_data = []
+    rh_gii_data = []
+    for i_file in range(len(lh_gii_files)):
+        # ASSUMING LH and RH have same naming...
+        new_file_name = lh_gii_files[i_file].split('/')[-1]
+        new_file_name = new_file_name.replace('hemi-L', 'BOTH-HEMI')
+        new_file_name = new_file_name.replace('.gii', '')
+        new_file_name = new_file_name.replace('.func', '')
+
+        lh_run_data = nib.load(lh_gii_files[i_file])
+        lh_run_cat = [i.data for i in lh_run_data.darrays]
+        lh_run_cat = np.vstack(lh_run_cat).T # [n_vx, n_tr]
+        lh_gii_data.append(lh_run_cat.copy())
+
+        rh_run_data = nib.load(rh_gii_files[i_file])
+        rh_run_cat = [i.data for i in rh_run_data.darrays]
+        rh_run_cat = np.vstack(rh_run_cat).T # [n_vx, n_tr]
+        rh_gii_data.append(rh_run_cat.copy())
+
+        
+    # -> average the runs...
+    mean_lh_gii_data = np.mean(np.stack(lh_gii_data, axis=0), axis=0).astype(np.float32)
+    mean_rh_gii_data = np.mean(np.stack(rh_gii_data, axis=0), axis=0).astype(np.float32)
+    
+    # -> save the averaged runs [combined] (.npy format)
+    mean_lr_gii_data = np.concatenate([mean_lh_gii_data, mean_rh_gii_data], axis=0)
+    mean_lr_gii_out_file = opj(npy_file, f'{mean_name}_lr_raw.npy')
+    np.save(mean_lr_gii_out_file, mean_lr_gii_data)
+    print(f'Saved {mean_lr_gii_out_file}')
+
+    # *** Calculate the mean epi (average across runs & time) *** 
+    # -> useful for checking for veins and signal dropout later...
+    lr_mean_epi = np.mean(mean_lr_gii_data, axis=1)
+    # -> save it
+    mean_epi_file = opj(npy_file, f'{mean_name}_lr_mean_epi.npy')
+    np.save(mean_epi_file, lr_mean_epi)
+
+    # -> save the averaged runs in PSC [combined] (.npy format)
+    # ** percent signal change **
+    lr_gii_data_psc = dag_dct_detrending(mean_lr_gii_data, detrend)
+
+    # sanity check that the mean is 0
+    print('Sanity check...')
+    print(np.mean(lr_gii_data_psc, axis=1))
+    print(np.mean(mean_lr_gii_data, axis=1).shape)
+
+    lr_gii_out_psc_file = opj(npy_file, f'{mean_name}_lr_psc.npy')
+    np.save(lr_gii_out_psc_file, lr_gii_data_psc)
+    print(f'Saved {lr_gii_out_psc_file}')        
+
+    # *** Also calculate the noise ceiling ***
+    # -> useful for seeing how good our fits are later...
+    # -> Split into 2 halves (half the runs)
+    n_runs = len(lh_gii_files)
+    if n_runs==1:
+        print('Only 1 run, therefore cannot do noise ceiling')
+        return
+    n_runs_half = int(n_runs / 2)
+    lh_gii_data_half1 = np.mean(np.stack(lh_gii_data[:n_runs_half], axis=0), axis=0)
+    lh_gii_data_half2 = np.mean(np.stack(lh_gii_data[n_runs_half:], axis=0), axis=0)
+    rh_gii_data_half1 = np.mean(np.stack(rh_gii_data[:n_runs_half], axis=0), axis=0)
+    rh_gii_data_half2 = np.mean(np.stack(rh_gii_data[n_runs_half:], axis=0), axis=0)
+    # -> combine them
+    lr_half1_gii_data = np.concatenate([lh_gii_data_half1, rh_gii_data_half1], axis=0)
+    lr_half2_gii_data = np.concatenate([lh_gii_data_half2, rh_gii_data_half2], axis=0)
+
+    # -> convert to percent signal change 
+    psc_lr_half1 = dag_dct_detrending(lr_half1_gii_data, detrend)
+    psc_lr_half2 = dag_dct_detrending(lr_half2_gii_data, detrend)
+
+    # -> calculate the correlation between runs (for each voxel)
+    # should be an array of size [n_vx]
+    # only do it for vx that are not std = 0 
+    std_mask = psc_lr_half1.std(axis=1) != 0
+    std_mask &= psc_lr_half2.std(axis=1) != 0
+    std_idx = np.where(std_mask)[0]
+    run_correlation = np.zeros(psc_lr_half1.shape[0])
+
+    i_count = 0
+    for i in std_idx:
+        run_correlation[i] = np.corrcoef(psc_lr_half1[i, :], psc_lr_half2[i, :])[0,1]
+        i_count += 1
+        if i_count % 5000 == 0:
+            print(f'Calculating correlation for voxel {i_count} of {psc_lr_half1.shape[0]}')
+
+    print(f'Run correlation: {run_correlation}')
+    # -> save it
+    run_correlation_file = opj(npy_file, f'{mean_name}_lr_run_correlation.npy')
+    np.save(run_correlation_file, run_correlation)
+    print(f'Saved {run_correlation_file}')            
+
+
+
+
+
+
+
+if __name__ == "__main__":
+    main(sys.argv[1:])    

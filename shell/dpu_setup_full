@@ -82,7 +82,7 @@ if [[ $1 == "setup" ]]; then
 
     env_name="dag_prf"
     if [[ -z `conda info --envs | grep ${env_name}` ]]; then
-      ${cmd} env create --file ${DPU_REPO_DIR}/shell/environment.yml --prefix=~/.conda/envs/${env_name}
+      ${cmd} env create --file ${DPU_REPO_DIR}/environment.yml --prefix=~/.conda/envs/${env_name}
       if [[ $? -ne 0 ]]; then
         echo "ERROR: conda install from environment.yml file did not complete"
         exit 1

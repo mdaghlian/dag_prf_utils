@@ -1,9 +1,40 @@
 import numpy as np
 from scipy.stats import t
 
+from scipy.fftpack import dct, idct
+
+def dag_dct_detrending(ts_au, n_trend_to_remove):
+    if n_trend_to_remove is not False:
+        # Preparation: - demean
+        ts_au_centered = ts_au - np.mean(ts_au, axis=1, keepdims=True)
+
+        # [2] Get the DCT of the time series (specify axis=1 to do it over time)
+        dct_values = dct(ts_au_centered, type=2, norm='ortho', axis=1)
+
+        # [3] Remove the coefficients specified
+        dct_values[:,:n_trend_to_remove] = 0
+
+        # [4] Get the inverse DCT
+        ts_detrend = idct(dct_values, type=2, norm='ortho', axis=1)
+        # print(np.mean(ts_detrend, axis=1))
+        # [5] Add the mean back
+        ts_detrend = ts_detrend + np.mean(ts_au, axis=1, keepdims=True)
+    else:
+        ts_detrend = ts_au.copy()
+    # [6] PSC
+    ts_detrend = dag_psc(ts_detrend)
+
+    return ts_detrend
+
+def dag_psc(ts_in):
+    ts_out = (ts_in - np.mean(ts_in, axis=1, keepdims=True)) / np.mean(ts_in, axis=1, keepdims=True) * 100
+    nan_rows = np.isnan(ts_out).any(axis=1)
+    ts_out[nan_rows, :] = 0
+    return ts_out
+
 def dag_paired_ttest(x, y, **kwargs):
     '''dag_paired_ttest
-    simple paired t-test, with option to override to correct for voxel-to-surface upsampling
+    sim#ple paired t-test, with option to override to correct for voxel-to-surface upsampling
     
     ow_n                    Specify the 'n' by hand
     upsampling_factor       n will be obtained from len(x)/upsampling factor 

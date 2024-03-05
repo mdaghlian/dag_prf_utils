@@ -377,8 +377,9 @@ class PyctxSaver():
         print(f"index {index}")#: {pars}")
 
         return
-    def to_static(self, *args, **kwargs):
-        filename = f"{self.base_name}_desc-static"
+    def to_static(self, filename=None, *args, **kwargs):
+        if filename is None:
+            filename = f"{self.base_name}_desc-static"        
         cortex.webgl.make_static(
             opj(self.fig_dir, filename),
             self.data_dict,

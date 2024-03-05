@@ -392,6 +392,96 @@ class FSMaker(object):
             os.remove(surf)
         
         return
+# ************************************************************************
+# ************************************************************************
+# import os
+# opj = os.path.join
+# import numpy as np
+# import nibabel as nib
+# import scipy.io as sio
+
+# from dag_prf_utils.mesh_maker import *
+
+# derivatives_dir = '/data1/projects/dumoulinlab/Lab_members/Marcus/projects/csf/derivatives'
+# MrVista_dir = opj(derivatives_dir, 'MrVista_copies')
+# ROI_bin_dir = opj(derivatives_dir, 'ROI_binary_masks')
+# freesurfer_dir = opj(derivatives_dir, 'freesurfer')
+
+# class FSMaker_vol(FSMaker):
+#     '''Builds on FSMaker to add volume-based functions'''
+    
+#     def __init__(self, sub, fs_dir=freesurfer_dir, anat_file=[], **kwargs):
+#         super().__init__(sub, fs_dir=fs_dir, **kwargs)
+#         self.sub_id = sub.split('-')[1]        
+#         self.anat_file = anat_file
+#         # find the gray 
+#         # self.sub_vol = nib.load(self.sub_vol_file)
+
+#     def add_surf_from_vol(self, data, surf_name, mrvista_coords=None, **kwargs):
+#         '''add_surf_from_vol
+#         Create a freesurfer surface for displaying data
+#         data            array of length voxels
+#         surf_name       what we call the surface
+#         mrvista_coords  where the voxels are going...
+        
+#         '''        
+#         vmin = kwargs.get('vmin', data.min())
+#         # [1] Load the anatomical volume
+#         new_vol = nib.load(self.sub_vol_file)
+#         new_vol_data = new_vol.get_fdata() # The data itself (3D array)
+#         # [2] Fill the volume with nan
+#         new_vol_data.fill(np.nan)
+#         # [3] Fill the volume with the data
+#         # -> note orientation for mr_vista_coords...
+#         # atm, I'm just flipping the x and z axis
+#         # note also that the coordinates are 1-indexed
+#         max_x = new_vol_data.shape[0]
+#         max_z = new_vol_data.shape[2]
+#         new_vol_data[
+#             max_x - (self.mr_coords[2,:]-1), 
+#             (self.mr_coords[1,:]-1), 
+#             max_z - (self.mr_coords[0,:]-1),
+#             ] = data
+#         # [4] Save the new volume
+#         new_vol = nib.Nifti1Image(new_vol_data, new_vol.affine, new_vol.header)
+#         tmp_vol_name = opj(self.custom_surf_dir, f'{surf_name}.nii.gz')
+#         nib.save(new_vol, tmp_vol_name)
+#         print(f'Saved tmp file {tmp_vol_name}')
+#         # [5] Project to surface
+#         # -> input volume
+#         vol_in = tmp_vol_name
+#         hemi_list = ['lh', 'rh']
+#         data_for_surf = []
+#         # Loop over hemispheres
+#         for hemi in hemi_list:
+#             # -> output surface            
+#             surf_out_name = f"{hemi}.{surf_name}.mgh"            
+#             surf_out = opj(self.custom_surf_dir, surf_out_name)            
+#             # -> call mri_vol2surf
+#             # source is the volume, out is the surface
+#             # project to fiducial
+#             # output should be the same range of values (i.e., floats)            
+#             fs_cmd = f'mri_vol2surf --mov {vol_in} --out {surf_out} '
+#             fs_cmd+= f'--surf fiducial --hemi {hemi} --regheader {self.sub} '
+#             # interpolate the data (not using nearest, using trilinear)
+#             # fs_cmd+= f'--interp trilinear '# --projfrac 0.5'
+#             os.system(fs_cmd)            
+#             tmp_hemi_data = nib.load(surf_out)
+#             data_for_surf.append(tmp_hemi_data.get_fdata())
+#             # Remove the tmp file
+#             os.remove(surf_out)
+#         # Remove the tmp file
+#         os.remove(tmp_vol_name)
+#         data_for_surf = np.concatenate(data_for_surf, axis=0)
+#         # Turn nans into 1 less than vmin 
+#         data_for_surf[np.isnan(data_for_surf)] = vmin - 1
+
+#         # Now call add surface in the traditional way..
+#         self.add_surface(
+#             data=data_for_surf,
+#             surf_name=surf_name,
+#             **kwargs
+#         )
         
 
 

@@ -476,7 +476,7 @@ def dag_visual_field_scatter(dot_x, dot_y, **kwargs):
         fig = plt.gcf()
         cb = fig.colorbar(scat_col, ax=ax)        
     dag_add_ecc_pol_lines(ax, ecc_bounds=ecc_bounds, pol_bounds=pol_bounds)    
-    dag_add_ax_basics(ax, **kwargs)    
+    dag_add_ax_basics(**kwargs)    
     return ax, cb
 
 def dag_plot_bin_line(ax, X,Y, bin_using, **kwargs):    

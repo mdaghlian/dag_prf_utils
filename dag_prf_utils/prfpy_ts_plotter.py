@@ -18,29 +18,40 @@ class TSPlotter(Prf1T1M):
         self.real_ts = real_ts
         self.prfpy_model = prfpy_model
         self.prfpy_stim = prfpy_model.stimulus
-        self.TR_in_s = kwargs.get('TR_in_s', 1.5)
+        self.TR_in_s = self.prfpy_stim.TR
         if self.incl_rsq:
-            self.pred_idx = -1
+            self.pred_idx = -1 # When generating predictions don't include the last value (i.e., rsq)
         else:
             self.pred_idx = None
     
+    def return_preds(self, idx=None):
+        if idx is None:
+            idx = np.ones(self.n_vox, dtype=bool)
+        preds = self.prfpy_model.return_prediction(*list(self.prf_params_np[idx,:self.pred_idx]))
+        return preds
+        
+
     def prf_ts_plot(self, idx, time_pt=None, return_fig=False, **kwargs):
         if self.model in ['gauss', 'css']:
             self.gauss1_ts_plot(idx, return_fig, **kwargs)
         elif self.model in ['norm', 'dog']:
-            self.gauss2_ts_plot(idx, time_pt, return_fig)
+            self.gauss2_ts_plot(idx, time_pt, return_fig, **kwargs)        
+        
 
     def real_ts_plot(self, ax, idx, **kwargs):
         this_real_ts = self.real_ts[idx,:]
         ts_x = np.arange(this_real_ts.shape[-1]) * self.TR_in_s
-        ax.plot(ts_x,this_real_ts, ':^', color='k', markersize=5, lw=2, alpha=.5)
+        ax.plot(ts_x,this_real_ts, ':^', color='k', markersize=5, lw=2, alpha=.5)        
 
-
-    def gauss1_ts_plot(self, idx, return_fig=False):
+    def gauss1_ts_plot(self, idx, return_fig=False, **kwargs):
         '''
         Plot time series for PRF model with 1 RF 
         > i.e., gauss, css
         '''
+        do_dm = kwargs.pop('do_dm', True)
+        ts_kwargs = dict(linestyle='-', markersize=10, lw=5, alpha=.5)
+        ts_kwargs_in = kwargs.get('ts_kwargs', {})
+        ts_kwargs.update(ts_kwargs_in)
 
         # [1] 
         this_rf = np.rot90(gauss2D_iso_cart(
@@ -66,12 +77,24 @@ class TSPlotter(Prf1T1M):
         param_text = self.make_prf_str(idx)
         ax[1].text(1.35, 0.20, param_text, transform=ax[1].transAxes, fontsize=10, va='center', ha='right', family='monospace',)
         # ts
-        ax[1].plot(ts_x,this_pred_ts, '-', markersize=10, lw=5, alpha=.5) 
+        ax[1].plot(ts_x,this_pred_ts, **ts_kwargs) 
         if self.real_ts is not None:
             self.real_ts_plot(ax=ax[1], idx=idx)
         ax[1].plot((0,ts_x[-1]), (0,0), 'k')   
-
+        # Do dm?
         dag_update_fig_fontsize(fig, 15)        
+        if do_dm:
+            ax[1].set_xticks(np.arange(ts_x[0], ts_x[-1],15))            
+            dag_add_dm_to_ts(                
+                fig, 
+                ax=ax[1], 
+                dm=self.prfpy_stim.design_matrix, 
+                TR_in_s=self.TR_in_s, 
+                dx_axs=2, do_time=False, 
+                move_y=-.1
+                )
+            ax[1].set_xticks(np.arange(ts_x[0], ts_x[-1],50))            
+            # ax[1].set_xticks([])
         if return_fig:
             return fig
         return

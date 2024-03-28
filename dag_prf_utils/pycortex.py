@@ -17,12 +17,56 @@ import matplotlib.pyplot as plt
 import matplotlib as mpl
 from typing import Union
 opj = os.path.join
-
+from PIL import Image
+import uuid
 
 from dag_prf_utils.mesh_maker import *
+from dag_prf_utils.cmap_functions import *
+from dag_prf_utils.utils import *
 '''
-STOLEN FROM JHEIJ LINESCANNING!!!
+MUCH STOLEN FROM JHEIJ LINESCANNING!!!
 '''
+def dag_add_cmap_to_pyctx(cmap_name, pyctx_cmap_name=None):
+    pyc_cmap_path = cortex.config.get('webgl', 'colormaps')
+    if pyctx_cmap_name is None:
+        pyctx_cmap_name = 'pyc_'+cmap_name
+    # do reverse version
+    for direction in ['fw', 'bw']:
+        if direction=='fw':
+            cname_1D = pyctx_cmap_name + '_1D.png'
+            cname_2D = pyctx_cmap_name + '_2D.png'
+            cval_arr = np.linspace(0,1,256)
+        elif direction=='bw':
+            cname_1D = pyctx_cmap_name + '_1D_r.png'
+            cname_2D = pyctx_cmap_name + '_2D_r.png'
+            cval_arr = np.linspace(1,0,256)
+        # [1] 1D version
+        oneD_rgba = dag_get_col_vals(cval_arr, cmap_name)
+        oneD_rgba = oneD_rgba[np.newaxis,:,:]
+        oneD_rgba = (oneD_rgba * 255).astype(np.uint8)
+        image = Image.fromarray(oneD_rgba)
+        image.save(opj(pyc_cmap_path, cname_1D))
+        # [2] 2D version
+        twoD_arr, alpha_val = np.meshgrid(cval_arr, np.linspace(1,0,256))
+        twoD_rgba = dag_get_col_vals(twoD_arr,cmap_name)
+        # -> enter alpha levels
+        # twoD_rgba[:,-1,:-1] = 0
+        # alpha_val[alpha_val<.5] = 0
+        # alpha_val[alpha_val>.5] = 1
+        twoD_rgba[:,:,-1] = alpha_val
+        idx,idy = np.where(alpha_val==0)
+        # set anywhere with 0 alpha to be black
+        twoD_rgba[idx,idy,0] = 0
+        twoD_rgba[idx,idy,1] = 0
+        twoD_rgba[idx,idy,2] = 0
+
+        twoD_rgba = (twoD_rgba * 255).astype(np.uint8)
+        plt.figure()
+        plt.imshow(twoD_rgba)
+        # twoD_rgba[:,:,-1] = .1
+        image = Image.fromarray(twoD_rgba)
+        image.save(opj(pyc_cmap_path, cname_2D))
+
 
 def set_ctx_path(p=None, opt="update"):
     """set_ctx_path
@@ -40,7 +84,10 @@ def set_ctx_path(p=None, opt="update"):
     ----------
     >>> set_ctx_path('path/to/pycortex', "update")
     """
-
+    # ************************
+    cortex.options.config.set('basic', 'filestore', p)
+    cortex.db.filestore=p
+    # ************************
     if p == None:
         p = os.environ.get('CTX')
 
@@ -76,6 +123,14 @@ def set_ctx_path(p=None, opt="update"):
         else:
             return config.get("basic", "filestore")
 
+def get_ctx_path():
+    usercfg = cortex.options.usercfg
+    config = configparser.ConfigParser()
+    config.read(usercfg)
+    return config.get("basic", "filestore")
+
+
+    
 # def create_ctx_transform # **** DELETED 
 
 def get_thickness(thick_map, hemi, vertex_nr):
@@ -112,35 +167,6 @@ def get_thickness(thick_map, hemi, vertex_nr):
     # invert value as it is a negative value
     return abs(val)
 
-def get_ctxsurfmove(subject):
-
-    """get_ctxsurfmove
-
-    Following `cortex.freesurfer` module: "Freesurfer uses FOV/2 for center, let's set the surfaces to use the magnet isocenter", where it adds an offset of [128, 128, 128]*the affine of the files in the 'anatomicals'-folder. This short function fetches the offset added given a subject name, assuming a correct specification of the cortex-directory as defined by 'database.default_filestore, cx_subject'
-
-    Parameters
-    ----------
-    subject: str
-        subject name (e.g., sub-xxx)
-
-    Returns
-    ----------
-    numpy.ndarray
-        (4,4) array representing the inverse of the shift induced when importing a `FreeSurfer` subject into `Pycortex`
-
-    Example
-    ----------
-    >>> offset = get_ctxsurfmove("sub-001")
-    """
-
-    anat = opj(cortex.database.default_filestore, subject, 'anatomicals', 'raw.nii.gz')
-    if not os.path.exists(anat):
-        raise FileNotFoundError(f'Could not find {anat}')
-
-    trans = nb.load(anat).affine[:3, -1]
-    surfmove = trans - np.sign(trans) * [128, 128, 128]
-
-    return surfmove
 
 
 class PyctxSaver():
@@ -214,8 +240,8 @@ class PyctxSaver():
         specularity: int=0,
         unfold: int=1,
         azimuth: int=180,
-        altitude: int=105,
-        radius: int=163,
+        altitude: int=90,
+        radius: int=250,
         pivot: float=0,
         size: tuple=(2400,1200),
         data_name: str="occipital_inflated",
@@ -284,14 +310,19 @@ class PyctxSaver():
                 ax = self.cm_axs
             else:
                 ax = self.cm_axs[iK]
-            self.cms[key] = dag_cmap_plotter(
-                cmap=self.cms_dict[key]['cmap'], 
-                vmin=self.cms_dict[key]['vmin'], 
-                vmax=self.cms_dict[key]['vmax'], 
-                title=str(key), 
-                return_ax=True, 
-                ax=ax,
-            )
+            
+            if self.cms_dict[key] == 'pyc':
+                ax.set_title('pyc')
+                self.cms[key] = ax
+            else:
+                self.cms[key] = dag_cmap_plotter(
+                    cmap=self.cms_dict[key]['cmap'], 
+                    vmin=self.cms_dict[key]['vmin'], 
+                    vmax=self.cms_dict[key]['vmax'], 
+                    title=str(key), 
+                    return_ax=True, 
+                    ax=ax,
+                )
 
         
         # check what do to with hemispheres
@@ -378,10 +409,14 @@ class PyctxSaver():
 
         return
     def to_static(self, filename=None, *args, **kwargs):
+        output_dir = kwargs.pop('output_dir', self.fig_dir)
         if filename is None:
             filename = f"{self.base_name}_desc-static"        
+        print(f'Saving static to {opj(output_dir, filename)}')
+        print(args)
+        print(kwargs)
         cortex.webgl.make_static(
-            opj(self.fig_dir, filename),
+            opj(output_dir, filename),
             self.data_dict,
             *args,
             **kwargs)
@@ -492,15 +527,6 @@ class PyctxSaver():
                     min_max = [data_dict[key].vmin,data_dict[key].vmax]
 
                 cm_ax = axs.inset_axes(cm_inset)
-                # plotting.LazyColorbar(
-                #     cmap=data_dict[key].cmap,
-                #     vmin=min_max[0],
-                #     vmax=min_max[1], 
-                #     axs=cm_ax,
-                #     dec=self.cm_decimals,
-                #     nr=self.cm_nr,
-                #     *args,
-                #     **kwargs)
                 dag_cmap_plotter(
                     cmap=self.cms_dict[key]['cmap'], 
                     vmin=self.cms_dict[key]['vmin'], 
@@ -564,6 +590,9 @@ class PyctxSaver():
 # ****************************************
 # ****************************************
 # ****************************************
+# print(f'Assuming the unique issue in pycortex is fixed...')
+# print(f'see: https://github.com/gallantlab/pycortex/issues/341')
+# print(f'If not fixed. change fixed_unique to False in pyctxmaker')
 
 class PyctxMaker(GenMeshMaker):
 
@@ -582,16 +611,18 @@ class PyctxMaker(GenMeshMaker):
             set_ctx_path(self.ctx_path)
             self.ctx_path = opj(self.ctx_path, self.subject)
         else:
-            self.ctx_path = opj(cortex.database.default_filestore, self.sub)
+            self.ctx_path = opj(get_ctx_path(), self.sub)
         print(self.ctx_path)
         self.vertex_dict = {} 
         self.cmap_dict = {}
+        self.fixed_unique = kwargs.get('fixed_unique', False) # Have we fixed the unique issue in pycortex? 
+        self.dud = kwargs.get('dud', True)
         if not os.path.exists(self.ctx_path):
             # import subject from freesurfer (will have the same names)
             cortex.freesurfer.import_subj(
                 fs_subject=self.sub,
                 cx_subject=self.sub,
-                freesurfer_subject_dir=os.environ.get("SUBJECTS_DIR"),
+                freesurfer_subject_dir=self.fs_dir,
                 whitematter_surf='smoothwm')
         
         # reload database after import
@@ -600,22 +631,112 @@ class PyctxMaker(GenMeshMaker):
         #this provides a nice workaround for pycortex opacity issues, at the cost of interactivity    
         # Get curvature
         self.curv = cortex.db.get_surfinfo(self.sub)
+        if self.dud:
+            # Add dud at the beggining
+            self.add_vertex_obj(
+                data=np.random.rand(self.total_n_vx),
+                surf_name='dud'
+            )
 
     def add_vertex_obj(self, data, surf_name, **kwargs):
-        display_rgb,cmap_dict = self.return_display_rgb(
-            data, 
-            return_cmap_dict=True, 
-            unit_rgb=False, 
-            **kwargs)  
+        '''Add a pycortex surface to the dictionary self.vertex_dict
+        Can use the inbuild pycortex functions (Vertex2D, Vertex)
+        But sometimes that doesn't work. 
+        So added an option to do the RGB by hand (also makes colormaps more flexible)
+        The disadvantage of this is that it makes it non interactive. (i.e. cannot adjust threshold)
+        
+        
+        
+        See also 
+        Issue 1: https://github.com/gallantlab/pycortex/issues/341
+
+        TODO: add the pyc to colormaps
+        '''
+        ctx_method = kwargs.get('ctx_method', 'custom') # vertex1d, vertex2d
+        if ctx_method.lower() not in ('custom', 'vertex1d', 'vertex2d'):
+            raise Exception('ctx_method should be custom, vertex2d or vertex1d')
+        
+        pycortex_args = kwargs.get('pycortex_args', {})
+        return_vx_obj = kwargs.get('return_vx_obj', False) # Return the vertex object? Or save it to self.vertex_dict 
+
+        if ctx_method.lower()=='custom':
+            # Use custom rgb method
+            display_rgb,cmap_dict = self.return_display_rgb(
+                data, 
+                return_cmap_dict=True, 
+                unit_rgb=False, 
+                **kwargs)  
+                
+            this_vertex_dict = cortex.VertexRGB(
+                red=display_rgb[:,0], 
+                green=display_rgb[:,1], 
+                blue=display_rgb[:,2], 
+                subject=self.subject,
+                # unit_rgb=False, 
+                )     
+            this_cmap_dict = cmap_dict
+
+        else:
+            # Use either vertex1d or vertex2d        
+            data_mask = kwargs.get('data_mask', np.ones(self.total_n_vx, dtype=bool))
+            data_alpha = kwargs.get('data_alpha', np.ones(self.total_n_vx))
+            data_alpha[~data_mask] = 0 # Make values to be masked have alpha=0
+            cmap = kwargs.get('cmap', None) # 'autumnblack_alpha_2D')    
+            vmin1 = kwargs.get('vmin', np.nanmin(data[data_mask]))
+            vmax1 = kwargs.get('vmax', np.nanmax(data[data_mask]))
+            masked_value = kwargs.get('masked_value', vmin-1) # What to set values outside mask to
+            vmin2 = kwargs.get('vmin2', 0)
+            vmax2 = kwargs.get('vmax2', 1)
+            # dtype_to_set = kwargs.get('dtype_to_set', np.float32)            
+            data = data.astype(np.float32)
+            data[~data_mask] = masked_value # 
+            # data[np.isnan(data)] = 0
+            data_alpha = data_alpha.astype(np.float32)
+            # data_alpha[np.isnan(data_alpha)] = 0
+            # *** NOTE ON BUG ***
+            # if not self.fixed_unique:
+            #     print('Adding noise to dim1 and dim2 so that to prevent crashes ')
+            #     print('np.random.rand(len(data))*1e-1000')
+            #     print(f'see: https://github.com/gallantlab/pycortex/issues/341')
+            #     print('to stop this set self.fixed_unique=True')
+            #     data += np.random.rand(len(data))*1e-1000
+            #     data_alpha += np.random.rand(len(data))*1e-1000
+
+            if ctx_method.lower()=='vertex2d':
+                # Vertex 2D 
+                this_vertex_dict = cortex.Vertex2D(
+                        dim1=data, 
+                        dim2=data_alpha,
+                        cmap=cmap, 
+                        subject=self.subject,
+                        vmin=vmin1, 
+                        vmax=vmax1,                 
+                        vmin2=vmin2, 
+                        vmax2=vmax2,    
+                        **pycortex_args,
+                    )
+                # TO FIX THE "unique" pycortex ISSUE...
+                this_vertex_dict.dim1.unique_id = np.random.rand(500)
+                this_vertex_dict.dim2.unique_id = np.random.rand(500)
+                this_cmap_dict = 'pyc'
+                return
             
-        self.vertex_dict[surf_name] = cortex.VertexRGB(
-            red=display_rgb[:,0], 
-            green=display_rgb[:,1], 
-            blue=display_rgb[:,2], 
-            subject=self.subject,
-            # unit_rgb=False, 
-            )     
-        self.cmap_dict[surf_name] = cmap_dict
+            elif ctx_method.lower()=='vertex1d':
+                this_vertex_dict = cortex.Vertex(
+                    data=data, 
+                    cmap=cmap,                 
+                    subject=self.sub,
+                    vmin=vmin1, vmax=vmax1, 
+                    **pycortex_args
+                )
+                this_vertex_dict.dim1.unique_id = np.random.rand(500)
+                this_cmap_dict = 'pyc'
+        if return_vx_obj:
+            return this_vertex_dict, this_cmap_dict
+        else:
+            self.vertex_dict[surf_name] = this_vertex_dict
+            self.cmap_dict[surf_name] = this_cmap_dict
+        return 
                         
     def open(self, **kwargs):
         self.pyc = PyctxSaver(
@@ -623,14 +744,22 @@ class PyctxMaker(GenMeshMaker):
             cms_dict = self.cmap_dict,
             subject=self.sub,
             **kwargs)
+        
     def return_pyc_saver(self, **kwargs):
+        '''
+        '''
+        output_dir = kwargs.pop('output_dir', self.output_dir)
         self.pyc = PyctxSaver(
             data_dict=self.vertex_dict,
             cms_dict = self.cmap_dict,
             subject=self.sub,
+            fig_dir = output_dir,
             # viewer=False,
             **kwargs)
 
     
     def get_curv(self):
         return self.curv
+    
+    def clear_cache(self):
+        cortex.db.clear_cache(self.sub)

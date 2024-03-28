@@ -91,7 +91,7 @@ def prfpy_params_dict():
 
 def set_tc_shape (tc_in, n_timepts = 225):
     '''set_tc_shape
-    Force the timecourse to be n_timepts x n_units
+    Force the timecourse to be n_units * n_time
     '''
     # *** ALWAYS n_units * n_time
     if tc_in.shape[0] == n_timepts:

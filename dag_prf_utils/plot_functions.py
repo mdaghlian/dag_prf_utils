@@ -523,7 +523,7 @@ def dag_plot_bin_line(ax, X,Y, bin_using, **kwargs):
     do_bars = kwargs.get("do_bars", True)
     do_shade = kwargs.get("do_shade", False)
     summary_type = kwargs.get("summary_type", 'mean')
-    err_type = kwargs.get("err_type", None)
+    err_type = kwargs.get("err_type", 'std')
     # Do the binning
     X_mean = binned_statistic(bin_using, X, bins=bins, statistic=summary_type)[0]
     if do_not_bin_X:
@@ -557,7 +557,7 @@ def dag_plot_bin_line(ax, X,Y, bin_using, **kwargs):
                 **line_kwargs
                 )        
 
-    elif do_shade:
+    if do_shade:
         
         if 'pc' in err_type:            
             Y_mid = binned_statistic(bin_using, Y, bins=bins, statistic=np.median)[0]                      
@@ -572,10 +572,11 @@ def dag_plot_bin_line(ax, X,Y, bin_using, **kwargs):
             #
             X_mid_pt = binned_statistic(bin_using, X, bins=bins, statistic=np.median)[0]                      
 
-        if err_type=='mean':
+        if err_type=='std':
             Y_mid = Y_mean
             Y_lower = Y_mean - Y_std
             Y_upper = Y_mean + Y_std
+            X_mid_pt = binned_statistic(bin_using, X, bins=bins, statistic=np.median)[0]                      
 
         if do_not_bin_X:
             X_mid_pt = (bins[:-1] + bins[1:]) / 2
@@ -596,7 +597,9 @@ def dag_plot_bin_line(ax, X,Y, bin_using, **kwargs):
             Y_upper,
             alpha=0.5,
             color=line_col,            
-            label='_'        
+            label='_',
+            lw=0,
+            edgecolor=line_col,        
             )       
 
     else:
@@ -672,7 +675,7 @@ def dag_arrow_plot(ax, old_x, old_y, new_x, new_y, **kwargs):
     # aperture_rad = kwargs.get("aperture_rad", None)
     # patch_col = kwargs.get("patch_col", "k")
     arrow_col = kwargs.get("arrow_col", 'b')
-    arrow_cmap = kwargs.get("arrow_cmap", 'magma_magmarev')
+    arrow_cmap = kwargs.get("arrow_cmap", 'hsv')
     arrow_kwargs = {
         'scale'     : 1,                                    # ALWAYS 1 -> exact pt to exact pt 
         'width'     : kwargs.get('arrow_width', .01),       # of shaft (relative to plot )
@@ -747,7 +750,7 @@ def dag_scatter(X,Y,ax=None, **kwargs):
     if ax is None:
         ax = plt.gca()
     do_kde = kwargs.get('do_kde', False)    
-    do_id_line = kwargs.get('do_id_line', False)
+    do_id_line = kwargs.pop('do_id_line', False)
     do_ow = kwargs.get('ow', False)
     do_scatter = kwargs.get('do_scatter', True)
     do_line = kwargs.get('do_line', False)
@@ -930,7 +933,8 @@ def dag_add_axis_to_xtick(fig, ax, dx_axs=1, **kwargs):
         inv = fig.transFigure.inverted()      # Invert the figure transform
     # Get the x tick values
     xticks = ax.get_xticks()                             
-    ymin, _ = kwargs.get('ymin', ax.get_ylim())          # Get the y limits
+    ymin, _ = kwargs.pop('ymin', ax.get_ylim())          # Get the y limits
+    move_y = kwargs.pop('move_y', 0)
     xmin, xmax = ax.get_xlim()                           # Get the x limits
     pix_coord = ax.transData.transform([(xtick, ymin) for xtick in xticks])     # Transform the x tick values to pixel coordinates
     fig_coord = inv.transform(pix_coord)                                        # Transform the pixel coordinates to figure coordinates
@@ -944,7 +948,7 @@ def dag_add_axis_to_xtick(fig, ax, dx_axs=1, **kwargs):
             continue
         new_ax_pos = [
             fig_coord[i_tick,0]-dx_fig/2,
-            fig_coord[i_tick,1]-(dx_fig*1), #  - i_tick/10, # option to stagger the axes with i_tick
+            fig_coord[i_tick,1]-(dx_fig*1) + move_y, #  - i_tick/10, # option to stagger the axes with i_tick
             dx_fig,
             dx_fig
             ]                   # Calculate the position of the new axis
@@ -970,12 +974,17 @@ def dag_add_dm_to_x(dm, xtick_out, xtick_axs, xtick_axs_idx=None, **kwargs):
         None
     '''
     kwargs['cmap'] = kwargs.get('cmap', 'Greys')
-    kwargs['alpha'] = kwargs.get('alpha', 0.3)
+    kwargs['alpha'] = kwargs.get('alpha', 1)
+    kwargs['vmin'] = kwargs.get('vmin', 0)
+    kwargs['vmax'] = kwargs.get('vmax', 1)
+    kwargs['extent'] = kwargs.get('extent', [-5,5,-5,5])
+    TR_in_s = kwargs.pop('TR_in_s', 1)
+    do_time = kwargs.pop('do_time', True)
     
     max_t = dm.shape[-1]
     for i,xtick in enumerate(xtick_out): 
         if xtick_axs_idx is None:
-            dm_idx = int(xtick)
+            dm_idx = int(xtick/TR_in_s)
         else:
             dm_idx = xtick_axs_idx[i]
         if dm_idx>max_t:
@@ -983,22 +992,33 @@ def dag_add_dm_to_x(dm, xtick_out, xtick_axs, xtick_axs_idx=None, **kwargs):
         elif dm_idx==max_t:
             xtick_axs[i].imshow(
                 dm[:,:,dm_idx-1], 
-                vmin=-1, vmax=1,
-                extent=[-5,5,-5,5], 
                 **kwargs
-                # cmap='Greys', 
-                # alpha=0.8
                 )
+            if do_time:
+                xtick_axs[i].set_xlabel(f'{int(xtick)}')
         else:
             xtick_axs[i].imshow(
                 dm[:,:,dm_idx], 
-                vmin=-1, vmax=1,
-                extent=[-5,5,-5,5], 
                 **kwargs
-                # cmap='Greys', 
-                # alpha=0.8
+
                 )
+            if do_time:
+                xtick_axs[i].set_xlabel(f'{xtick:.0f}')            
+        
         # xtick_axs[i].patch.set_alpha(0.5)
+
+def dag_add_dm_to_ts(fig, ax, dm, dx_axs=1, **kwargs):
+    '''Add dm to time series
+    '''
+    move_y = kwargs.pop('move_y', 0)
+    xtick_out, ax_out = dag_add_axis_to_xtick(fig, ax, dx_axs,move_y=move_y, **kwargs)
+    dag_add_dm_to_x(
+        dm=dm, 
+        xtick_out=xtick_out, 
+        xtick_axs=ax_out, 
+        xtick_axs_idx=None, 
+        **kwargs
+        )
 
 def dag_change_fig_item_col(fig_item, old_col, new_col, depth=0):
     '''
@@ -1282,6 +1302,7 @@ def dag_shaded_line(line_data, xdata, **kwargs):
             alpha=shade_alpha,
             color=line_col,
             label='_',
+            edgecolor=line_col,
             lw=0,
             **shade_kwargs,                    
             )

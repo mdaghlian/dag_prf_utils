@@ -31,11 +31,18 @@ def main(argv):
         --include       comma separated list. things to include in file search
         --exclude       [optional] comma separated list for things to exclude in file search        
         --detrend       [optional] number of trends to remove. Default is false (just does PSC)
+        --baseline_pt   [optional] specify psc to baseline to periods.
+                        e.g.... --baseline 0,19 # Use values from time 0-19 to set psc
+                        TODO -> add dm_file.py
+        --cut_vol       [optional] cut volumes at beggining default = 0
+        --ending        [optional] how to end files
     ---------------------------
     '''
     search_excl = None
-    detrend  = False
+    detrend  = 0 # Do not detrend
     mean_name = 'mean-prf'
+    cut_vol = 0
+    baseline_pt = None
     for i,arg in enumerate(argv):
         if '--gii_file' in arg:
             gii_file = argv[i+1]
@@ -57,31 +64,41 @@ def main(argv):
                 search_excl = [search_excl]
         elif '--detrend' in arg:
             detrend = int(argv[i+1])
+        elif '--baseline_pt' in arg:
+            baseline_pt = argv[i+1].split(',')
+            baseline_pt = [int(i) for i in baseline_pt]
+        elif '--cut_vol' in arg:
+            cut_vol = int(argv[i+1])
+
     mean_name_raw = '' + mean_name
     mean_name = f'{mean_name}_detrend-{detrend}'
     # [1] Load the data:
     if not os.path.exists(npy_file):
         os.makedirs(npy_file)
 
-    # -> get the list of files for this subject & task
+    # -> get the list of files for this subject & task    
     lh_gii_files = dag_find_file_in_folder(
-        ['.gii', 'hemi-L', *search_incl],
+        ['.gii', 'hemi-l', *search_incl],
         gii_file,
         exclude = search_excl,
         return_msg=None,
-    )
+    )    
         
     rh_gii_files = dag_find_file_in_folder(
-        ['.gii', 'hemi-R', *search_incl],
+        ['.gii', 'hemi-r', *search_incl],
         gii_file,
         exclude = search_excl,
         return_msg=None,
     )
+
     if lh_gii_files is None or rh_gii_files is None:
         print(f'No .gii files found ')
-        print(lh_gii_files)
-        print(rh_gii_files)
+        print(f'Using filter {[".gii", "hemi-L", *search_incl]}')
+        print(f'Looking in folder {gii_file}')
+        print(f'lh found {lh_gii_files}')
+        print(f'rh found {rh_gii_files}')
         return
+    
     if not isinstance(lh_gii_files, list):
         lh_gii_files = [lh_gii_files]
         rh_gii_files = [rh_gii_files]
@@ -101,13 +118,16 @@ def main(argv):
         new_file_name = new_file_name.replace('.func', '')
 
         lh_run_data = nib.load(lh_gii_files[i_file])
-        lh_run_cat = [i.data for i in lh_run_data.darrays]
+        lh_run_cat = [i.data for i in lh_run_data.darrays]        
         lh_run_cat = np.vstack(lh_run_cat).T # [n_vx, n_tr]
+        # CUT VOLUME
+        lh_run_cat = lh_run_cat[:,cut_vol:]
         lh_gii_data.append(lh_run_cat.copy())
 
         rh_run_data = nib.load(rh_gii_files[i_file])
         rh_run_cat = [i.data for i in rh_run_data.darrays]
         rh_run_cat = np.vstack(rh_run_cat).T # [n_vx, n_tr]
+        rh_run_cat = rh_run_cat[:,cut_vol:]        
         rh_gii_data.append(rh_run_cat.copy())
 
         
@@ -130,14 +150,19 @@ def main(argv):
 
     # -> save the averaged runs in PSC [combined] (.npy format)
     # ** percent signal change **
-    lr_gii_data_psc = dag_dct_detrending(mean_lr_gii_data, detrend)
+    lr_gii_data_psc = dag_dct_detrending(
+        ts_au=mean_lr_gii_data, 
+        n_trend_to_remove=detrend,
+        do_psc=True, 
+        baseline_pt=baseline_pt,
+        )
 
     # sanity check that the mean is 0
     print('Sanity check...')
     print(np.mean(lr_gii_data_psc, axis=1))
     print(np.mean(mean_lr_gii_data, axis=1).shape)
 
-    lr_gii_out_psc_file = opj(npy_file, f'{mean_name}_lr_psc.npy')
+    lr_gii_out_psc_file = opj(npy_file, f'{mean_name}_hemi-lr_psc.npy')
     np.save(lr_gii_out_psc_file, lr_gii_data_psc)
     print(f'Saved {lr_gii_out_psc_file}')        
 
@@ -158,8 +183,16 @@ def main(argv):
     lr_half2_gii_data = np.concatenate([lh_gii_data_half2, rh_gii_data_half2], axis=0)
 
     # -> convert to percent signal change 
-    psc_lr_half1 = dag_dct_detrending(lr_half1_gii_data, detrend)
-    psc_lr_half2 = dag_dct_detrending(lr_half2_gii_data, detrend)
+    psc_lr_half1 = dag_dct_detrending(
+        ts_au=lr_half1_gii_data, 
+        n_trend_to_remove=detrend,
+        do_psc=True, 
+        baseline_pt=baseline_pt,)
+    psc_lr_half2 = dag_dct_detrending(
+        ts_au=lr_half2_gii_data,
+        n_trend_to_remove=detrend,
+        do_psc=True, 
+        baseline_pt=baseline_pt,)        
 
     # -> calculate the correlation between runs (for each voxel)
     # should be an array of size [n_vx]
@@ -179,7 +212,7 @@ def main(argv):
     # run_correlation = run_correlation**2 # R squared
     print(f'Run correlation: {run_correlation}')
     # -> save it
-    run_correlation_file = opj(npy_file, f'{mean_name}_lr_run_correlation.npy')
+    run_correlation_file = opj(npy_file, f'{mean_name}_hemi-lr_run_correlation.npy')
     np.save(run_correlation_file, run_correlation)
     print(f'Saved {run_correlation_file}')            
 

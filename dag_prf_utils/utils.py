@@ -10,6 +10,50 @@ import time
 opj = os.path.join
 
 import subprocess
+import shutil
+from datetime import datetime
+
+def dag_make_backup(source_path, ow=False):
+    # Check if the source exists
+    if not os.path.exists(source_path):
+        print("Source does not exist.")
+        return
+    
+
+    # Get the directory of the source file
+    source_dir = os.path.dirname(source_path)
+    
+    # Get the filename of the source file
+    filename = os.path.basename(source_path)
+    
+    # Define the backup directory (parent directory of the source directory)
+    backup_dir = os.path.abspath(os.path.join(source_dir, os.pardir))
+    
+    # Define the path for the backup file
+    backup_file = os.path.join(source_dir, f"{filename}.backup")
+    
+    # Check if the backup file already exists
+    if not ow:
+        if os.path.exists(backup_file):
+            # If the backup file already exists, append the current date and time to the filename
+            current_time = datetime.now().strftime("%Y%m%d_%H%M%S")
+            backup_file = os.path.join(backup_dir, f"{filename}_{current_time}.backup")
+    
+    try:
+    # If the source is a file, copy it to the backup path
+        if os.path.isfile(source_path):
+            shutil.copyfile(source_path, backup_file)
+            print(f"Backup created: {backup_file}")
+        # If the source is a directory, copy the entire directory to the backup path
+        elif os.path.isdir(source_path):
+            shutil.copytree(source_path, backup_file)
+            print(f"Backup created: {backup_file}")
+    except Exception as e:
+        print(f"Error creating backup: {e}")
+
+
+
+
 def dag_get_cores_used():
     user_name = os.environ['USER']
     command = f"qstat -u {user_name}"  # Replace with your actual username

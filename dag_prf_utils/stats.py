@@ -1,35 +1,87 @@
 import numpy as np
 from scipy.stats import t
-
 from scipy.fftpack import dct, idct
 
-def dag_dct_detrending(ts_au, n_trend_to_remove):
-    if n_trend_to_remove is not False:
-        # Preparation: - demean
+def dag_dct_detrending(ts_au, n_trend_to_remove, do_psc=True, baseline_pt=None):
+    """
+    Perform detrending using Discrete Cosine Transform (DCT) and optionally Percentage Signal Change (PSC).
+
+    Parameters:
+    - ts_au (numpy.ndarray): Input time series data, shape (n_vx, n_time_points).
+    - n_trend_to_remove (int or False): Number of DCT coefficients to remove for detrending. If False/0, no detrending is performed.
+    - do_psc (bool, optional): Whether to perform Percentage Signal Change (PSC) after detrending. Default is True.
+    - baseline_pt (np.ndarray, int, list, or None, optional): Baseline points used for PSC calculation. If None, all points are considered as baseline.
+        If 1 value: taske baseline values from 0 to baseline_pt
+        If 2 value: it represents the range of points [start, stop] as baseline.
+        If more   : it represents specific points as baseline.
+
+    Returns:
+    - numpy.ndarray: Detrended time series data, shape (n_vx, n_time_points).
+    """
+    if ts_au.ndim == 1:
+        ts_au = ts_au.reshape(-1, 1)
+
+    if n_trend_to_remove!=0:
+        # Preparation: demean the time series
         ts_au_centered = ts_au - np.mean(ts_au, axis=1, keepdims=True)
 
-        # [2] Get the DCT of the time series (specify axis=1 to do it over time)
+        # Compute the DCT of the time series
         dct_values = dct(ts_au_centered, type=2, norm='ortho', axis=1)
 
-        # [3] Remove the coefficients specified
-        dct_values[:,:n_trend_to_remove] = 0
+        # Remove the specified number of coefficients
+        dct_values[:, :n_trend_to_remove] = 0
 
-        # [4] Get the inverse DCT
+        # Inverse DCT to obtain detrended time series
         ts_detrend = idct(dct_values, type=2, norm='ortho', axis=1)
-        # print(np.mean(ts_detrend, axis=1))
-        # [5] Add the mean back
+
+        # Add the mean back to the detrended series
         ts_detrend = ts_detrend + np.mean(ts_au, axis=1, keepdims=True)
     else:
         ts_detrend = ts_au.copy()
-    # [6] PSC
-    ts_detrend = dag_psc(ts_detrend)
+
+    # Perform Percentage Signal Change (PSC) if specified
+    if do_psc:
+        ts_detrend = dag_psc(ts_detrend, baseline_pt)
 
     return ts_detrend
 
-def dag_psc(ts_in):
-    ts_out = (ts_in - np.mean(ts_in, axis=1, keepdims=True)) / np.mean(ts_in, axis=1, keepdims=True) * 100
+def dag_psc(ts_in, baseline_pt=None):
+    """
+    Calculate Percentage Signal Change (PSC) for the input time series.
+
+    Parameters:
+    - ts_in (numpy.ndarray): Input time series data, shape (n_vx, n_time_points).
+    - baseline_pt (np.ndarray, int, list, or None, optional): Baseline points used for PSC calculation. If None, all points are considered as baseline.
+        If 1 value: taske baseline values from 0 to baseline_pt
+        If 2 value: it represents the range of points [start, stop] as baseline.
+        If more   : it represents specific points as baseline.
+
+    Returns:
+    - numpy.ndarray: Time series data after Percentage Signal Change (PSC) normalization, shape (n_vx, n_time_points).
+    """
+    if ts_in.ndim == 1:
+        ts_in = ts_in.reshape(-1, 1)
+
+    # Define the baseline points
+    if baseline_pt is None:
+        baseline_pt = np.arange(ts_in.shape[-1])
+    elif isinstance(baseline_pt, (int, np.integer)):
+        baseline_pt = np.arange(0, baseline_pt)
+    elif len(baseline_pt) == 2:
+        baseline_pt = np.arange(baseline_pt[0], baseline_pt[1], dtype=int)
+    else:
+        baseline_pt = np.array(list(baseline_pt), dtype=int)
+
+    # Calculate the mean of baseline points
+    baseline_mean = np.mean(ts_in[:, baseline_pt], axis=1, keepdims=True)
+
+    # Perform Percentage Signal Change (PSC) normalization
+    ts_out = (ts_in - baseline_mean) / baseline_mean * 100
+
+    # Handle NaN values resulting from division by zero
     nan_rows = np.isnan(ts_out).any(axis=1)
     ts_out[nan_rows, :] = 0
+
     return ts_out
 
 def dag_paired_ttest(x, y, **kwargs):

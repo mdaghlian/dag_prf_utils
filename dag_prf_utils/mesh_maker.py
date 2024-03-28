@@ -34,7 +34,8 @@ class GenMeshMaker(FSMaker):
     '''
     def __init__(self, sub, fs_dir=os.environ['SUBJECTS_DIR'], output_dir=[], **kwargs):
         super().__init__(sub, fs_dir)
-        self.output_dir = os.path.abspath(output_dir)
+        # self.output_dir = os.path.abspath(output_dir)
+        self.output_dir = output_dir
         if isinstance(output_dir, str):
             if not os.path.exists(self.output_dir):
                 os.mkdir(self.output_dir)                  
@@ -196,6 +197,8 @@ class GenMeshMaker(FSMaker):
         mesh_info['i']=this_mesh_info['faces'][:,0]
         mesh_info['j']=this_mesh_info['faces'][:,1]
         mesh_info['k']=this_mesh_info['faces'][:,2]
+        mesh_info['coords'] = this_mesh_info['coords']
+        mesh_info['faces'] = this_mesh_info['faces']
 
         return mesh_info
     
@@ -724,7 +727,7 @@ class GenMeshMaker(FSMaker):
         def serve_static(path):
             return send_from_directory(app_folder, path)
 
-        # server.run(host='0.0.0.0', port=8001)
+        # server.run(host='0.0.0.0', port=8000)
 
         # # Run the app
         # app.run_server(

@@ -22,6 +22,7 @@ class FSMaker(object):
         
         self.sub = sub        
         self.fs_dir = fs_dir        # Where the freesurfer files are        
+        print(f'Using fs dir = {self.fs_dir}')
         self.sub_surf_dir = opj(fs_dir, sub, 'surf')
         self.sub_label_dir = opj(fs_dir, sub, 'label')
         #

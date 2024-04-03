@@ -7,6 +7,8 @@ from scipy.spatial import ConvexHull
 import subprocess
 opj = os.path.join
 
+from io import BytesIO
+import base64
 from dag_prf_utils.utils import *
 from dag_prf_utils.plot_functions import *
 from dag_prf_utils.mesh_format import *
@@ -427,7 +429,7 @@ class GenMeshMaker(FSMaker):
         if not isinstance(hemi_list, list):
             hemi_list = [hemi_list]
         return_mesh_obj = kwargs.get('return_mesh_obj', False)
-        roi_list = kwargs.pop('roi_list', [])        
+        roi_list = kwargs.pop('ply_roi_list', [])        
 
         mesh_dict = self.plotly_return_mesh_dict(data, **kwargs)
         mesh3d_obj = []        
@@ -544,7 +546,7 @@ class GenMeshMaker(FSMaker):
         Add an instance of vx_col... (i.e., eccentricity)
         '''
         kwargs['hemi_list'] = self.web_hemi_list
-        roi_list = kwargs.pop('roi_list', None)
+        roi_list = kwargs.pop('ply_roi_list', None)
         this_mesh = self.plotly_return_mesh_dict(**kwargs)
         for ih in this_mesh.keys():
             self.web_vxcol[ih][vx_col_name] = this_mesh[ih]['vertexcolor']
@@ -622,117 +624,141 @@ class GenMeshMaker(FSMaker):
         )        
         return fig
 
-    def web_launch_with_dash(self, fig):
-        # Create a Dash app
-        app = Dash(__name__)
 
-        # Define the layout of the app
+    # **************************************
+    # **************************************
+    # **************************************
+    # **************************************
+    def web_launch2(self):
+        '''
+        Return a Dash app! 
+        '''
+        app = dash.Dash(__name__)
+        self.create_figure()
         app.layout = html.Div([
-            dcc.Graph(id='graph', figure=fig), #go.Figure(mesh)),
-            html.Label('eye-x'),
-            dcc.Input(id='eye-x', type='number', value=0),
-            html.Label('eye-y'),
-            dcc.Input(id='eye-y', type='number', value=1),
-            html.Label('eye-z'),
-            dcc.Input(id='eye-z', type='number', value=1)    
+            dcc.Graph(id='mesh-plot', figure=self.dash_fig),
+            dcc.Dropdown(
+                id='vertex-color-dropdown',
+                options=[{'label': col_name, 'value': col_name} for col_name in self.web_vxcol_list],
+                value=self.web_vxcol_list[0]
+            ),                                      # Dropdown menu - change the surface colour
+            html.Div(id='vertex-index-output'),     # Print which vertex you have clicked on 
+            html.Div(id='mpl-figure-output'),       # Plot the output of the figure (based on click)
+
         ])
-
-        # Set initial values for eye position
-        initial_eye_x, initial_eye_y, initial_eye_z = 0, 1, 1
-
-        fig.update_layout(
-            # scene=dict(aspectmode="cube"), 
-            scene_camera=dict(eye=dict(x=initial_eye_x, y=initial_eye_y, z=initial_eye_z))
-            )
-
-        # Define a callback to update the 3D scene when the camera position changes
         @app.callback(
-            [
-                Output('eye-x', 'value'),
-                Output('eye-y', 'value'),
-                Output('eye-z', 'value')
-            ],
-            [
-                Input('graph', 'relayoutData')
-            ],
-            [
-                State('eye-x', 'value'),
-                State('eye-y', 'value'),
-                State('eye-z', 'value')
-            ]            
+            Output('mesh-plot', 'figure'),
+            [Input('vertex-color-dropdown', 'value')]
         )
+        def update_figure(selected_color):
+            if selected_color is None:
+                raise dash.exceptions.PreventUpdate            
+            self.update_figure_with_color(selected_color)
+            return self.dash_fig
 
-        def update_input_fields(relayoutData, eye_x, eye_y, eye_z):
-            ctx = dash.callback_context
-            if not ctx.triggered_id:
-                input_id = 'No Input'
-            else:
-                input_id = ctx.triggered_id
-            print(f'Triggered by {input_id}')
-            
-            if 'scene.camera' in relayoutData:
-                camera_data = relayoutData['scene.camera']
-                new_eye_x, new_eye_y, new_eye_z = camera_data['eye']['x'], camera_data['eye']['y'], camera_data['eye']['z']
+        @app.callback(
+            Output('vertex-index-output', 'children'),
+            [Input('mesh-plot', 'clickData')]
+        )
+        def display_click_data(clickData):
+            if clickData is not None:
+                point_index = clickData['points'][0]['pointNumber']
+                mesh_index = clickData['points'][0]['curveNumber']
+                hemi_name = self.web_hemi_list[mesh_index]                
+                return f'Clicked hemi: {hemi_name}, Vertex Index: {point_index}'
+
+        @app.callback(
+            Output('mpl-figure-output', 'children'),
+            [Input('mesh-plot', 'clickData')]
+        )
+        def display_mpl_figure(clickData):
+            if clickData is not None:
+                point_index = clickData['points'][0]['pointNumber']
+                mesh_index = clickData['points'][0]['curveNumber']
+                hemi_name = self.web_hemi_list[mesh_index]                
+                if hemi_name == 'rh':
+                    point_index += self.n_vx['lh']
                 
-                # Check if the changes are significant
-                if (new_eye_x, new_eye_y, new_eye_z) != (eye_x, eye_y, eye_z):
-                    return new_eye_x, new_eye_y, new_eye_z
-            # If the keys are not present or the changes are not significant, return the current values
-            return eye_x, eye_y, eye_z        
-        # def update_input_fields(relayoutData):
-        #     if 'scene.camera' in relayoutData:
-        #         camera_data = relayoutData['scene.camera']
-        #         eye_x, eye_y, eye_z = camera_data['eye']['x'], camera_data['eye']['y'], camera_data['eye']['z']
-        #         print(camera_data)
-        #         # el = 
-        #         return eye_x, eye_y, eye_z
-        #     else:
-        #         # If the keys are not present, return the initial values
-        #         return initial_eye_x, initial_eye_y, initial_eye_z
+                mpl_fig = self.mpl_fig_maker(idx=point_index, return_fig=True)
+                # Scale the matplotlib figure to a sensible size. Keeping the aspect
+                # mpl_fig.set_tight_layout(True)
+                mpl_fig_path = opj(self.output_dir, 'mpl_fig.svg')
+                mpl_fig.savefig(mpl_fig_path)
+                # Convert the Matplotlib figure to an image
+                with open(mpl_fig_path, 'r') as f:
+                    svg_content = f.read()                
+                svg_data_uri = 'data:image/svg+xml;base64,' + base64.b64encode(svg_content.encode()).decode()
+                # Return the image tag embedding the SVG. Make it a sensible size
+                svg4html = html.Img(
+                    src=svg_data_uri,
+                    id='mpl-figure-image',
+                    style={'width': '100%', 'height': 'auto'},
+                    )
+                return svg4html
+        app.scripts.config.serve_locally = True
+        app.css.config.serve_locally = True
 
-        # Define a callback to update the 3D scene when the input values change
-        @app.callback(
-            Output('graph', 'figure'),
-            [
-                Input('eye-x', 'value'),
-                Input('eye-y', 'value'),
-                Input('eye-z', 'value'),
-            ]
+
+        # # Create the folder to store Dash app files
+        # self.app_folder = opj(self.output_dir, 'dash_app')
+        # if not os.path.exists(self.app_folder):
+        #     os.makedirs(self.app_folder)
+
+        # # Save the Dash app as HTML file
+        # app_index_file = os.path.join(self.app_folder, 'index.html')
+        # with open(app_index_file, 'w') as f:
+        #     f.write(app.index())
+
+        # default values
+        # app.config.assets_folder = opj(self.app_folder,'assets')     # The path to the assets folder.
+        # app.config.include_asset_files = True   # Include the files in the asset folder
+        # app.config.assets_external_path = ""    # The external prefix if serve_locally == False
+        # app.config.assets_url_path = opj(self.app_folder,'assets')     # The path to the assets folder.
+        # # Run the Flask server to serve the Dash app
+        # server = Flask(__name__)
+
+        # @server.route('/')
+        # def serve_index():
+        #     return send_from_directory(self.app_folder, 'index.html')
+
+        # @server.route('/<path:path>')
+        # def serve_static(path):
+        #     return send_from_directory(self.app_folder, path)
+
+
+        return app
+
+    def create_figure(self):
+        self.dash_fig = go.Figure()
+        for web_mesh in self.web_mesh:
+            self.dash_fig.add_trace(web_mesh)
+        self.camera = dict(
+            up=dict(x=0, y=0, z=1),
+            center=dict(x=0, y=0, z=0),
+            eye=dict(x=1.25, y=1.25, z=1.25)
+        )  # Default camera position
+        # Update plot sizing
+        self.dash_fig.update_layout(
+            autosize=True,
+            margin=dict(t=0, b=0, l=0, r=0),
+            template="plotly_white",
+            scene_camera=self.camera,
+            uirevision='constant'  # Preserve camera settings
         )
-        def update_eye(eye_x, eye_y, eye_z):
-            # eye_x,eye_y,eye_z = dag_plotly_eye(eye_x, eye_y, eye_z)
-            fig.update_layout(
-                # scene=dict(aspectmode="cube"),
-                scene_camera=dict(eye=dict(x=eye_x, y=eye_y, z=eye_z))
+
+        # Update 3D scene options
+        self.dash_fig.update_scenes(
+            aspectmode="manual"
+        )
+
+
+
+    def update_figure_with_color(self, selected_color):
+        this_col_list = []
+        for hemi in self.web_hemi_list:
+            this_col_list.append(
+                self.web_vxcol[hemi][selected_color]
             )
-            return fig
-        # Create the folder to store Dash app files
-        app_folder = opj(self.output_dir, 'dash_app')
-        if not os.path.exists(app_folder):
-            os.makedirs(app_folder)
-
-        # Save the Dash app as HTML file
-        app_index_file = os.path.join(app_folder, 'index.html')
-        with open(app_index_file, 'w') as f:
-            f.write(app.index())
-
-        # Run the Flask server to serve the Dash app
-        server = Flask(__name__)
-
-        @server.route('/')
-        def serve_index():
-            return send_from_directory(app_folder, 'index.html')
-
-        @server.route('/<path:path>')
-        def serve_static(path):
-            return send_from_directory(app_folder, path)
-
-        # server.run(host='0.0.0.0', port=8000)
-
-        # # Run the app
-        # app.run_server(
-        #     host='0.0.0.0',
-        #     port=8082,
-        #     open_browser=True,
-        # )
-
+        # Update facecolor for each mesh trace
+        for i in range(len(self.web_mesh)):
+            self.dash_fig.data[i].update(vertexcolor=this_col_list[i])

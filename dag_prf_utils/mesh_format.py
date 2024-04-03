@@ -9,6 +9,101 @@ opj = os.path.join
 from dag_prf_utils.utils import *
 from dag_prf_utils.plot_functions import *
 
+def dag_sph2flat(coords):
+    '''https://stackoverflow.com/questions/4116658/faster-numpy-cartesian-to-spherical-coordinate-conversion'''
+    # First move to 0,0,0...
+    sph_centre = np.mean(coords, axis=0)
+    coords -= sph_centre
+
+    # # UV mapping
+    # # https://en.wikipedia.org/wiki/UV_mapping#Finding_UV_on_a_sphere    
+    # abs_coords = coords
+    # u = 0.5 + (np.arctan2(abs_coords[:,2], abs_coords[:,0]) / np.pi*2) # z,x
+    # print(np.isnan(u).mean())
+    # v = 0.5 + (np.arcsin(abs_coords[:,1]) / np.pi)  # y
+    # print(np.arcsin(abs_coords[:,1]))
+    # print(np.isnan(v).mean())
+    # print(np.isnan(u).sum())
+
+    # print(np.where(np.isnan(v)))
+
+
+    x,y,z = coords[:,0], coords[:,1], coords[:,2]
+    XsqPlusYsq = x**2 + y**2
+    r = np.sqrt(XsqPlusYsq + z**2)               # r
+    elev = np.arctan2(z,np.sqrt(XsqPlusYsq))     # theta
+    az = np.arctan2(y,x)                           # phi
+    # plt.figure()
+    # plt.scatter(r, az,c=x)
+    # bb
+    # plt.figure()
+    # plt.scatter(u, v,c=x)
+    # plt.figure()
+    # # plt.scatter(, elev,c=x)    
+    # bloop
+    return az,elev
+import copy
+def dag_fake_flatten(sphere_mesh_info):
+    '''Take the spherical coordinates
+    > flatten them to 2D (just polar)
+    > find the enclosing edges convex hull 
+    > remove the faces with 3 vx in the hull    
+    '''
+    fake_flat = {}
+    p1, p2 = dag_sph2flat(sphere_mesh_info['coords'])
+    # find relative scale...
+    mag = sphere_mesh_info['coords'].max() / p1.max() 
+    fake_flat['x'] = p1 * mag
+    fake_flat['y'] = p2 * mag
+    fake_flat['z'] = np.zeros_like(p1)    
+    pts = np.vstack([fake_flat['x'],fake_flat['y'], fake_flat['z']]).T
+    outer_vx = ConvexHull(pts[:,:2]).vertices
+    plt.figure()
+    plt.plot(
+        pts[:,0], pts[:,1], c=sphere_mesh_info['x']
+    )
+    bloop
+    in_face_x = {} 
+    for face_x in ['i', 'j', 'k']:
+        in_face_x[face_x] = np.isin(sphere_mesh_info[face_x], outer_vx) * 1.0    
+    
+    # remove faces with 2+ vx in the cut
+    f_w_23cutvx = (in_face_x['i'] + in_face_x['j'] + in_face_x['k']) >= 2
+    fake_flat['faces']  = sphere_mesh_info['faces'][~f_w_23cutvx,:]
+    fake_flat['i']      = sphere_mesh_info['i'][~f_w_23cutvx]
+    fake_flat['j']      = sphere_mesh_info['j'][~f_w_23cutvx]
+    fake_flat['k']      = sphere_mesh_info['k'][~f_w_23cutvx]
+
+
+    # # Now find those outer vertices which appear in 2 faces
+    # flat_faces = fake_flat['faces'].ravel()
+    # vx_counts = np.sum(flat_faces[:, None]==outer_vx, axis=0)
+    # print(vx_counts)
+
+    # vx_in2face = np.where(vx_counts==2)[0]
+    # faces2remove = []
+    # for i_outvx in vx_in2face:
+    #     this_vx = outer_vx[i_outvx]
+    #     # find it ...
+
+    #     faces2remove.append(
+    #         np.where(np.sum(fake_flat['faces'] == this_vx, axis=1) > 0)[0][0]
+    #     )
+    # # Remove the face
+    # if faces2remove is not []:
+    #     fake_flat['faces'] = np.delete(fake_flat['faces'], faces2remove, axis=0)
+    #     fake_flat['i'] = np.delete(fake_flat['i'], faces2remove)
+    #     fake_flat['j'] = np.delete(fake_flat['j'], faces2remove)
+    #     fake_flat['k'] = np.delete(fake_flat['k'], faces2remove)
+
+
+    # Now find those outer vertices which appear in 2 faces
+    flat_faces = fake_flat['faces'].ravel()
+    vx_counts = np.sum(flat_faces[:, None]==outer_vx, axis=0)
+
+    polys = fake_flat['faces']    
+    return pts, polys
+
 def dag_plotly_eye(el, az, zoom):
     # x = zoom*np.cos(np.radians(el))*np.cos(np.radians(az))
     # y = zoom*np.cos(np.radians(el))*np.sin(np.radians(az))

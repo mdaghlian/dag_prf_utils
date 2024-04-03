@@ -33,10 +33,11 @@ class TSPlotter(Prf1T1M):
 
     def prf_ts_plot(self, idx, time_pt=None, return_fig=False, **kwargs):
         if self.model in ['gauss', 'css']:
-            self.gauss1_ts_plot(idx, return_fig, **kwargs)
+            fig = self.gauss1_ts_plot(idx, return_fig, **kwargs)
         elif self.model in ['norm', 'dog']:
-            self.gauss2_ts_plot(idx, time_pt, return_fig, **kwargs)        
-        
+            fig = self.gauss2_ts_plot(idx, time_pt, return_fig, **kwargs)        
+        if return_fig:
+            return fig
 
     def real_ts_plot(self, ax, idx, **kwargs):
         this_real_ts = self.real_ts[idx,:]

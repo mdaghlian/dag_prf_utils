@@ -1,4 +1,5 @@
 import cortex
+import cortex.freesurfer
 import imageio
 # from linescanning import (
 #     # image,
@@ -10,6 +11,7 @@ import numpy as np
 import os
 import pandas as pd
 import configparser
+from scipy.spatial import ConvexHull
 import sys
 import time
 from matplotlib.colors import Normalize
@@ -21,6 +23,7 @@ from PIL import Image
 import uuid
 
 from dag_prf_utils.mesh_maker import *
+from dag_prf_utils.mesh_format import *
 from dag_prf_utils.cmap_functions import *
 from dag_prf_utils.utils import *
 '''
@@ -238,7 +241,7 @@ class PyctxSaver():
         subject: str=None,
         fig_dir: str=None,
         specularity: int=0,
-        unfold: int=1,
+        unfold: int=0,
         azimuth: int=180,
         altitude: int=90,
         radius: int=250,
@@ -684,7 +687,7 @@ class PyctxMaker(GenMeshMaker):
             cmap = kwargs.get('cmap', None) # 'autumnblack_alpha_2D')    
             vmin1 = kwargs.get('vmin', np.nanmin(data[data_mask]))
             vmax1 = kwargs.get('vmax', np.nanmax(data[data_mask]))
-            masked_value = kwargs.get('masked_value', vmin-1) # What to set values outside mask to
+            masked_value = kwargs.get('masked_value', vmin1-1) # What to set values outside mask to
             vmin2 = kwargs.get('vmin2', 0)
             vmax2 = kwargs.get('vmax2', 1)
             # dtype_to_set = kwargs.get('dtype_to_set', np.float32)            
@@ -716,12 +719,16 @@ class PyctxMaker(GenMeshMaker):
                         **pycortex_args,
                     )
                 # TO FIX THE "unique" pycortex ISSUE...
+                print(this_vertex_dict)
+
                 this_vertex_dict.dim1.unique_id = np.random.rand(500)
                 this_vertex_dict.dim2.unique_id = np.random.rand(500)
                 this_cmap_dict = 'pyc'
-                return
             
             elif ctx_method.lower()=='vertex1d':
+                print(data.min())
+                print(vmin1)
+                print(data)
                 this_vertex_dict = cortex.Vertex(
                     data=data, 
                     cmap=cmap,                 
@@ -729,7 +736,7 @@ class PyctxMaker(GenMeshMaker):
                     vmin=vmin1, vmax=vmax1, 
                     **pycortex_args
                 )
-                this_vertex_dict.dim1.unique_id = np.random.rand(500)
+                this_vertex_dict.unique_id = np.random.rand(500)
                 this_cmap_dict = 'pyc'
         if return_vx_obj:
             return this_vertex_dict, this_cmap_dict
@@ -763,3 +770,91 @@ class PyctxMaker(GenMeshMaker):
     
     def clear_cache(self):
         cortex.db.clear_cache(self.sub)
+
+    def make_fake_flat_map(self, flatmap_name='fake.patch.3d'):
+        '''
+        Pycotex uses flatmaps for a bunch of things
+        But if you can't be bothered to do it properly, and just want
+        to display freesurfer ROIs in pycortex you can do this
+
+        It takes the spherical coordinates of each surface
+        And uses them to generate the flatmap
+        '''
+        # Make a fake flatmap...
+        # [1] Look for the overlays.svg if it exists back it up
+        old_overlay = opj(self.ctx_path, 'overlays.svg')
+        current_datetime_str = datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
+        bu_overlay = opj(self.ctx_path, f'overlays_BU_{current_datetime_str}.svg')
+        if os.path.exists(old_overlay):
+            print('backing up existing overlay')
+            os.system(f'cp {old_overlay} {bu_overlay}')
+        
+        # [2] Write fake flat files into freesurfer...
+        # self.fake_flat
+        for hemi in ['lh', 'rh']:
+            
+            # r,elev,az = dag_cart2sph(
+            #     x = self.mesh_info['sphere'][hemi]['x'],
+            #     y = self.mesh_info['sphere'][hemi]['y'],
+            #     z = self.mesh_info['sphere'][hemi]['z'],
+            # )
+            
+            # if hemi=='lh':
+            #     r *= -1 # Flip if lh
+            # filename = opj(self.sub_surf_dir, f'{hemi}.{flatmap_name}')
+            # dag_write_patch(
+            #     filename=filename, 
+            #     vertex_index=np.arange(1,len(r)+1, dtype='int32'), 
+            #     x_coords=r.astype('float32'), 
+            #     y_coords=elev.astype('float32'), 
+            #     z_coords=np.zeros(len(r), dtype='float32')
+            #     )            
+            pts,polys = dag_fake_flatten(self.mesh_info['sphere'][hemi])
+            # FROM PYCORTEX IMPORT FLAT
+            flat = pts[:, [1, 0, 2]]
+            # Flip Y axis upside down
+            flat[:, 1] = -flat[:, 1]
+            polys = cortex.freesurfer._remove_disconnected_polys(polys)
+            flat = cortex.freesurfer._move_disconnect_points_to_zero(flat, polys)
+            flat_surf_path = opj(self.ctx_path, 'surfaces', f'flat_{hemi}.gii')
+            print("saving to %s"%flat_surf_path)
+            cortex.formats.write_gii(flat_surf_path, pts=flat, polys=polys)
+
+            # print(pts)
+            # print(pts.shape)
+            # print(polys)
+            # print(polys.shape)
+            # bloop
+
+
+            
+            
+
+def dag_write_patch(filename, vertex_index, x_coords, y_coords, z_coords):
+    """
+    Writes vertex data to a binary file.
+    
+    Parameters:
+        filename (str): Name of the file to write to.
+        vertex_index (array-like): Array containing vertex indices.
+        x_coords (array-like): Array containing x coordinates.
+        y_coords (array-like): Array containing y coordinates.
+        z_coords (array-like): Array containing z coordinates.
+    """
+    assert len(vertex_index) == len(x_coords) == len(y_coords) == len(z_coords)
+    
+    with open(filename, 'wb') as fp:
+        # Write header (assuming a default value of 0 for now)
+        header = 0
+        fp.write(struct.pack('>i', header))
+        
+        # Write number of vertices
+        nverts = len(vertex_index)
+        fp.write(struct.pack('>i', nverts))
+        
+        # Write vertex data
+        for i in range(nverts):
+            fp.write(struct.pack('>i', vertex_index[i]))
+            fp.write(struct.pack('>f', x_coords[i]))
+            fp.write(struct.pack('>f', y_coords[i]))
+            fp.write(struct.pack('>f', z_coords[i]))

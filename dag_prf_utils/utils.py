@@ -306,6 +306,9 @@ def dag_hyphen_parse(str_prefix, str_in):
         str_out = str_in
     else: 
         str_out = f'{str_prefix}-{str_in}'
+    # Check for multiple hyphen
+    while '--' in str_out:
+        str_out = str_out.replace('--', '-')
     return str_out
     
 def dag_rescale_bw(data_in, old_min=None, old_max=None, new_min=0, new_max=1):

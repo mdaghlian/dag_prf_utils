@@ -31,7 +31,7 @@ class TSPlotter(Prf1T1M):
         return preds
         
 
-    def prf_ts_plot(self, idx, time_pt=None, return_fig=False, **kwargs):
+    def prf_ts_plot(self, idx, time_pt=None, return_fig=True, **kwargs):
         if self.model in ['gauss', 'css']:
             fig = self.gauss1_ts_plot(idx, return_fig, **kwargs)
         elif self.model in ['norm', 'dog']:
@@ -49,7 +49,7 @@ class TSPlotter(Prf1T1M):
         Plot time series for PRF model with 1 RF 
         > i.e., gauss, css
         '''
-        do_dm = kwargs.pop('do_dm', True)
+        do_dm = kwargs.pop('do_dm', False)
         ts_kwargs = dict(linestyle='-', markersize=10, lw=5, alpha=.5)
         ts_kwargs_in = kwargs.get('ts_kwargs', {})
         ts_kwargs.update(ts_kwargs_in)

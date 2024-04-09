@@ -62,7 +62,19 @@ class GenMeshMaker(FSMaker):
             )
         # ... other
         self.ply_files = {}
+
     # *****************************************************************
+    # *****************************************************************
+    # *****************************************************************
+    #region Color functions 
+    """
+    Functions for displaying color on the surface
+    return_display_rgb      Return the rgb values for the surface
+    _data_to_rgb            Simple mapping from values to colors
+    _combine2maps           Combine two maps (e.g., data and undersurface)
+    get_us_cols             Get the undersurface colors
+    """
+
     def return_display_rgb(self, data=None, **kwargs):
         '''Per vertex rgb values
             data            np.ndarray      What are we plotting on the surface? 1D array, same length as the number of vertices in subject surface.
@@ -154,9 +166,7 @@ class GenMeshMaker(FSMaker):
             return display_rgb, cmap_dict
         else:
             return display_rgb    
-
-    # *****************************************************************
-    # COLOR FUNCTIONS
+    
     def _data_to_rgb(self, data, cmap='viridis', vmin=None, vmax=None):
         '''
         Simple mapping from values to colors
@@ -182,10 +192,13 @@ class GenMeshMaker(FSMaker):
             )
         return self.us_cols[key]
 
-
+    #endregion
 
     # *****************************************************************
-    # MESH COORDS
+    # *****************************************************************
+    # *****************************************************************
+    #region MESH COORDS 
+
     def _return_fs_mesh_coords(self, mesh, hemi):
         '''Return dict with the vx and faces of mesh specified
         '''
@@ -215,13 +228,18 @@ class GenMeshMaker(FSMaker):
         elif return_type=='list':
             mesh_info = mesh_info_L
         return mesh_info
+    
     def get_mesh_info(self, key):
         if key not in self.mesh_info.keys():
             self.mesh_info[key] = self._return_fs_mesh_coords_both_hemis(mesh=key)
         return self.mesh_info[key]
+    #endregion MESH COORDS
     
+
     # *****************************************************************
-    # CURV VALS
+    # *****************************************************************
+    # *****************************************************************
+    #region CURV VALS 
     def _return_fs_curv_vals(self, curv_name, hemi='', **kwargs):
         '''Finds a curv file in fs folder. Returns the specified values
 
@@ -270,9 +288,12 @@ class GenMeshMaker(FSMaker):
             self.us_values[key] = self._return_fs_curv_vals_both_hemis(
                 curv_name=key, return_type='concat')
         return self.us_values[key]
-
+    #endregion CURV VALS
+    
     # *****************************************************************
-    # ROI BOOL
+    # *****************************************************************
+    # *****************************************************************
+    #region ROI FUNCTIONS
     def _return_roi_bool(self, roi_name, hemi='', **kwargs):
         roi_bool = dag_load_roi(self.sub, roi_name, fs_dir=self.fs_dir, split_LR=True)[hemi]
         return roi_bool
@@ -289,6 +310,7 @@ class GenMeshMaker(FSMaker):
         elif return_type=='concat':
             roi_bool = np.concatenate(roi_bool_L)
         return roi_bool
+    
     # -> borders.
     def _return_roi_bool_border(self, roi_name, hemi, **kwargs):
         roi_bool = self._return_roi_bool(roi_name, hemi, **kwargs)
@@ -308,11 +330,12 @@ class GenMeshMaker(FSMaker):
         elif return_type=='concat':
             roi_bool = np.concatenate(roi_bool_L)
         return roi_bool
-    
+    #endregion ROI FUNCTIONS
+
     # *****************************************************************
     # *****************************************************************
     # *****************************************************************
-    # .ply code: make .ply files. Can be used with meshlab or blender
+    #region PLY FUNCTIONS
     def add_ply_surface(self, data=None, surf_name=None, **kwargs):
         '''
         Arguments:
@@ -367,12 +390,14 @@ class GenMeshMaker(FSMaker):
         # os.chdir(self.output_dir)
         # os.system(mlab_cmd)
         subprocess.run(mlab_cmd, shell=True, cwd=self.output_dir)
+    
+    #endregion PLY FUNCTIONS
 
+    # *****************************************************************
+    # *****************************************************************
+    # *****************************************************************
+    #region PLOTLY FUNCTIONS
 
-    # *****************************************************************
-    # *****************************************************************
-    # *****************************************************************
-    # plotly code        
     def plotly_return_mesh_dict(self, data, **kwargs):
         '''Return a dict with mesh info [x,y,z,i,j,k,intensity,vertexcolor]
         '''
@@ -513,8 +538,7 @@ class GenMeshMaker(FSMaker):
                         opacity=1,
                     )
                     roi_obj.append(border_line)
-        return roi_obj
-
+        return roi_obj    
 
     # WEB SECTION: usef for easy switching b/w surface overlays in html
     def web_get_ready(self, **kwargs):
@@ -624,38 +648,124 @@ class GenMeshMaker(FSMaker):
         )        
         return fig
 
+    #endregion PLOTLY FUNCTIONS
 
-    # **************************************
-    # **************************************
-    # **************************************
-    # **************************************
-    def web_launch2(self):
+
+    # *****************************************************************
+    # *****************************************************************
+    # *****************************************************************
+    #region DASH FUNCTIONS
+    def web_launch_with_dash(self):
         '''
         Return a Dash app! 
         '''
         app = dash.Dash(__name__)
         self.create_figure()
         app.layout = html.Div([
-            dcc.Graph(id='mesh-plot', figure=self.dash_fig),
+            # Add camera controls here
+            html.Label('radius'),
+            dcc.Input(id='radius', type='number', value=2, step=0.1, n_submit=0, debounce=True),            
+            dcc.Input(id='inflate', type='number', value=1, step=0.1, n_submit=0, debounce=True),            
+            #
             dcc.Dropdown(
                 id='vertex-color-dropdown',
                 options=[{'label': col_name, 'value': col_name} for col_name in self.web_vxcol_list],
                 value=self.web_vxcol_list[0]
             ),                                      # Dropdown menu - change the surface colour
+            dcc.Graph(id='mesh-plot', figure=self.dash_fig),
             html.Div(id='vertex-index-output'),     # Print which vertex you have clicked on 
-            html.Div(id='mpl-figure-output'),       # Plot the output of the figure (based on click)
+            html.Div(
+                id='mpl-figure-output',
+                style={'overflow-x': 'auto', 'overflow-y': 'auto'},
+                ),       # Plot the output of the figure (based on click)
+            html.Div(id='camera-position-output'),
 
-        ])
+        ], style={'width': '100%', 'height': '100vh'})
+
+
+        # @app.callback(
+        #     Output("camera-position-output", "children"),
+        #     Input("mesh-plot", "relayoutData")
+        # )
+        # def show_data(relayoutData):
+        #     if relayoutData is None:
+        #         raise dash.exceptions.PreventUpdate
+        #     if 'scene.camera' in relayoutData:
+        #         # Update self.camera with the current camera position
+        #         self.camera = relayoutData['scene.camera']
+        #         raise dash.exceptions.PreventUpdate
+        #     else:
+        #         raise dash.exceptions.PreventUpdate
+
+
+
+        # @app.callback(
+        #     Output('camera-position-output', 'children'),
+        #     [Input('mesh-plot', 'relayoutData')],
+        #     [State('mesh-plot', 'config')]
+        # )
+        # def update_camera_position(relayoutData, config):
+        #     if 'scene.camera' in relayoutData:
+        #         if 'mouseup' in config['events']:
+        #             # Update self.camera with the current camera position
+        #             self.camera = relayoutData['scene.camera']
+        #             print(self.camera)
+        #             return f'Camera position: {self.camera}'
+        #     else:
+        #         raise dash.exceptions.PreventUpdate
+            
         @app.callback(
             Output('mesh-plot', 'figure'),
-            [Input('vertex-color-dropdown', 'value')]
+            [Input('radius', 'value'),
+            Input('vertex-color-dropdown', 'value')]
         )
-        def update_figure(selected_color):
-            if selected_color is None:
-                raise dash.exceptions.PreventUpdate            
-            self.update_figure_with_color(selected_color)
+        def update_figure(radius, selected_color):
+            if (radius is None) & (selected_color is None):
+                raise dash.exceptions.PreventUpdate
+            if selected_color is not None:
+                # Update colors
+                self.update_figure_with_color(selected_color)                
+            if (radius is not None) & (radius != 0):
+                # Update camera radius (current camera)
+                radius = float(radius)
+                radius_now = np.sqrt(self.camera['eye']['x']**2 + self.camera['eye']['y']**2 + self.camera['eye']['z']**2)
+                scale = radius / radius_now
+                self.camera['eye']['x'] *= scale
+                self.camera['eye']['y'] *= scale
+                self.camera['eye']['z'] *= scale
+                # Update layout with new camera settings
+                self.dash_fig.update_layout(scene_camera=self.camera)
+                # print(self.camera)
+
             return self.dash_fig
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        # # CONTROL THE VERTEX COLORS WITH DROPDOWN
+        # @app.callback(
+        #     Output('mesh-plot', 'figure'),
+        #     [Input('vertex-color-dropdown', 'value')]
+        # )
+        # def update_figure(selected_color):
+        #     if selected_color is None:
+        #         raise dash.exceptions.PreventUpdate            
+        #     self.update_figure_with_color(selected_color)
+        #     return self.dash_fig
+
+        # CLICKER FUNCTION (PRINTS VERTEX INDEX)
         @app.callback(
             Output('vertex-index-output', 'children'),
             [Input('mesh-plot', 'clickData')]
@@ -666,7 +776,8 @@ class GenMeshMaker(FSMaker):
                 mesh_index = clickData['points'][0]['curveNumber']
                 hemi_name = self.web_hemi_list[mesh_index]                
                 return f'Clicked hemi: {hemi_name}, Vertex Index: {point_index}'
-
+        
+        # CLICKER FUNCTION (DISPLAYS MATPLOTLIB FIGURE, IF DEFINED)
         @app.callback(
             Output('mpl-figure-output', 'children'),
             [Input('mesh-plot', 'clickData')]
@@ -675,57 +786,14 @@ class GenMeshMaker(FSMaker):
             if clickData is not None:
                 point_index = clickData['points'][0]['pointNumber']
                 mesh_index = clickData['points'][0]['curveNumber']
-                hemi_name = self.web_hemi_list[mesh_index]                
+                hemi_name = self.web_hemi_list[mesh_index]                                
                 if hemi_name == 'rh':
                     point_index += self.n_vx['lh']
-                
-                mpl_fig = self.mpl_fig_maker(idx=point_index, return_fig=True)
-                # Scale the matplotlib figure to a sensible size. Keeping the aspect
-                # mpl_fig.set_tight_layout(True)
-                mpl_fig_path = opj(self.output_dir, 'mpl_fig.svg')
-                mpl_fig.savefig(mpl_fig_path)
-                # Convert the Matplotlib figure to an image
-                with open(mpl_fig_path, 'r') as f:
-                    svg_content = f.read()                
-                svg_data_uri = 'data:image/svg+xml;base64,' + base64.b64encode(svg_content.encode()).decode()
-                # Return the image tag embedding the SVG. Make it a sensible size
-                svg4html = html.Img(
-                    src=svg_data_uri,
-                    id='mpl-figure-image',
-                    style={'width': '100%', 'height': 'auto'},
-                    )
-                return svg4html
+                mpl_figs = self.web_return_mpl_figs(point_index)                
+
+                return mpl_figs
         app.scripts.config.serve_locally = True
         app.css.config.serve_locally = True
-
-
-        # # Create the folder to store Dash app files
-        # self.app_folder = opj(self.output_dir, 'dash_app')
-        # if not os.path.exists(self.app_folder):
-        #     os.makedirs(self.app_folder)
-
-        # # Save the Dash app as HTML file
-        # app_index_file = os.path.join(self.app_folder, 'index.html')
-        # with open(app_index_file, 'w') as f:
-        #     f.write(app.index())
-
-        # default values
-        # app.config.assets_folder = opj(self.app_folder,'assets')     # The path to the assets folder.
-        # app.config.include_asset_files = True   # Include the files in the asset folder
-        # app.config.assets_external_path = ""    # The external prefix if serve_locally == False
-        # app.config.assets_url_path = opj(self.app_folder,'assets')     # The path to the assets folder.
-        # # Run the Flask server to serve the Dash app
-        # server = Flask(__name__)
-
-        # @server.route('/')
-        # def serve_index():
-        #     return send_from_directory(self.app_folder, 'index.html')
-
-        # @server.route('/<path:path>')
-        # def serve_static(path):
-        #     return send_from_directory(self.app_folder, path)
-
-
         return app
 
     def create_figure(self):
@@ -743,7 +811,7 @@ class GenMeshMaker(FSMaker):
             margin=dict(t=0, b=0, l=0, r=0),
             template="plotly_white",
             scene_camera=self.camera,
-            uirevision='constant'  # Preserve camera settings
+            uirevision='constant',  # Preserve camera settings
         )
 
         # Update 3D scene options
@@ -762,3 +830,47 @@ class GenMeshMaker(FSMaker):
         # Update facecolor for each mesh trace
         for i in range(len(self.web_mesh)):
             self.dash_fig.data[i].update(vertexcolor=this_col_list[i])
+
+    def web_return_mpl_figs(self, idx):
+        '''
+        Run through the mpl figure plotters...
+        '''
+        if not hasattr(self, 'mpl_fig_makers'):
+            print('No mpl fig makers')
+            return       
+        figs = []
+        for key in self.mpl_fig_makers.keys():
+            this_fig = self.mpl_fig_makers[key]['func'](
+                idx, **self.mpl_fig_makers[key]['kwargs'])
+            this_fig.suptitle = f'{key} - {idx} - {this_fig._suptitle}'
+            this_fig.tight_layout()
+            this_fig.canvas.draw()
+            # get title 
+            # Save the Matplotlib figure as an SVG, making sure nothing is cut off
+            mpl_fig_path = opj(self.output_dir, f'mpl_fig_{key}.svg')
+            this_fig.savefig(mpl_fig_path)
+            # Convert the Matplotlib figure to an image
+            with open(mpl_fig_path, 'r') as f:
+                svg_content = f.read()                
+            svg_data_uri = 'data:image/svg+xml;base64,' + base64.b64encode(svg_content.encode()).decode()
+            # Return the image tag embedding the SVG. Make it a sensible size
+            svg4html = html.Img(
+                src=svg_data_uri,
+                id='mpl-figure-image',
+                style={'width': '100%', 'height': 'auto'},
+                )            
+            figs.append(svg4html)
+        return html.Div(figs)
+
+
+    def web_add_mpl_fig_maker(self, mpl_func, mpl_key, mpl_kwargs={}):
+        '''
+        Add a function to make a matplotlib figure
+        '''
+        if not hasattr(self, 'mpl_fig_makers'):
+            self.mpl_fig_makers = {}
+        self.mpl_fig_makers[mpl_key] = {}
+        self.mpl_fig_makers[mpl_key]['func'] = mpl_func
+        self.mpl_fig_makers[mpl_key]['kwargs'] = mpl_kwargs
+        
+    #endregion DASH FUNCTIONS

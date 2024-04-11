@@ -412,3 +412,10 @@ def dag_get_rgb_str(rgb_vals):
     for v_idx in range(n_vx):
         rgb_str += f'{rgb_vals[v_idx][0]},{rgb_vals[v_idx][1]},{rgb_vals[v_idx][2]}\n'
     return rgb_str    
+
+
+def dag_mesh_interpolate(coords1, coords2, interp):
+    '''Interpolate coordinate from 1 to 2 in step interp
+    '''
+    coords_interp = ((1-interp) * coords1) + (interp * coords2)
+    return coords_interp

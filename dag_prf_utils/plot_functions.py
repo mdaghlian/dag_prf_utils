@@ -867,6 +867,17 @@ def dag_full_violin(pd2plot):
         data=pd2plot, estimator=np.median,
         )   
 
+def dag_dict_key_to_pd_label(dict_in):
+    new_pd = {}
+    new_pd['key'] = []
+    new_pd['val'] = []
+    for key in dict_in.keys():    
+        new_pd['key'] += [str(key)] * len(dict_in[key])
+        new_pd['val'] += list(dict_in[key])
+    new_pd = pd.DataFrame(new_pd)    
+    return new_pd
+
+
 def dag_half_violin(pd2plot, match_id, split_id, **kwargs):
     new_pd = {}
     new_pd['match_id'] = []

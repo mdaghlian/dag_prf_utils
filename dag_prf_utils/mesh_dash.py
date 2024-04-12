@@ -431,11 +431,10 @@ class MeshDash(GenMeshMaker):
             arg_list = [radius, inflate, selected_color,vmin,vmax,cmap,rsq_thresh,]
             if all(arg is None for arg in arg_list):
                 raise dash.exceptions.PreventUpdate                
-            for i in arg_list:
-                print(i)
+            # for i in arg_list:
+            #     print(i)
             # CHECK FOR CHANGE IN COLOR
-            if selected_color is not self.current_col_args['vx_col']:
-                print('col change')
+            if selected_color!=self.current_col_args['vx_col']:
                 # Update colors
                 disp_rgb, cmap_path = self.get_web_vx_col_info(
                     vx_col_name=selected_color,         
@@ -487,7 +486,7 @@ class MeshDash(GenMeshMaker):
                 self.update_figure_with_color(disp_rgb)  
                 self.current_col_bar = cmap_path  
             else:
-                print('b;pppppppppppp')
+                print('No color changes')
             
             # CHECK FOR RADIUS CHANGE
             if (radius is not None) & (radius != 0):

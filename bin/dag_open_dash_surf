@@ -3,37 +3,12 @@
 #$ -cwd
 #$ -V
 
-
-import numpy as np  
-import matplotlib.pyplot as plt
-import matplotlib as mpl
-from datetime import datetime
 import os
-from scipy.spatial import ConvexHull
-import subprocess
 opj = os.path.join
-
-from io import BytesIO
-import base64
-from dag_prf_utils.utils import *
-from dag_prf_utils.plot_functions import *
-from dag_prf_utils.mesh_format import *
-from dag_prf_utils.fs_tools import *
-try:
-    import plotly.graph_objects as go
-except:
-    print('No plotly')
-
-try: 
-    from dash import Dash, dcc, html, Input, Output, State
-    import dash
-    from flask import Flask, send_file,render_template_string, send_from_directory
-except:
-    print('no dash..')
-
-path_to_utils = os.path.abspath(os.path.dirname(__file__))
-
 import pickle
+import sys
+
+
 def main(argv):
     '''
     ---------------------------
@@ -50,11 +25,13 @@ def main(argv):
     # Loading the variable from the pickle file
     with open(pickle_file_path, 'rb') as f:
         loaded_fs = pickle.load(f)
+    # Assume in the correct path
+    loaded_fs.output_dir = './'
     app = loaded_fs.web_launch_with_dash()
     # Open the app in a browser
     # Do not show it in the notebook
     print(f'http://localhost:8000/')
-    app.run_server(mode='external', host='127.0.0.1', port=8000, debug=False, use_reloader=False) 
+    app.run_server(host='127.0.0.1', port=8000, debug=False, use_reloader=False) 
 
 
 

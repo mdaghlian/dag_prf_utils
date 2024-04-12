@@ -27,13 +27,15 @@ except:
 path_to_utils = os.path.abspath(os.path.dirname(__file__))
 
 import pickle
-def dag_mesh_pickle(mesh_dash):
+def dag_mesh_pickle(mesh_dash, **kwargs):
     # Path to the pickle file
     pickle_file_path = opj(mesh_dash.output_dir, 'mesh_dash.pickle')
     print(f'pickling mesh_dash object to : {pickle_file_path}')
+    if os.path.exists(pickle_file_path):
+        os.remove(pickle_file_path)
     # Writing the variable to the pickle file
     with open(pickle_file_path, 'wb') as f:
-        pickle.dump(mesh_dash, f)
+        pickle.dump(mesh_dash, f, **kwargs)
 
 class MeshDash(GenMeshMaker):
     def __init__(self, sub, fs_dir=os.environ['SUBJECTS_DIR'], output_dir=[], **kwargs):
@@ -508,13 +510,19 @@ class MeshDash(GenMeshMaker):
 
             return self.dash_fig, self.current_col_bar, self.current_col_args['c_vmin'],self.current_col_args['c_vmax'],self.current_col_args['c_cmap'],self.current_col_args['c_rsq_thresh']
 
-
+        self.last_click = time.time()
         # CLICKER FUNCTION (PRINTS VERTEX INDEX)
         @app.callback(
             Output('vertex-index-output', 'children'),
             [Input('mesh-plot', 'clickData')]
         )
         def display_click_data(clickData):
+            now = time.time()
+            if (now - self.last_clicktime)<0.5:
+                raise dash.exceptions.PreventUpdate      
+            else: 
+                self.last_clicktime = now
+
             if clickData is not None:
                 point_index = clickData['points'][0]['pointNumber']
                 mesh_index = clickData['points'][0]['curveNumber']
@@ -527,6 +535,11 @@ class MeshDash(GenMeshMaker):
             [Input('mesh-plot', 'clickData')]
         )
         def display_mpl_figure(clickData):
+            now = time.time()
+            if (now - self.last_clicktime)<0.5:
+                raise dash.exceptions.PreventUpdate      
+            else: 
+                self.last_clicktime = now            
             if clickData is not None:
                 point_index = clickData['points'][0]['pointNumber']
                 mesh_index = clickData['points'][0]['curveNumber']

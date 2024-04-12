@@ -43,3 +43,11 @@ if not 'BLENDER' in os.environ.keys():
 elif not os.path.exists(os.environ['BLENDER']):    
     print('Could not find blender, specify location in __init__ file')
     print('only a problem if you want to use blender...')
+
+
+# ************************** CHECK FOR SUBJECTS DIR **************************
+if "SUBJECTS_DIR" not in os.environ.keys():
+    print('SUBJECTS_DIR not found in os.environ')
+    print('Adding empty string...')
+    os.environ['SUBJECTS_DIR'] = ''
+    

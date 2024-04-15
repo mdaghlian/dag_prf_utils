@@ -20,6 +20,7 @@ except:
 try: 
     from dash import Dash, dcc, html, Input, Output, State
     import dash
+    # import dash_bootstrap_components as dbc
     from flask import Flask, send_file,render_template_string, send_from_directory
 except:
     print('no dash..')
@@ -110,7 +111,8 @@ class MeshDash(GenMeshMaker):
             this_mesh3d = go.Mesh3d(
                 **mesh_dict[hemi],
                 name=hemi,
-                showlegend=True,                
+                showlegend=True,
+                hoverinfo='skip',                
                 # showscale=True
                 )
             mesh3d_obj.append(this_mesh3d)
@@ -120,6 +122,7 @@ class MeshDash(GenMeshMaker):
 
         if return_mesh_obj:
             return mesh3d_obj
+        # TODO - CREATE FOR SIMPLE HTML SHARING...
         ply_axis_dict = dict(
             showgrid=False, 
             showticklabels=False, 
@@ -133,6 +136,7 @@ class MeshDash(GenMeshMaker):
                     xaxis=ply_axis_dict,
                     yaxis=ply_axis_dict,
                     zaxis=ply_axis_dict,
+                    xaxis_visible=False, yaxis_visible=False,zaxis_visible=False
                     # bgcolor='rgba(0,0,0,0)'  # Set background color to transparent
                     
                 ),
@@ -302,7 +306,6 @@ class MeshDash(GenMeshMaker):
         cmap_fig.savefig(cmap_path)        
         with open(cmap_path, 'r') as f:
             svg_content = f.read()    
-        # print(svg_content)
         svg_data_uri = 'data:image/svg+xml;base64,' + base64.b64encode(svg_content.encode()).decode()
         # Return the image tag embedding the SVG. Make it a sensible size
         svg4html = html.Img(
@@ -326,7 +329,11 @@ class MeshDash(GenMeshMaker):
         > Add clicker position
         > hemi on & hemi off...
         '''
-        app = dash.Dash(__name__)        
+        app = dash.Dash(
+            __name__,
+            # external_scripts=[opj(path_to_utils, 'mesh_dash_helpers.js')],
+            external_stylesheets=["https://cdn.jsdelivr.net/npm/bootstrap@5.3.1/dist/css/bootstrap.min.css"]#[opj(path_to_utils, 'mesh_dash_css.css')],
+            )        
         self.create_figure()
         init_vx_col = self.web_vxcol_list[0]
         init_vmin = self.web_vxcol[init_vx_col]['c_vmin']
@@ -357,17 +364,26 @@ class MeshDash(GenMeshMaker):
             dcc.Dropdown(
                 id='vertex-color-dropdown',
                 options=[{'label': col_name, 'value': col_name} for col_name in self.web_vxcol_list],
-                value=self.web_vxcol_list[0]
+                value=self.web_vxcol_list[0],
             ),                                      # Dropdown menu - change the surface colour
             dcc.Graph(id='mesh-plot', figure=self.dash_fig),
             html.Div(
                 id='colbar',
-                style={'overflow-x': 'auto', 'overflow-y': 'auto'},
+                style={'maxWidth': '400px', 'width': '100%', 'overflowX': 'auto', 'overflowY': 'auto'},
                 ),       # Plot the colorbar
+            # Update on / off
+            dcc.Checklist(
+                id='vxtoggle',
+                options=[
+                    {'label': 'Plot vx?', 'value': 'on'}
+                ],
+                value=[]
+            ),
+            html.Div(id='vxtoggle-hidden'),
             html.Div(id='vertex-index-output'),     # Print which vertex you have clicked on 
             html.Div(
                 id='mpl-figure-output',
-                style={'overflow-x': 'auto', 'overflow-y': 'auto'},
+                style={'maxWidth': '400px', 'width': '100%', 'overflowX': 'auto', 'overflowY': 'auto'},
                 ),       # Plot the output of the figure (based on click)
             html.Div(id='camera-position-output'),
 
@@ -389,107 +405,15 @@ class MeshDash(GenMeshMaker):
             else:
                 raise dash.exceptions.PreventUpdate
 
-        _,self.current_col_bar = self.get_web_vx_col_info(self.web_vxcol_list[0], rsq_thresh=0)
-        self.current_col_args = {
-            'vx_col' : self.web_vxcol_list[0],
-            'c_vmin' : self.web_vxcol[self.web_vxcol_list[0]]['c_vmin'],
-            'c_vmax' : self.web_vxcol[self.web_vxcol_list[0]]['c_vmax'],
-            'c_cmap' : self.web_vxcol[self.web_vxcol_list[0]]['c_cmap'],
-            'c_rsq_thresh' : self.web_vxcol[self.web_vxcol_list[0]]['c_rsq_thresh'],            
-        }
-
+        # RADIUS
         @app.callback(
-            [
-                Output('mesh-plot', 'figure'),
-                Output('colbar', 'children'),
-                # UPDATE THE VALUES...
-                Output('vmin', 'value'),# 
-                Output('vmax', 'value'),# 
-                Output('cmap', 'value'),# 
-                Output('rsq_thresh', 'value'),# 
-
-            ],
-            [
-                Input('radius', 'value'),               # RADIUS CONTROL
-                Input('inflate', 'value'),              # INFLATE CONTROL
-                Input('vertex-color-dropdown', 'value'),# COLOR DROP DOWN 
-                #
-                Input('vmin', 'value'),# 
-                Input('vmax', 'value'),# 
-                Input('cmap', 'value'),# 
-                Input('rsq_thresh', 'value'),# 
-            ]
+            Output('mesh-plot', 'figure', allow_duplicate=True),
+            Input('radius', 'value'),
+            prevent_initial_call=True
         )
-        def update_figure(
-            radius, 
-            inflate, 
-            selected_color,
-            vmin,
-            vmax,
-            cmap,
-            rsq_thresh,            
-            ):
-            # ALL NONE? 
-            arg_list = [radius, inflate, selected_color,vmin,vmax,cmap,rsq_thresh,]
-            if all(arg is None for arg in arg_list):
-                raise dash.exceptions.PreventUpdate                
-            # for i in arg_list:
-            #     print(i)
-            # CHECK FOR CHANGE IN COLOR
-            if selected_color!=self.current_col_args['vx_col']:
-                # Update colors
-                disp_rgb, cmap_path = self.get_web_vx_col_info(
-                    vx_col_name=selected_color,         
-                )
-                self.update_figure_with_color(disp_rgb)  
-                self.current_col_bar = cmap_path        
-                self.current_col_args['vx_col'] = selected_color
-                for key in self.web_vxcol[selected_color].keys():
-                    self.current_col_args[key] = self.web_vxcol[selected_color][key]
-
-            elif vmin != self.current_col_args['c_vmin']:
-                selected_color = self.current_col_args['vx_col']
-                self.web_vxcol[selected_color]['c_vmin'] = vmin
-                self.current_col_args['c_vmin'] = vmin
-                disp_rgb, cmap_path = self.get_web_vx_col_info(
-                    vx_col_name=selected_color,          
-                )                    
-                self.update_figure_with_color(disp_rgb)  
-                self.current_col_bar = cmap_path        
-
-            elif vmax != self.current_col_args['c_vmax']:
-                selected_color = self.current_col_args['vx_col']
-                self.web_vxcol[selected_color]['c_vmax'] = vmax
-                self.current_col_args['c_vmax'] = vmax
-                disp_rgb, cmap_path = self.get_web_vx_col_info(
-                    vx_col_name=selected_color,          
-                )                    
-                self.update_figure_with_color(disp_rgb)  
-                self.current_col_bar = cmap_path                        
-
-
-            elif cmap != self.current_col_args['c_cmap']:
-                selected_color = self.current_col_args['vx_col']
-                self.web_vxcol[selected_color]['c_cmap'] = cmap
-                self.current_col_args['c_cmap'] = cmap
-                disp_rgb, cmap_path = self.get_web_vx_col_info(
-                    vx_col_name=selected_color,          
-                )                    
-                self.update_figure_with_color(disp_rgb)  
-                self.current_col_bar = cmap_path  
-
-            elif rsq_thresh != self.current_col_args['c_rsq_thresh']:
-                selected_color = self.current_col_args['vx_col']
-                self.web_vxcol[selected_color]['c_rsq_thresh'] = rsq_thresh
-                self.current_col_args['c_rsq_thresh'] = rsq_thresh
-                disp_rgb, cmap_path = self.get_web_vx_col_info(
-                    vx_col_name=selected_color,          
-                )                    
-                self.update_figure_with_color(disp_rgb)  
-                self.current_col_bar = cmap_path  
-            else:
-                print('No color changes')
-            
+        def update_figure_radius(radius):
+            # INFLATE
+            print('RADIUS CALLBACK')
             # CHECK FOR RADIUS CHANGE
             if (radius is not None) & (radius != 0):
                 # Update camera radius (current camera)
@@ -501,53 +425,236 @@ class MeshDash(GenMeshMaker):
                 self.camera['eye']['z'] *= scale
                 # Update layout with new camera settings
                 self.dash_fig.update_layout(scene_camera=self.camera)
-                # print(self.camera)
-
+            else:
+                raise dash.exceptions.PreventUpdate 
+            return self.dash_fig
+        # INFLATE 
+        @app.callback(
+            Output('mesh-plot', 'figure'),
+            Input('inflate', 'value')
+        )
+        def update_figure_inflate(inflate):
             # INFLATE
+            print('INFLATE CALLBACK')
             if inflate is not None:            
                 self.update_figure_inflate(inflate)
+            else:
+                raise dash.exceptions.PreventUpdate 
+            return self.dash_fig
 
-
-            return self.dash_fig, self.current_col_bar, self.current_col_args['c_vmin'],self.current_col_args['c_vmax'],self.current_col_args['c_cmap'],self.current_col_args['c_rsq_thresh']
-
-        self.last_click = time.time()
-        # CLICKER FUNCTION (PRINTS VERTEX INDEX)
-        @app.callback(
-            Output('vertex-index-output', 'children'),
-            [Input('mesh-plot', 'clickData')]
-        )
-        def display_click_data(clickData):
-            now = time.time()
-            if (now - self.last_clicktime)<0.5:
-                raise dash.exceptions.PreventUpdate      
-            else: 
-                self.last_clicktime = now
-
-            if clickData is not None:
-                point_index = clickData['points'][0]['pointNumber']
-                mesh_index = clickData['points'][0]['curveNumber']
-                hemi_name = self.web_hemi_list[mesh_index]                
-                return f'Clicked hemi: {hemi_name}, Vertex Index: {point_index}'
+        # COLOR CALLBACKS     
+        # -> prevent callbacks to callbacks
+        self.do_col_updates = {
+            'vmin' : True,
+            'vmax' : True,
+            'cmap' : True,
+            'rsq_thresh' : True,
+        }   
+        _,self.current_col_bar = self.get_web_vx_col_info(self.web_vxcol_list[0], rsq_thresh=0)
+        self.current_col_args = {
+            'vx_col' : self.web_vxcol_list[0],
+            'c_vmin' : self.web_vxcol[self.web_vxcol_list[0]]['c_vmin'],
+            'c_vmax' : self.web_vxcol[self.web_vxcol_list[0]]['c_vmax'],
+            'c_cmap' : self.web_vxcol[self.web_vxcol_list[0]]['c_cmap'],
+            'c_rsq_thresh' : self.web_vxcol[self.web_vxcol_list[0]]['c_rsq_thresh'],            
+        }
         
-        # CLICKER FUNCTION (DISPLAYS MATPLOTLIB FIGURE, IF DEFINED)
+        # COLOR [1] DROPDOWN
         @app.callback(
-            Output('mpl-figure-output', 'children'),
+            [
+                Output('mesh-plot', 'figure', allow_duplicate=True),
+                Output('colbar', 'children'),
+                Output('vmin', 'value'),# 
+                Output('vmax', 'value'),# 
+                Output('cmap', 'value'),# 
+                Output('rsq_thresh', 'value'),# 
+            ],
+            Input('vertex-color-dropdown', 'value'),
+            prevent_initial_call='initial_duplicate'
+        )
+        def update_col_dropdown(selected_color):
+            print('COL DROPDOWN CALLBACK')
+            if selected_color is not None:
+                # CHECK FOR CHANGE IN COLOR
+                if selected_color!=self.current_col_args['vx_col']:
+                    # Update colors
+                    disp_rgb, cmap_path = self.get_web_vx_col_info(
+                        vx_col_name=selected_color,         
+                    )
+                    self.update_figure_with_color(disp_rgb)  
+                    self.current_col_bar = cmap_path        
+                    self.current_col_args['vx_col'] = selected_color
+                    for key in self.web_vxcol[selected_color].keys():
+                        self.current_col_args[key] = self.web_vxcol[selected_color][key]
+                    for key in self.do_col_updates.keys():
+                        self.do_col_updates[key] = False
+                    return self.dash_fig, self.current_col_bar, self.current_col_args['c_vmin'],self.current_col_args['c_vmax'],self.current_col_args['c_cmap'],self.current_col_args['c_rsq_thresh']
+            raise dash.exceptions.PreventUpdate                
+        
+        # COLOR [2] vmin
+        @app.callback(
+            [
+                Output('mesh-plot', 'figure', allow_duplicate=True),
+                Output('colbar', 'children', allow_duplicate=True),
+            ],
+            Input('vmin', 'value'),
+            prevent_initial_call='initial_duplicate'
+        )
+        def update_col_vmin(vmin):
+            if not self.do_col_updates['vmin']:
+                self.do_col_updates['vmin'] = True
+                raise dash.exceptions.PreventUpdate                
+            
+            print('VMIN CALLBACK')
+            if vmin is not None:
+                # CHECK FOR CHANGE IN COLOR
+                if vmin != self.current_col_args['c_vmin']:
+                    selected_color = self.current_col_args['vx_col']
+                    self.web_vxcol[selected_color]['c_vmin'] = vmin
+                    self.current_col_args['c_vmin'] = vmin
+                    disp_rgb, cmap_path = self.get_web_vx_col_info(
+                        vx_col_name=selected_color,          
+                    )                    
+                    self.update_figure_with_color(disp_rgb)  
+                    self.current_col_bar = cmap_path        
+                    
+                    return self.dash_fig, self.current_col_bar
+            raise dash.exceptions.PreventUpdate                
+
+        # COLOR [3] vmax
+        @app.callback(
+            [
+                Output('mesh-plot', 'figure', allow_duplicate=True),
+                Output('colbar', 'children', allow_duplicate=True),
+            ],
+            Input('vmax', 'value'),
+            prevent_initial_call='initial_duplicate'
+        )
+        def update_col_vmax(vmax):
+            if not self.do_col_updates['vmax']:
+                self.do_col_updates['vmax'] = True
+                raise dash.exceptions.PreventUpdate                
+
+            print('VMAX CALLBACK')
+            if vmax is not None:
+                # CHECK FOR CHANGE IN COLOR
+                if vmax != self.current_col_args['c_vmax']:
+                    selected_color = self.current_col_args['vx_col']
+                    self.web_vxcol[selected_color]['c_vmax'] = vmax
+                    self.current_col_args['c_vmax'] = vmax
+                    disp_rgb, cmap_path = self.get_web_vx_col_info(
+                        vx_col_name=selected_color,          
+                    )                    
+                    self.update_figure_with_color(disp_rgb)  
+                    self.current_col_bar = cmap_path        
+                    
+                    return self.dash_fig, self.current_col_bar
+            raise dash.exceptions.PreventUpdate                
+
+        # COLOR [4] cmap
+        @app.callback(
+            [
+                Output('mesh-plot', 'figure', allow_duplicate=True),
+                Output('colbar', 'children', allow_duplicate=True),
+            ],
+            Input('cmap', 'value'),
+            prevent_initial_call='initial_duplicate'
+        )
+        def update_col_cmap(cmap):
+            if not self.do_col_updates['cmap']:
+                self.do_col_updates['cmap'] = True
+                raise dash.exceptions.PreventUpdate                
+
+            print('CMAP CALLBACK')
+            if cmap is not None:
+                # CHECK FOR CHANGE IN COLOR
+                if cmap != self.current_col_args['c_cmap']:
+                    selected_color = self.current_col_args['vx_col']
+                    self.web_vxcol[selected_color]['c_cmap'] = cmap
+                    self.current_col_args['c_cmap'] = cmap
+                    disp_rgb, cmap_path = self.get_web_vx_col_info(
+                        vx_col_name=selected_color,          
+                    )                    
+                    self.update_figure_with_color(disp_rgb)  
+                    self.current_col_bar = cmap_path        
+                    
+                    return self.dash_fig, self.current_col_bar
+            raise dash.exceptions.PreventUpdate   
+
+        # COLOR [5] rsq_thresh
+        @app.callback(
+            Output('mesh-plot', 'figure', allow_duplicate=True),
+            Input('rsq_thresh', 'value'),
+            prevent_initial_call='initial_duplicate'
+        )
+        def update_col_rsq_thresh(rsq_thresh):
+            if not self.do_col_updates['rsq_thresh']:
+                self.do_col_updates['rsq_thresh'] = True
+                raise dash.exceptions.PreventUpdate                
+
+            print('RSQ THRESH CALLBACK')
+            if rsq_thresh is not None:
+                # CHECK FOR CHANGE IN COLOR
+                if rsq_thresh != self.current_col_args['c_rsq_thresh']:
+                    selected_color = self.current_col_args['vx_col']
+                    self.web_vxcol[selected_color]['c_rsq_thresh'] = rsq_thresh
+                    self.current_col_args['c_rsq_thresh'] = rsq_thresh
+                    disp_rgb, _ = self.get_web_vx_col_info(
+                        vx_col_name=selected_color,          
+                    )                    
+                    self.update_figure_with_color(disp_rgb)  
+                    
+                    return self.dash_fig
+            raise dash.exceptions.PreventUpdate
+
+        # UPDATE VERTEX PLOTS ON CLICK?
+        self.vx_toggle_on = False
+        @app.callback(
+            [Output('vxtoggle-hidden', 'children'),],
+            [Input('vxtoggle', 'value')]
+        )
+        def update_output(value):
+            if 'on' in value:
+                self.vx_toggle_on = True
+            else:
+                self.vx_toggle_on = False
+            raise dash.exceptions.PreventUpdate
+
+
+        # CLICKER FUNCTION (DISPLAYS MATPLOTLIB FIGURE, IF DEFINED)
+        self.last_clicktime = time.time()
+        @app.callback(
+            [
+                Output('mpl-figure-output', 'children'),
+                Output('vertex-index-output', 'children'),
+            ],
             [Input('mesh-plot', 'clickData')]
         )
         def display_mpl_figure(clickData):
+            if not self.vx_toggle_on:
+                print('Toggled OFF')
+                raise dash.exceptions.PreventUpdate 
             now = time.time()
-            if (now - self.last_clicktime)<0.5:
-                raise dash.exceptions.PreventUpdate      
-            else: 
-                self.last_clicktime = now            
+            if (now - self.last_clicktime)<5:
+                print('Clicked too soon...')
+                raise dash.exceptions.PreventUpdate 
+            else:
+                self.last_clicktime = now
+            print('CLICK CALLBACK')
             if clickData is not None:
+                right_now = time.time()
                 point_index = clickData['points'][0]['pointNumber']
                 mesh_index = clickData['points'][0]['curveNumber']
                 hemi_name = self.web_hemi_list[mesh_index]                                
                 if hemi_name == 'rh':
-                    point_index += self.n_vx['lh']
-                mpl_figs = self.web_return_mpl_figs(point_index)                
-
+                    full_point_index = self.n_vx['lh']+point_index
+                else:
+                    full_point_index = point_index
+                click_str = f'Clicked hemi: {hemi_name}, vx id: {point_index}, full_id {full_point_index}'
+                mpl_figs = self.web_return_mpl_figs(full_point_index), click_str                
+                self.last_clicktime = time.time()
+                finished_now = time.time()
+                print(f'time = {finished_now - right_now}')
                 return mpl_figs
         app.scripts.config.serve_locally = True
         app.css.config.serve_locally = True
@@ -579,7 +686,8 @@ class MeshDash(GenMeshMaker):
 
         # Update 3D scene options
         self.dash_fig.update_scenes(
-            aspectmode="manual"
+            aspectmode="manual",
+            xaxis_visible=False, yaxis_visible=False,zaxis_visible=False,
         )
 
     def update_figure_with_color(self, disp_rgb):

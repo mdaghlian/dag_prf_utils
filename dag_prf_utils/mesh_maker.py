@@ -53,17 +53,8 @@ class GenMeshMaker(FSMaker):
         for us in ['curv', 'thickness']:
             self.us_values[us] = self._return_fs_curv_vals_both_hemis(curv_name=us, return_type='concat',)            
             if us=='curv':
-                vmin,vmax=-1,1
-                self.us_values[us] *= (-1.25+0.1)
-                # fc: float=-1.25,
-                # if self.curv_type == "standard":
-                #     self.curv.data *= (fc+0.1)
-                # elif self.curv_type == "hcp":
-                #     self.curv.data *= (fc+0.1)
-                # elif self.curv_type == "cortex":
-                #     self.fix_transparancy = False
-                # else:
-                #     self.curv.data = np.ones_like(self.curv.data)                
+                vmin,vmax=-1,2
+                self.us_values[us] = (self.us_values[us]<0)*1.0
             elif us=='thickness':
                 vmin,vmax=0,5
             self.us_cols[us] = self._data_to_rgb(

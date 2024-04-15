@@ -122,7 +122,6 @@ class MeshDash(GenMeshMaker):
 
         if return_mesh_obj:
             return mesh3d_obj
-        # TODO - CREATE FOR SIMPLE HTML SHARING...
         ply_axis_dict = dict(
             showgrid=False, 
             showticklabels=False, 
@@ -284,7 +283,7 @@ class MeshDash(GenMeshMaker):
             
         # RETURN RGB & CMAP INFO
         disp_rgb, cmap_dict = self.return_display_rgb(
-            return_cmap_dict=True, unit_rgb=False, split_hemi=True, 
+            return_cmap_dict=True, unit_rgb=True, split_hemi=True, 
             data=self.web_vxcol[vx_col_name]['data'],
             data_mask=self.web_vxcol[vx_col_name]['data4mask']>self.web_vxcol[vx_col_name]['c_rsq_thresh'],
             cmap = self.web_vxcol[vx_col_name]['c_cmap'],
@@ -332,7 +331,10 @@ class MeshDash(GenMeshMaker):
         app = dash.Dash(
             __name__,
             # external_scripts=[opj(path_to_utils, 'mesh_dash_helpers.js')],
-            external_stylesheets=["https://cdn.jsdelivr.net/npm/bootstrap@5.3.1/dist/css/bootstrap.min.css"]#[opj(path_to_utils, 'mesh_dash_css.css')],
+            # external_stylesheets=["https://cdn.jsdelivr.net/npm/bootstrap@5.3.1/dist/css/bootstrap.min.css"]#[opj(path_to_utils, 'mesh_dash_css.
+            # css')],
+            external_stylesheets=["https://cdn.jsdelivr.net/npm/bootswatch@5.3.3/dist/sketchy/bootstrap.min.css"]
+
             )        
         self.create_figure()
         init_vx_col = self.web_vxcol_list[0]
@@ -645,7 +647,8 @@ class MeshDash(GenMeshMaker):
                 right_now = time.time()
                 point_index = clickData['points'][0]['pointNumber']
                 mesh_index = clickData['points'][0]['curveNumber']
-                hemi_name = self.web_hemi_list[mesh_index]                                
+                hemi_name = self.web_hemi_list[mesh_index]
+                print(self.dash_fig.data[mesh_index]['vertexcolor'][point_index,:])                                
                 if hemi_name == 'rh':
                     full_point_index = self.n_vx['lh']+point_index
                 else:
@@ -691,7 +694,7 @@ class MeshDash(GenMeshMaker):
         )
 
     def update_figure_with_color(self, disp_rgb):
-        # Update vertexcolor for each mesh trace
+        # Update vertexcolor for each mesh trace        
         for i,ih in enumerate(self.web_hemi_list):
             self.dash_fig.data[i].update(vertexcolor=disp_rgb[ih])        
 

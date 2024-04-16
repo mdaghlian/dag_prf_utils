@@ -307,15 +307,16 @@ class MeshDash(GenMeshMaker):
                             width=10, 
                         ),
                         opacity=1,
-                        legend=True if first_instance else False, 
+                        showlegend=True if first_instance else False, 
                     )
                     this_roi_dict = {
                         'hemi' : hemi,
                         'roi' : roi,
                         'border_vx' : border_vx,
                         'border_line' : border_line,
+                        'data_id' : None,
                     }
-                    self.append(border_line)        
+                    self.roi_obj.append(this_roi_dict)        
     
     def get_web_vx_col_info(
             self, vx_col_name, 
@@ -450,7 +451,7 @@ class MeshDash(GenMeshMaker):
             html.Div(
                 id='mpl-figure-output',
                 # className='mpl_figure_full',
-                style={'maxWidth': '600px', 'width': '100%', 'overflowX': 'auto', 'overflowY': 'auto'},
+                style={'maxWidth': '800px', 'width': '100%', 'overflowX': 'auto', 'overflowY': 'auto'},
             ),  # Plot the output of the figure (based on click)
             html.Div(id='camera-position-output'),
 
@@ -504,7 +505,7 @@ class MeshDash(GenMeshMaker):
             # INFLATE
             print('INFLATE CALLBACK')
             if inflate is not None:            
-                self.update_figure_inflate(inflate)
+                self.update_figure_inflate_NEW(inflate)
             else:
                 raise dash.exceptions.PreventUpdate 
             return self.dash_fig
@@ -730,10 +731,14 @@ class MeshDash(GenMeshMaker):
 
     def create_figure(self):
         self.dash_fig = go.Figure()
+        self.hemi_count = 0
         for web_mesh in self.web_mesh:
             self.dash_fig.add_trace(web_mesh)
-        for roi in self.roi_obj:
-            self.dash_fig.add_trace(roi['border_line'])
+            self.hemi_count += 1
+
+        for iroi,vroi in enumerate(self.roi_obj):
+            self.dash_fig.add_trace(vroi['border_line'])
+            self.roi_obj[iroi]['data_id'] = iroi + self.hemi_count
         # Get index of dash_fig traces
         self.dash_fig_id = []
         for i,i_data in enumerate(self.dash_fig.data):
@@ -788,8 +793,32 @@ class MeshDash(GenMeshMaker):
                 y=this_vx_coord[i][:,1],
                 z=this_vx_coord[i][:,2],
                 )
-        # for i_dash in 
 
+    def update_figure_inflate_NEW(self, inflate):
+        new_vx_coords = {}
+        for hemi in self.web_hemi_list:
+            # INTERPOLATE
+            new_vx_coords[hemi] = dag_mesh_interpolate(
+                coords1=self.mesh_info['pial'][hemi]['coords'],
+                coords2=self.mesh_info['inflated'][hemi]['coords'],
+                interp=inflate,
+                )
+        # Update the vertex coordinates for each webmesh
+        for i_hemi,v_hemi in enumerate(self.web_hemi_list):
+            self.dash_fig.data[i_hemi].update(
+                x=new_vx_coords[v_hemi][:,0],
+                y=new_vx_coords[v_hemi][:,1],
+                z=new_vx_coords[v_hemi][:,2],
+                )
+        # Update the ROI coordinates
+        for i_roi,v_roi in enumerate(self.roi_obj):
+            this_hemi = v_roi['hemi']
+            this_border_vx = v_roi['border_vx']
+            self.dash_fig.data[self.roi_obj['data_id']].update(
+                x=new_vx_coords[this_hemi][this_border_vx,0],
+                y=new_vx_coords[this_hemi][this_border_vx,1],
+                z=new_vx_coords[this_hemi][this_border_vx,2],
+                )
 
         
 

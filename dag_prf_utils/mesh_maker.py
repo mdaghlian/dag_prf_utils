@@ -100,6 +100,7 @@ class GenMeshMaker(FSMaker):
         # Load mask for data to be plotted on surface
         data_mask = kwargs.get('data_mask', np.ones(self.total_n_vx, dtype=bool))
         data_alpha = kwargs.get('data_alpha', np.ones(self.total_n_vx))
+        mask_vmin = kwargs.get('mask_vmin', False)
         data_alpha[~data_mask] = 0 # Make values to be masked have alpha=0
         
         # ROI arguments
@@ -120,7 +121,8 @@ class GenMeshMaker(FSMaker):
         vmin = kwargs.get('vmin', np.nanmin(data[data_mask]))
         vmax = kwargs.get('vmax', np.nanmax(data[data_mask]))
         # By default use vmin as mask...
-        data_alpha[data<vmin] = 0
+        if mask_vmin:
+            data_alpha[data<vmin] = 0
                 
         # Create rgb values mapping from data to cmap
         data_col1 = self._data_to_rgb(

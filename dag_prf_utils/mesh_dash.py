@@ -289,8 +289,11 @@ class MeshDash(GenMeshMaker):
                     return_coords=False,
                     )
                 # If more than one closed path (e.g., v2v and v2d)...
-                for border_vx in border_vx_list:
-                    first_instance = (ih==0) & (i_roi==0)
+                print('#{:02x}{:02x}{:02x}'.format(*(roi_cols[i_roi]*255).astype(int)))
+                this_roi_col = '#{:02x}{:02x}{:02x}'.format(*(roi_cols[i_roi]*255).astype(int))
+                # bloop
+                for ibvx,border_vx in enumerate(border_vx_list):
+                    first_instance = (ih==0) & (ibvx==0)
                     # Create a the line object for the border
                     border_line = go.Scatter3d(
                         x=self.mesh_info[mesh_name][hemi]['x'][border_vx],
@@ -300,10 +303,10 @@ class MeshDash(GenMeshMaker):
                         name=roi,
                         marker=dict(
                             size=10,
-                            color=roi_cols[i_roi],
+                            color=this_roi_col, #roi_cols[i_roi],
                         ),
                         line=dict(
-                            color=roi_cols[i_roi],
+                            color=this_roi_col, #roi_cols[i_roi],
                             width=10, 
                         ),
                         opacity=1,
@@ -814,7 +817,7 @@ class MeshDash(GenMeshMaker):
         for i_roi,v_roi in enumerate(self.roi_obj):
             this_hemi = v_roi['hemi']
             this_border_vx = v_roi['border_vx']
-            self.dash_fig.data[self.roi_obj['data_id']].update(
+            self.dash_fig.data[self.roi_obj[i_roi]['data_id']].update(
                 x=new_vx_coords[this_hemi][this_border_vx,0],
                 y=new_vx_coords[this_hemi][this_border_vx,1],
                 z=new_vx_coords[this_hemi][this_border_vx,2],

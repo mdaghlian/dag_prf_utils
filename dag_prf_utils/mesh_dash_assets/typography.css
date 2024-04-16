@@ -1,0 +1,43 @@
+* {
+    /* font-family: sans-serif;*/
+    font-family: "Comic Sans MS", cursive, sans-serif;
+}
+h1, h2, h3, h4, h5, h6 {
+    color: hotpink
+}
+
+
+/* @import url('https://fonts.googleapis.com/css2?family=Pacifico&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Bungee&display=swap');
+
+body {
+    font-family: 'Pacifico', cursive;
+    color: #333;
+}
+svg text {
+    font-family: 'Pacifico', cursive;
+    color: #333;
+}
+input {
+    font-family: 'Pacifico', cursive;
+    color: #333;
+}
+
+h1, h2, h3, h4, h5, h6 {
+    font-family: 'Bungee', cursive;
+    color: #ff6347;
+}
+
+p {
+    font-size: 1.2em;
+    line-height: 1.6;
+}
+
+a {
+    color: #ff6347;
+    text-decoration: none;
+}
+
+a:hover {
+    color: #ff4500;
+} */

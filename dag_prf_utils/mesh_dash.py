@@ -112,7 +112,7 @@ class MeshDash(GenMeshMaker):
                 **mesh_dict[hemi],
                 name=hemi,
                 showlegend=True,
-                hoverinfo='skip',                
+                # hoverinfo='skip',                
                 # showscale=True
                 )
             mesh3d_obj.append(this_mesh3d)
@@ -223,6 +223,8 @@ class MeshDash(GenMeshMaker):
         self.web_mesh = self.add_plotly_surface(
             return_mesh_obj=True,
             **kwargs)        
+        self.roi_obj = []
+        self.roi_list = []
         self.web_vxcol = {}
         self.web_vxcol_list = []
     
@@ -257,7 +259,63 @@ class MeshDash(GenMeshMaker):
         self.web_vxcol[vx_col_name]['c_cmap'] = c_cmap
         # self.web_vxcol[vx_col_name]['c_rgb'] = [] # To be assigned
         self.web_vxcol_list.append(vx_col_name)
-        
+
+    def web_add_roi(self, roi_list, **kwargs):
+        '''
+        Add a roi to the plot
+        '''
+        if not isinstance(roi_list, list):
+            roi_list = [roi_list]
+        self.roi_list = roi_list
+        self.roi_info = []            
+        hemi_list = kwargs.get('hemi_list', self.web_hemi_list)
+        if not isinstance(hemi_list, list):
+            hemi_list = [hemi_list]
+        mesh_name = kwargs.get('mesh_name', 'inflated')
+        # marker_kwargs = kwargs.get()
+        roi_cols = dag_get_col_vals(
+            np.arange(len(roi_list)),
+            vmin = -1, vmax=7, cmap='jet'
+        )
+        self.roi_obj = []
+        for ih,hemi in enumerate(hemi_list):
+            for i_roi,roi in enumerate(roi_list):
+                # Load roi index:
+                roi_bool = dag_load_roi(self.sub, roi, fs_dir=self.fs_dir, split_LR=True)[hemi]
+
+                border_vx_list = dag_find_border_vx_in_order(
+                    roi_bool=roi_bool, 
+                    mesh_info=self.mesh_info[mesh_name][hemi], 
+                    return_coords=False,
+                    )
+                # If more than one closed path (e.g., v2v and v2d)...
+                for border_vx in border_vx_list:
+                    first_instance = (ih==0) & (i_roi==0)
+                    # Create a the line object for the border
+                    border_line = go.Scatter3d(
+                        x=self.mesh_info[mesh_name][hemi]['x'][border_vx],
+                        y=self.mesh_info[mesh_name][hemi]['y'][border_vx],
+                        z=self.mesh_info[mesh_name][hemi]['z'][border_vx],
+                        mode='lines',
+                        name=roi,
+                        marker=dict(
+                            size=10,
+                            color=roi_cols[i_roi],
+                        ),
+                        line=dict(
+                            color=roi_cols[i_roi],
+                            width=10, 
+                        ),
+                        opacity=1,
+                        legend=True if first_instance else False, 
+                    )
+                    this_roi_dict = {
+                        'hemi' : hemi,
+                        'roi' : roi,
+                        'border_vx' : border_vx,
+                        'border_line' : border_line,
+                    }
+                    self.append(border_line)        
     
     def get_web_vx_col_info(
             self, vx_col_name, 
@@ -330,11 +388,7 @@ class MeshDash(GenMeshMaker):
         '''
         app = dash.Dash(
             __name__,
-            # external_scripts=[opj(path_to_utils, 'mesh_dash_helpers.js')],
-            # external_stylesheets=["https://cdn.jsdelivr.net/npm/bootstrap@5.3.1/dist/css/bootstrap.min.css"]#[opj(path_to_utils, 'mesh_dash_css.
-            # css')],
-            external_stylesheets=["https://cdn.jsdelivr.net/npm/bootswatch@5.3.3/dist/sketchy/bootstrap.min.css"]
-
+            assets_folder=opj(os.path.dirname(__file__),'mesh_dash_assets')
             )        
         self.create_figure()
         init_vx_col = self.web_vxcol_list[0]
@@ -343,36 +397,46 @@ class MeshDash(GenMeshMaker):
         init_rsq_thresh = self.web_vxcol[init_vx_col]['c_rsq_thresh']
         init_cmap = self.web_vxcol[init_vx_col]['c_cmap']
 
-        app_layout_number_args = dict(type='number', n_submit=0, debounce=True)
+        num_input_args = dict(type='number', n_submit=0, debounce=True)
+        # label_style = dict(width='50px', display='inline-block')
+        # column_style = dict(width='45%', float='left', marginRight='5%', display='inline-block')  # Adjusted width and added margin
+
         app.layout = html.Div([
-            # Add camera controls here
-            html.Label('radius'),
-            dcc.Input(id='radius', value=2, **app_layout_number_args),            
-            # Inflate 
-            html.Label('inflate'),
-            dcc.Input(id='inflate', value=1, **app_layout_number_args),            
-            
-            
-            # COLOR STUFF
-            html.Label('vmin'),
-            dcc.Input(id='vmin', value=init_vmin, **app_layout_number_args),                        
-            html.Label('vmax'),
-            dcc.Input(id='vmax', value=init_vmax, **app_layout_number_args),                        
-            html.Label('rsq_thresh'),
-            dcc.Input(id='rsq_thresh', value=init_rsq_thresh, **app_layout_number_args),                        
-            html.Label('cmap'),
-            dcc.Input(id='cmap', type='string', value=init_cmap, n_submit=0, debounce=True),                        
+            # COLUMN 1
+            html.Div([
+                # Radius
+                html.Label('radius', className='label'),
+                dcc.Input(id='radius', value=2,  **num_input_args),
+                # Inflate 
+                html.Label('inflate', className='label'),
+                dcc.Input(id='inflate', value=1,  **num_input_args),
+            ], className='column'),
+            # COLUMN 2
+            html.Div([
+                # COLOR STUFF
+                html.Label('vmin', className='label'),
+                dcc.Input(id='vmin', value=init_vmin,  **num_input_args),
+                html.Label('vmax', className='label'),
+                dcc.Input(id='vmax', value=init_vmax,  **num_input_args),
+            ], className='column'),
+            # COLUMN 3
+            html.Div([            
+                html.Label('cmap', className='label'),
+                dcc.Input(id='cmap',  type='string', value=init_cmap, n_submit=0, debounce=True),
+                html.Label('rsq_thresh', className='label'),
+                dcc.Input(id='rsq_thresh', value=init_rsq_thresh,  **num_input_args),
+            ], className='column'),
             #
             dcc.Dropdown(
                 id='vertex-color-dropdown',
                 options=[{'label': col_name, 'value': col_name} for col_name in self.web_vxcol_list],
                 value=self.web_vxcol_list[0],
-            ),                                      # Dropdown menu - change the surface colour
+            ),  # Dropdown menu - change the surface colour
             dcc.Graph(id='mesh-plot', figure=self.dash_fig),
             html.Div(
                 id='colbar',
                 style={'maxWidth': '400px', 'width': '100%', 'overflowX': 'auto', 'overflowY': 'auto'},
-                ),       # Plot the colorbar
+            ),  # Plot the colorbar
             # Update on / off
             dcc.Checklist(
                 id='vxtoggle',
@@ -382,14 +446,15 @@ class MeshDash(GenMeshMaker):
                 value=[]
             ),
             html.Div(id='vxtoggle-hidden'),
-            html.Div(id='vertex-index-output'),     # Print which vertex you have clicked on 
+            html.Div(id='vertex-index-output'),  # Print which vertex you have clicked on
             html.Div(
                 id='mpl-figure-output',
-                style={'maxWidth': '400px', 'width': '100%', 'overflowX': 'auto', 'overflowY': 'auto'},
-                ),       # Plot the output of the figure (based on click)
+                # className='mpl_figure_full',
+                style={'maxWidth': '600px', 'width': '100%', 'overflowX': 'auto', 'overflowY': 'auto'},
+            ),  # Plot the output of the figure (based on click)
             html.Div(id='camera-position-output'),
 
-        ], style={'width': '100%', 'height': '100vh'})
+        ], className='container')  # Add a container class to center the content
 
         # SAVE CAMERA POSITION AFTER DRAGGING...
         @app.callback(
@@ -659,14 +724,21 @@ class MeshDash(GenMeshMaker):
                 finished_now = time.time()
                 print(f'time = {finished_now - right_now}')
                 return mpl_figs
-        app.scripts.config.serve_locally = True
-        app.css.config.serve_locally = True
+        # app.scripts.config.serve_locally = True
+        # app.css.config.serve_locally = True
         return app
 
     def create_figure(self):
         self.dash_fig = go.Figure()
         for web_mesh in self.web_mesh:
             self.dash_fig.add_trace(web_mesh)
+        for roi in self.roi_obj:
+            self.dash_fig.add_trace(roi['border_line'])
+        # Get index of dash_fig traces
+        self.dash_fig_id = []
+        for i,i_data in enumerate(self.dash_fig.data):
+            self.dash_fig_id.append(i_data['name'])
+
         self.camera = dict(
             up=dict(x=0, y=0, z=1),
             center=dict(x=0, y=0, z=0),
@@ -716,7 +788,7 @@ class MeshDash(GenMeshMaker):
                 y=this_vx_coord[i][:,1],
                 z=this_vx_coord[i][:,2],
                 )
-
+        # for i_dash in 
 
 
         
@@ -751,7 +823,7 @@ class MeshDash(GenMeshMaker):
                 style={'width': '100%', 'height': 'auto'},
                 )            
             figs.append(svg4html)
-        return html.Div(figs)
+        return html.Div(figs,) # className='mpl_subfigure')
 
 
     def web_add_mpl_fig_maker(self, mpl_func, mpl_key, mpl_kwargs={}):

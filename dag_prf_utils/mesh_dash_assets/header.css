@@ -1,13 +1,25 @@
 .column {
-    width: 30%;
+    width: 10%;
     float: left;
     padding: 10px;
+    display: inline-block;
+    vertical-align: top;
 }
 
 .label {
     width: 50px;
     display: inline-block;
 }
+.dash-input {
+    width: 100px;
+    display: inline-block;
+}
+
+/* .scrollable {
+    /* height: 10px; */
+    /* overflow-y: auto; */
+/* } */
+
 
 /* .mpl_figure_full {
     width: 200px;

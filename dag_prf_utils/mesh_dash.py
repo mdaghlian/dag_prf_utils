@@ -219,12 +219,12 @@ class MeshDash(GenMeshMaker):
         if not isinstance(self.web_hemi_list, list):
             self.web_hemi_list = [self.web_hemi_list]
         kwargs['hemi_list'] = self.web_hemi_list
-
-        self.web_mesh = self.add_plotly_surface(
-            return_mesh_obj=True,
-            **kwargs)        
+        # Move to dash launch...
+        # self.web_mesh = self.add_plotly_surface(
+        #     return_mesh_obj=True,
+        #     **kwargs)        
+        self.hemi_count = len(self.web_hemi_list)
         self.roi_obj = []
-        self.roi_list = []
         self.web_vxcol = {}
         self.web_vxcol_list = []
     
@@ -289,9 +289,8 @@ class MeshDash(GenMeshMaker):
                     return_coords=False,
                     )
                 # If more than one closed path (e.g., v2v and v2d)...
-                print('#{:02x}{:02x}{:02x}'.format(*(roi_cols[i_roi]*255).astype(int)))
                 this_roi_col = '#{:02x}{:02x}{:02x}'.format(*(roi_cols[i_roi]*255).astype(int))
-                # bloop
+
                 for ibvx,border_vx in enumerate(border_vx_list):
                     first_instance = (ih==0) & (ibvx==0)
                     # Create a the line object for the border
@@ -316,10 +315,41 @@ class MeshDash(GenMeshMaker):
                         'hemi' : hemi,
                         'roi' : roi,
                         'border_vx' : border_vx,
-                        'border_line' : border_line,
+                        'roi_col' : this_roi_col,
+                        'border_line' : None,
                         'data_id' : None,
+                        'first_instance' : first_instance,
                     }
                     self.roi_obj.append(this_roi_dict)        
+    
+    def web_remake_roi(self):
+        mesh_name = 'inflated'
+        # marker_kwargs = kwargs.get()
+        for i_sub_roi,v_sub_roi in enumerate(self.roi_obj):
+            hemi = v_sub_roi['hemi']
+            roi = v_sub_roi['roi']
+            border_vx = v_sub_roi['border_vx']
+            this_roi_col = v_sub_roi['roi_col']
+            first_instance = v_sub_roi['first_instance']
+            # Create a the line object for the border
+            border_line = go.Scatter3d(
+                x=self.mesh_info[mesh_name][hemi]['x'][border_vx],
+                y=self.mesh_info[mesh_name][hemi]['y'][border_vx],
+                z=self.mesh_info[mesh_name][hemi]['z'][border_vx],
+                mode='lines',
+                name=roi,
+                marker=dict(
+                    size=10,
+                    color=this_roi_col, 
+                ),
+                line=dict(
+                    color=this_roi_col, 
+                    width=10, 
+                ),
+                opacity=1,
+                showlegend=True if first_instance else False, 
+            )
+            self.roi_obj[i_sub_roi]['border_line'] = border_line    
     
     def get_web_vx_col_info(
             self, vx_col_name, 
@@ -378,6 +408,45 @@ class MeshDash(GenMeshMaker):
         return disp_rgb, html.Div(svg4html)
     
     # ***** DASH *****
+    def create_figure(self):
+        self.dash_fig = go.Figure()
+        web_mesh = self.add_plotly_surface(return_mesh_obj=True)
+        for ih,hemi in enumerate(self.web_hemi_list):                        
+            self.dash_fig.add_trace(web_mesh[ih])
+        self.web_remake_roi() 
+        for iroi,vroi in enumerate(self.roi_obj):
+            self.dash_fig.add_trace(vroi['border_line'])
+            self.roi_obj[iroi]['data_id'] = iroi + self.hemi_count
+        # Get index of dash_fig traces
+        self.dash_fig_id = []
+        for i,i_data in enumerate(self.dash_fig.data):
+            self.dash_fig_id.append(i_data['name'])
+
+        self.camera = dict(
+            up=dict(x=0, y=0, z=1),
+            center=dict(x=0, y=0, z=0),
+            eye=dict(x=1.25, y=1.25, z=1.25)
+        )  # Default camera position
+        self.dash_fig.update_layout(legend=dict(
+            yanchor="top",
+            y=0.01,
+            xanchor="left",
+            x=0.01
+        ))        
+        # Update plot sizing
+        self.dash_fig.update_layout(
+            autosize=True,
+            margin=dict(t=0, b=0, l=0, r=0),
+            template="plotly_white",
+            scene_camera=self.camera,
+            uirevision='constant',  # Preserve camera settings
+        )
+
+        # Update 3D scene options
+        self.dash_fig.update_scenes(
+            aspectmode="manual",
+            xaxis_visible=False, yaxis_visible=False,zaxis_visible=False,
+        )
 
     def web_launch_with_dash(self):
         '''
@@ -402,9 +471,7 @@ class MeshDash(GenMeshMaker):
         init_cmap = self.web_vxcol[init_vx_col]['c_cmap']
 
         num_input_args = dict(type='number', n_submit=0, debounce=True)
-        # label_style = dict(width='50px', display='inline-block')
-        # column_style = dict(width='45%', float='left', marginRight='5%', display='inline-block')  # Adjusted width and added margin
-
+        checkbox_options = [{'label' : i,  'value' : 0} for i in self.roi_list]
         app.layout = html.Div([
             # COLUMN 1
             html.Div([
@@ -430,7 +497,17 @@ class MeshDash(GenMeshMaker):
                 html.Label('rsq_thresh', className='label'),
                 dcc.Input(id='rsq_thresh', value=init_rsq_thresh,  **num_input_args),
             ], className='column'),
-            #
+            # COLUMN 4
+            html.Div([
+            # Scrollable area with checkboxes
+                html.Div([
+                    dcc.Checklist(
+                        id='checkboxes',
+                        options=checkbox_options,
+                        value=[],  # Initial value
+                    ),
+                ], className='scrollable'),
+            ], className='column'),
             dcc.Dropdown(
                 id='vertex-color-dropdown',
                 options=[{'label': col_name, 'value': col_name} for col_name in self.web_vxcol_list],
@@ -732,46 +809,7 @@ class MeshDash(GenMeshMaker):
         # app.css.config.serve_locally = True
         return app
 
-    def create_figure(self):
-        self.dash_fig = go.Figure()
-        self.hemi_count = 0
-        for web_mesh in self.web_mesh:
-            self.dash_fig.add_trace(web_mesh)
-            self.hemi_count += 1
 
-        for iroi,vroi in enumerate(self.roi_obj):
-            self.dash_fig.add_trace(vroi['border_line'])
-            self.roi_obj[iroi]['data_id'] = iroi + self.hemi_count
-        # Get index of dash_fig traces
-        self.dash_fig_id = []
-        for i,i_data in enumerate(self.dash_fig.data):
-            self.dash_fig_id.append(i_data['name'])
-
-        self.camera = dict(
-            up=dict(x=0, y=0, z=1),
-            center=dict(x=0, y=0, z=0),
-            eye=dict(x=1.25, y=1.25, z=1.25)
-        )  # Default camera position
-        self.dash_fig.update_layout(legend=dict(
-            yanchor="top",
-            y=0.01,
-            xanchor="left",
-            x=0.01
-        ))        
-        # Update plot sizing
-        self.dash_fig.update_layout(
-            autosize=True,
-            margin=dict(t=0, b=0, l=0, r=0),
-            template="plotly_white",
-            scene_camera=self.camera,
-            uirevision='constant',  # Preserve camera settings
-        )
-
-        # Update 3D scene options
-        self.dash_fig.update_scenes(
-            aspectmode="manual",
-            xaxis_visible=False, yaxis_visible=False,zaxis_visible=False,
-        )
 
     def update_figure_with_color(self, disp_rgb):
         # Update vertexcolor for each mesh trace        

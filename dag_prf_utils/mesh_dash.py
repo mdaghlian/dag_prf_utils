@@ -25,6 +25,12 @@ try:
 except:
     print('no dash..')
 
+
+import io
+import base64
+import matplotlib.image as mpimg
+from PIL import Image
+
 path_to_utils = os.path.abspath(os.path.dirname(__file__))
 
 import pickle
@@ -57,7 +63,6 @@ class MeshDash(GenMeshMaker):
         disp_rgb, cmap_dict = self.return_display_rgb(
             data=data, split_hemi=True, return_cmap_dict=True, **kwargs
         )
-
         if data is None:
             data = np.zeros(self.total_n_vx)
 
@@ -227,6 +232,7 @@ class MeshDash(GenMeshMaker):
         self.roi_obj = []
         self.web_vxcol = {}
         self.web_vxcol_list = []
+
     
     def web_add_vx_col(self, vx_col_name, data, **kwargs):
         '''Add a surface
@@ -292,25 +298,7 @@ class MeshDash(GenMeshMaker):
                 this_roi_col = '#{:02x}{:02x}{:02x}'.format(*(roi_cols[i_roi]*255).astype(int))
 
                 for ibvx,border_vx in enumerate(border_vx_list):
-                    first_instance = (ih==0) & (ibvx==0)
-                    # Create a the line object for the border
-                    border_line = go.Scatter3d(
-                        x=self.mesh_info[mesh_name][hemi]['x'][border_vx],
-                        y=self.mesh_info[mesh_name][hemi]['y'][border_vx],
-                        z=self.mesh_info[mesh_name][hemi]['z'][border_vx],
-                        mode='lines',
-                        name=roi,
-                        marker=dict(
-                            size=10,
-                            color=this_roi_col, #roi_cols[i_roi],
-                        ),
-                        line=dict(
-                            color=this_roi_col, #roi_cols[i_roi],
-                            width=10, 
-                        ),
-                        opacity=1,
-                        showlegend=True if first_instance else False, 
-                    )
+                    first_instance = (ih==0) & (ibvx==0) # Only show legend for first instance
                     this_roi_dict = {
                         'hemi' : hemi,
                         'roi' : roi,
@@ -340,12 +328,10 @@ class MeshDash(GenMeshMaker):
                 name=roi,
                 marker=dict(
                     size=10,
-                    color=this_roi_col, 
-                ),
+                    color=this_roi_col, ),
                 line=dict(
                     color=this_roi_col, 
-                    width=10, 
-                ),
+                    width=10, ),
                 opacity=1,
                 showlegend=True if first_instance else False, 
             )
@@ -374,6 +360,7 @@ class MeshDash(GenMeshMaker):
                 self.web_vxcol[vx_col_name][c] = c_update[c]
             
         # RETURN RGB & CMAP INFO
+        make_rgb_time = time.time()
         disp_rgb, cmap_dict = self.return_display_rgb(
             return_cmap_dict=True, unit_rgb=True, split_hemi=True, 
             data=self.web_vxcol[vx_col_name]['data'],
@@ -382,7 +369,7 @@ class MeshDash(GenMeshMaker):
             vmin = self.web_vxcol[vx_col_name]['c_vmin'],
             vmax = self.web_vxcol[vx_col_name]['c_vmax'],
             )
-
+        print(f'Make RGB time = {time.time() - make_rgb_time}')
         # Save CMAP to svg
         cmap_fig = dag_cmap_plotter(
             cmap=cmap_dict['cmap'], 
@@ -393,19 +380,23 @@ class MeshDash(GenMeshMaker):
         
         cmap_fig.tight_layout()
         cmap_fig.canvas.draw()
-        cmap_path = opj(self.output_dir, f'cmap_{vx_col_name}.svg')
-        cmap_fig.savefig(cmap_path)        
-        with open(cmap_path, 'r') as f:
-            svg_content = f.read()    
-        svg_data_uri = 'data:image/svg+xml;base64,' + base64.b64encode(svg_content.encode()).decode()
-        # Return the image tag embedding the SVG. Make it a sensible size
-        svg4html = html.Img(
-            src=svg_data_uri,
-            id=f'colbar-{vx_col_name}',
-            style={'width': '100%', 'height': 'auto'},
-            )            
-        
-        return disp_rgb, html.Div(svg4html)
+        # cmap_path = opj(self.output_dir, f'cmap_{vx_col_name}.svg')
+        # cmap_fig.savefig(cmap_path)        
+        # with open(cmap_path, 'r') as f:
+        #     svg_content = f.read()    
+        # svg_data_uri = 'data:image/svg+xml;base64,' + base64.b64encode(svg_content.encode()).decode()
+        # # Return the image tag embedding the SVG. Make it a sensible size
+        # svg4html = html.Img(
+        #     src=svg_data_uri,
+        #     id=f'colbar-{vx_col_name}',
+        #     style={'width': '100%', 'height': 'auto'},
+        #     )            
+        img_4html = self.web_return_embedded_img(
+            fig=cmap_fig, 
+            id=f'colbar',
+            className='colbar',
+            )
+        return disp_rgb, html.Div(img_4html) # , className='colbar')
     
     # ***** DASH *****
     def create_figure(self):
@@ -413,14 +404,11 @@ class MeshDash(GenMeshMaker):
         web_mesh = self.add_plotly_surface(return_mesh_obj=True)
         for ih,hemi in enumerate(self.web_hemi_list):                        
             self.dash_fig.add_trace(web_mesh[ih])
-        self.web_remake_roi() 
-        for iroi,vroi in enumerate(self.roi_obj):
-            self.dash_fig.add_trace(vroi['border_line'])
-            self.roi_obj[iroi]['data_id'] = iroi + self.hemi_count
-        # Get index of dash_fig traces
-        self.dash_fig_id = []
-        for i,i_data in enumerate(self.dash_fig.data):
-            self.dash_fig_id.append(i_data['name'])
+        if self.roi_list != []:
+            self.web_remake_roi() 
+            for iroi,vroi in enumerate(self.roi_obj):
+                self.dash_fig.add_trace(vroi['border_line'])
+                self.roi_obj[iroi]['data_id'] = iroi + self.hemi_count
 
         self.camera = dict(
             up=dict(x=0, y=0, z=1),
@@ -431,13 +419,15 @@ class MeshDash(GenMeshMaker):
             yanchor="top",
             y=0.01,
             xanchor="left",
-            x=0.01
+            x=0.01,
+            bgcolor= "#141414",            
+
         ))        
         # Update plot sizing
         self.dash_fig.update_layout(
             autosize=True,
             margin=dict(t=0, b=0, l=0, r=0),
-            template="plotly_white",
+            template="plotly_dark",
             scene_camera=self.camera,
             uirevision='constant',  # Preserve camera settings
         )
@@ -448,7 +438,7 @@ class MeshDash(GenMeshMaker):
             xaxis_visible=False, yaxis_visible=False,zaxis_visible=False,
         )
 
-    def web_launch_with_dash(self):
+    def web_launch_with_dash(self, **kwargs):
         '''
         Return a Dash app! 
 
@@ -462,7 +452,9 @@ class MeshDash(GenMeshMaker):
         app = dash.Dash(
             __name__,
             assets_folder=opj(os.path.dirname(__file__),'mesh_dash_assets')
-            )        
+            )
+        self.image_type = kwargs.get('image_type', 'png')                
+        # plt.style.use('dark_background')
         self.create_figure()
         init_vx_col = self.web_vxcol_list[0]
         init_vmin = self.web_vxcol[init_vx_col]['c_vmin']
@@ -471,8 +463,21 @@ class MeshDash(GenMeshMaker):
         init_cmap = self.web_vxcol[init_vx_col]['c_cmap']
 
         num_input_args = dict(type='number', n_submit=0, debounce=True)
-        checkbox_options = [{'label' : i,  'value' : 0} for i in self.roi_list]
+        if self.roi_list==[]:
+            roi_html = html.Div(id='rois-dropdown')
+        else:
+            checkbox_options = [{'label' : roi,  'value' : roi} for roi in self.roi_list]
+            roi_html = html.Div([
+                dcc.Dropdown(
+                    id='rois-dropdown',
+                    options=checkbox_options,
+                    value=[],
+                    multi=True,
+                    )
+            ], className='column2')
+
         app.layout = html.Div([
+            # html.H1('awesome brain viewer'),
             # COLUMN 1
             html.Div([
                 # Radius
@@ -497,25 +502,21 @@ class MeshDash(GenMeshMaker):
                 html.Label('rsq_thresh', className='label'),
                 dcc.Input(id='rsq_thresh', value=init_rsq_thresh,  **num_input_args),
             ], className='column'),
-            # COLUMN 4
+
+            html.Hr(),            
+            roi_html,  # ROI HTML
             html.Div([
-            # Scrollable area with checkboxes
-                html.Div([
-                    dcc.Checklist(
-                        id='checkboxes',
-                        options=checkbox_options,
-                        value=[],  # Initial value
-                    ),
-                ], className='scrollable'),
-            ], className='column'),
-            dcc.Dropdown(
-                id='vertex-color-dropdown',
-                options=[{'label': col_name, 'value': col_name} for col_name in self.web_vxcol_list],
-                value=self.web_vxcol_list[0],
-            ),  # Dropdown menu - change the surface colour
+                dcc.Dropdown(
+                    id='vertex-color-dropdown',
+                    options=[{'label': col_name, 'value': col_name} for col_name in self.web_vxcol_list],
+                    value=self.web_vxcol_list[0],
+                ),  # Dropdown menu - change the surface colour
+            ], className='column2'),
+            # MESH PLOT
+            html.Hr(), 
             dcc.Graph(id='mesh-plot', figure=self.dash_fig),
             html.Div(
-                id='colbar',
+                id='colbar-div',
                 style={'maxWidth': '400px', 'width': '100%', 'overflowX': 'auto', 'overflowY': 'auto'},
             ),  # Plot the colorbar
             # Update on / off
@@ -529,9 +530,8 @@ class MeshDash(GenMeshMaker):
             html.Div(id='vxtoggle-hidden'),
             html.Div(id='vertex-index-output'),  # Print which vertex you have clicked on
             html.Div(
-                id='mpl-figure-output',
-                # className='mpl_figure_full',
-                style={'maxWidth': '800px', 'width': '100%', 'overflowX': 'auto', 'overflowY': 'auto'},
+                id='mpl-figure-output',                
+                # style={'maxWidth': '800px', 'width': '100%', 'overflowX': 'auto', 'overflowY': 'auto'},
             ),  # Plot the output of the figure (based on click)
             html.Div(id='camera-position-output'),
 
@@ -611,7 +611,7 @@ class MeshDash(GenMeshMaker):
         @app.callback(
             [
                 Output('mesh-plot', 'figure', allow_duplicate=True),
-                Output('colbar', 'children'),
+                Output('colbar-div', 'children'),
                 Output('vmin', 'value'),# 
                 Output('vmax', 'value'),# 
                 Output('cmap', 'value'),# 
@@ -643,7 +643,7 @@ class MeshDash(GenMeshMaker):
         @app.callback(
             [
                 Output('mesh-plot', 'figure', allow_duplicate=True),
-                Output('colbar', 'children', allow_duplicate=True),
+                Output('colbar-div', 'children', allow_duplicate=True),
             ],
             Input('vmin', 'value'),
             prevent_initial_call='initial_duplicate'
@@ -673,7 +673,7 @@ class MeshDash(GenMeshMaker):
         @app.callback(
             [
                 Output('mesh-plot', 'figure', allow_duplicate=True),
-                Output('colbar', 'children', allow_duplicate=True),
+                Output('colbar-div', 'children', allow_duplicate=True),
             ],
             Input('vmax', 'value'),
             prevent_initial_call='initial_duplicate'
@@ -703,13 +703,14 @@ class MeshDash(GenMeshMaker):
         @app.callback(
             [
                 Output('mesh-plot', 'figure', allow_duplicate=True),
-                Output('colbar', 'children', allow_duplicate=True),
+                Output('colbar-div', 'children', allow_duplicate=True),
             ],
             Input('cmap', 'value'),
             prevent_initial_call='initial_duplicate'
         )
         def update_col_cmap(cmap):
             if not self.do_col_updates['cmap']:
+                print('CMAP PREVENT')
                 self.do_col_updates['cmap'] = True
                 raise dash.exceptions.PreventUpdate                
 
@@ -805,16 +806,36 @@ class MeshDash(GenMeshMaker):
                 finished_now = time.time()
                 print(f'time = {finished_now - right_now}')
                 return mpl_figs
-        # app.scripts.config.serve_locally = True
-        # app.css.config.serve_locally = True
+        
+
+        # ROI call back
+        @app.callback(
+            Output('mesh-plot', 'figure', allow_duplicate=True),
+            Input('rois-dropdown', 'value'),
+            prevent_initial_call='initial_duplicate'
+        )
+        def roi_update(roi_dropdown):
+            print('ROI CALLBACK')
+            for roi_lines in self.roi_obj:
+                if roi_lines['roi'] in roi_dropdown:
+                    # set visible:
+                    self.dash_fig.data[roi_lines['data_id']].update(visible=True)
+                else:
+                    self.dash_fig.data[roi_lines['data_id']].update(visible=False)
+            return self.dash_fig
+        # Help to speed things up?
+        app.scripts.config.serve_locally = True
+        app.css.config.serve_locally = True
         return app
 
 
 
     def update_figure_with_color(self, disp_rgb):
+        vx_update_time = time.time()
         # Update vertexcolor for each mesh trace        
         for i,ih in enumerate(self.web_hemi_list):
             self.dash_fig.data[i].update(vertexcolor=disp_rgb[ih])        
+        print(f'Vertex update time = {time.time() - vx_update_time}')
 
     def update_figure_inflate(self, inflate):
         this_vx_coord = []
@@ -836,6 +857,7 @@ class MeshDash(GenMeshMaker):
                 )
 
     def update_figure_inflate_NEW(self, inflate):
+        inflate_time = time.time()
         new_vx_coords = {}
         for hemi in self.web_hemi_list:
             # INTERPOLATE
@@ -860,6 +882,7 @@ class MeshDash(GenMeshMaker):
                 y=new_vx_coords[this_hemi][this_border_vx,1],
                 z=new_vx_coords[this_hemi][this_border_vx,2],
                 )
+        print(f'Inflate time = {time.time() - inflate_time}')
 
         
 
@@ -871,6 +894,7 @@ class MeshDash(GenMeshMaker):
         if not hasattr(self, 'mpl_fig_makers'):
             print('No mpl fig makers')
             return       
+        fig_time = time.time()
         figs = []
         for key in self.mpl_fig_makers.keys():
             this_fig = self.mpl_fig_makers[key]['func'](
@@ -880,20 +904,15 @@ class MeshDash(GenMeshMaker):
             this_fig.canvas.draw()
             # get title 
             # Save the Matplotlib figure as an SVG, making sure nothing is cut off
-            mpl_fig_path = opj(self.output_dir, f'mpl_fig_{key}.svg')
-            this_fig.savefig(mpl_fig_path)
-            # Convert the Matplotlib figure to an image
-            with open(mpl_fig_path, 'r') as f:
-                svg_content = f.read()                
-            svg_data_uri = 'data:image/svg+xml;base64,' + base64.b64encode(svg_content.encode()).decode()
-            # Return the image tag embedding the SVG. Make it a sensible size
-            svg4html = html.Img(
-                src=svg_data_uri,
-                id='mpl-figure-image',
-                style={'width': '100%', 'height': 'auto'},
-                )            
-            figs.append(svg4html)
-        return html.Div(figs,) # className='mpl_subfigure')
+            img_4html = self.web_return_embedded_img(
+                fig=this_fig, 
+                id=f'mpl-figure',
+                className='mpl-figure',
+            )
+            #     style={'width': '100%', 'height': 'auto'},
+            figs.append(img_4html)
+        print(f'Fig time = {time.time() - fig_time}')
+        return html.Div(figs, ) # className='mpl-figure')
 
 
     def web_add_mpl_fig_maker(self, mpl_func, mpl_key, mpl_kwargs={}):
@@ -906,4 +925,34 @@ class MeshDash(GenMeshMaker):
         self.mpl_fig_makers[mpl_key]['func'] = mpl_func
         self.mpl_fig_makers[mpl_key]['kwargs'] = mpl_kwargs
         
+    def web_return_embedded_img(self, fig, id, className):
+        '''
+        Create embedding for image...
+        '''
+        if self.image_type == 'png':
+            # Save the Matplotlib figure as a PNG image
+            image_format = 'png'
+            image_buffer = io.BytesIO()
+            fig.savefig(image_buffer, format=image_format)
+            image_buffer.seek(0)
+        elif self.image_type == 'svg':
+            # Save the Matplotlib figure as an SVG image
+            image_format = 'svg'
+            image_buffer = io.BytesIO()
+            fig.savefig(image_buffer, format=image_format)
+            image_buffer.seek(0)
+        else:
+            raise ValueError("Unsupported image_type. Use 'png' or 'svg'.")
+        
+        # Convert the image buffer to base64-encoded string
+        image_data_uri = f"data:image/{self.image_type};base64," + base64.b64encode(image_buffer.getvalue()).decode()
+        
+        # Embed the image in HTML
+        image4html = html.Img(
+            src=image_data_uri,
+            id=id, 
+            className=className
+            # style={'width': '100%', 'height': 'auto'},
+        )
+        return image4html        
     #endregion DASH FUNCTIONS

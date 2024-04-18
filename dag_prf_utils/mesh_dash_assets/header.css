@@ -1,30 +1,73 @@
+body {
+    background-color: #000000; /* Black background */
+}
+.container {
+    background-color: #000000; /* Black background */
+    padding: 20px; /* Example padding */
+}
+
 .column {
-    width: 10%;
-    float: left;
+    width: 20%;
     padding: 10px;
     display: inline-block;
     vertical-align: top;
+    background-color: #000000; /* Black background */    
+}
+
+.column2 {
+    width: 40%;
+    padding: 10px;
+    display: inline-block;
+    vertical-align: top;
+    background-color: #000000;
 }
 
 .label {
-    width: 50px;
+    width: 200px;
     display: inline-block;
+    font-size: 1em;
 }
 .dash-input {
-    width: 100px;
+    font-size: 0.8em;
+    width: 200px;
     display: inline-block;
+    background-color: #000000;
 }
 
+.Select-control {
+    background-color: #000000; 
+}
+  
+.Select-menu-outer {
+    background-color: #000000; 
+}
+
+.Select-value-label {
+    background-color: #000000; 
+}
+
+.mpl-figure {
+    display: inline-block;
+    max-width: 800px;
+    width: 100%;
+    overflow-x: auto;
+    overflow-y:auto;
+}
+
+.colbar {
+    display: inline-block;
+    max-width: 400px;
+    width: 100%;
+    overflow-x: auto;
+    overflow-y:auto;    
+}
 /* .scrollable {
     /* height: 10px; */
     /* overflow-y: auto; */
 /* } */
 
 
-/* .mpl_figure_full {
-    width: 200px;
-    display: inline-block;
-}
+/* 
 
 .mpl_subfigure {
     width: 100px;

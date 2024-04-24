@@ -128,7 +128,7 @@ def main(argv):
             )
     if dump:
         dag_mesh_pickle(fs, file_name=file_name)
-        
+        return
     app = fs.web_launch_with_dash()
     # Open the app in a browser
     # Do not show it in the notebook

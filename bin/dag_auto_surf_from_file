@@ -24,11 +24,14 @@ def main(argv):
         outputdir   where to put it
 
     '''
-    outputdir = opj(os.getcwd(), 'z_dump')#opj(os.environ['DPU_REPO_DIR'], 'z_dump')    
     sub = None
     fs_dir = os.environ['SUBJECTS_DIR']
     dump = False
-    file_name = None
+    file_name = 'mesh_dash.pickle'
+    outputdir = opj(os.getcwd(), 'z_dump', file_name.replace('.pickle', ''))#opj(os.environ['DPU_REPO_DIR'], 'z_dump')    
+    if not os.path.exists(outputdir):
+        os.makedirs(outputdir)
+        
     for i,arg in enumerate(argv):        
         if '--path' in arg:                        
             file_path = argv[i+1]            
@@ -93,21 +96,21 @@ def main(argv):
             if p=='pol':
                 cmap = 'marco_pol'
                 vmin,vmax = -np.pi, np.pi
+                kwargs = dict(cmap=cmap, vmin=vmin, vmax=vmax)
             elif p=='ecc':
                 cmap = 'ecc2'
                 vmin,vmax = 0, 5
+                kwargs = dict(cmap=cmap, vmin=vmin, vmax=vmax)
             else:
-                cmap,vmin,vmax = None,None,None
+                kwargs = {}
             
             fs.web_add_vx_col(
                 data=data, 
                 # data_alpha=data_alpha, 
                 data4mask = data4mask,
                 rsq_thresh=0.1, 
-                cmap=cmap, 
-                vmin=vmin, 
-                vmax=vmax, 
-                vx_col_name=p,    
+                vx_col_name=p,  
+                **kwargs,  
             )
             # break
         fs.web_add_mpl_fig_maker(

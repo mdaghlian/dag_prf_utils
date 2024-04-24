@@ -37,7 +37,7 @@ import pickle
 def dag_mesh_pickle(mesh_dash, **kwargs):
     # Path to the pickle file
     file_name = kwargs.get('file_name', 'mesh_dash.pickle')
-    pickle_file_path = opj(mesh_dash.output_dir, 'mesh_dash.pickle')
+    pickle_file_path = opj(mesh_dash.output_dir, file_name)
     print(f'pickling mesh_dash object to : {pickle_file_path}')
     if os.path.exists(pickle_file_path):
         os.remove(pickle_file_path)
@@ -516,6 +516,7 @@ class MeshDash(GenMeshMaker):
                 ),  # Dropdown menu - change the surface colour
             ], className='column2'),
             # MESH PLOT
+            html.Div(id='color-chain'),
             html.Hr(), 
             dcc.Graph(id='mesh-plot', figure=self.dash_fig),
             html.Div(
@@ -523,11 +524,8 @@ class MeshDash(GenMeshMaker):
                 style={'maxWidth': '400px', 'width': '100%', 'overflowX': 'auto', 'overflowY': 'auto'},
             ),  # Plot the colorbar
             # Update on / off
-            dcc.Checklist(
-                id='vxtoggle',
-                options=[
-                    {'label': 'Plot vx?', 'value': 'on'}
-                ],
+            dcc.Checklist(id='vxtoggle',
+                options=[{'label': 'Plot vx?', 'value': 'on'}],
                 value=[]
             ),
             html.Div(id='vxtoggle-hidden'),
@@ -536,6 +534,16 @@ class MeshDash(GenMeshMaker):
                 id='mpl-figure-output',                
                 # style={'maxWidth': '800px', 'width': '100%', 'overflowX': 'auto', 'overflowY': 'auto'},
             ),  # Plot the output of the figure (based on click)
+            
+            # Add histogram
+            dcc.Checklist(id='hist-toggle',
+                options=[{'label': 'histogram', 'value': 'on'}],
+                value=[]
+            ),
+            html.Div(
+                id='hist-output',                
+                # style={'maxWidth': '800px', 'width': '100%', 'overflowX': 'auto', 'overflowY': 'auto'},
+            ),  # Plot the output of the figure (based on click)                        
             html.Div(id='camera-position-output'),
 
         ], className='container')  # Add a container class to center the content
@@ -610,11 +618,25 @@ class MeshDash(GenMeshMaker):
             'c_rsq_thresh' : self.web_vxcol[self.web_vxcol_list[0]]['c_rsq_thresh'],            
         }
         
-        # COLOR [1] DROPDOWN
+        # COLOR CHAIN
         @app.callback(
             [
                 Output('mesh-plot', 'figure', allow_duplicate=True),
                 Output('colbar-div', 'children'),
+                Output('hist-output', 'children'),
+            ],
+            Input('color-chain', 'children'),
+            prevent_initial_call='initial_duplicate'
+        )
+        def color_chain(color_chain):
+            print('COLOR CHAIN')
+            self.update_hist()        
+            return self.dash_fig, self.current_col_bar, self.current_hist
+        
+        # COLOR [1] DROPDOWN
+        @app.callback(
+            [
+                Output('color-chain', 'children', allow_duplicate=True),
                 Output('vmin', 'value'),# 
                 Output('vmax', 'value'),# 
                 Output('cmap', 'value'),# 
@@ -639,15 +661,12 @@ class MeshDash(GenMeshMaker):
                         self.current_col_args[key] = self.web_vxcol[selected_color][key]
                     for key in self.do_col_updates.keys():
                         self.do_col_updates[key] = False
-                    return self.dash_fig, self.current_col_bar, self.current_col_args['c_vmin'],self.current_col_args['c_vmax'],self.current_col_args['c_cmap'],self.current_col_args['c_rsq_thresh']
+                    return html.Div(), self.current_col_args['c_vmin'],self.current_col_args['c_vmax'],self.current_col_args['c_cmap'],self.current_col_args['c_rsq_thresh']
             raise dash.exceptions.PreventUpdate                
         
         # COLOR [2] vmin
         @app.callback(
-            [
-                Output('mesh-plot', 'figure', allow_duplicate=True),
-                Output('colbar-div', 'children', allow_duplicate=True),
-            ],
+            Output('color-chain', 'children', allow_duplicate=True),
             Input('vmin', 'value'),
             prevent_initial_call='initial_duplicate'
         )
@@ -669,15 +688,12 @@ class MeshDash(GenMeshMaker):
                     self.update_figure_with_color(disp_rgb)  
                     self.current_col_bar = cmap_path        
                     
-                    return self.dash_fig, self.current_col_bar
+                    return html.Div()
             raise dash.exceptions.PreventUpdate                
 
         # COLOR [3] vmax
         @app.callback(
-            [
-                Output('mesh-plot', 'figure', allow_duplicate=True),
-                Output('colbar-div', 'children', allow_duplicate=True),
-            ],
+            Output('color-chain', 'children', allow_duplicate=True),
             Input('vmax', 'value'),
             prevent_initial_call='initial_duplicate'
         )
@@ -699,15 +715,12 @@ class MeshDash(GenMeshMaker):
                     self.update_figure_with_color(disp_rgb)  
                     self.current_col_bar = cmap_path        
                     
-                    return self.dash_fig, self.current_col_bar
+                    return html.Div()
             raise dash.exceptions.PreventUpdate                
 
         # COLOR [4] cmap
         @app.callback(
-            [
-                Output('mesh-plot', 'figure', allow_duplicate=True),
-                Output('colbar-div', 'children', allow_duplicate=True),
-            ],
+            Output('color-chain', 'children', allow_duplicate=True),
             Input('cmap', 'value'),
             prevent_initial_call='initial_duplicate'
         )
@@ -730,12 +743,12 @@ class MeshDash(GenMeshMaker):
                     self.update_figure_with_color(disp_rgb)  
                     self.current_col_bar = cmap_path        
                     
-                    return self.dash_fig, self.current_col_bar
+                    return html.Div()
             raise dash.exceptions.PreventUpdate   
 
         # COLOR [5] rsq_thresh
         @app.callback(
-            Output('mesh-plot', 'figure', allow_duplicate=True),
+            Output('color-chain', 'children', allow_duplicate=True),
             Input('rsq_thresh', 'value'),
             prevent_initial_call='initial_duplicate'
         )
@@ -756,8 +769,25 @@ class MeshDash(GenMeshMaker):
                     )                    
                     self.update_figure_with_color(disp_rgb)  
                     
-                    return self.dash_fig
+                    return html.Div()
             raise dash.exceptions.PreventUpdate
+        # # Histogram?
+        self.hist_on = False
+        self.current_hist = None
+        @app.callback(
+            Output('color-chain', 'children'),
+            Input('hist-toggle', 'value'),
+            prevent_initial_call='initial_duplicate'
+        )
+        def update_output(value):
+            if 'on' in value:
+                self.hist_on = True
+                self.update_hist()
+                return html.Div()
+            else:
+                self.hist_on = False            
+                raise dash.exceptions.PreventUpdate
+
 
         # UPDATE VERTEX PLOTS ON CLICK?
         self.vx_toggle_on = False
@@ -826,12 +856,47 @@ class MeshDash(GenMeshMaker):
                 else:
                     self.dash_fig.data[roi_lines['data_id']].update(visible=False)
             return self.dash_fig
+        
+
+
+
+
         # Help to speed things up?
         app.scripts.config.serve_locally = True
         app.css.config.serve_locally = True
         return app
 
 
+    def update_hist(self):
+        if self.hist_on:
+            vx_col_name = self.current_col_args['vx_col']
+            data=self.web_vxcol[vx_col_name]['data']
+            data_mask=self.web_vxcol[vx_col_name]['data4mask']>self.web_vxcol[vx_col_name]['c_rsq_thresh'],                
+            data = data[data_mask]            
+            this_hist, ax = plt.subplots(1, figsize=(5,2))            
+            bins = np.linspace(
+                self.current_col_args['c_vmin'],
+                self.current_col_args['c_vmax'],
+                100, 
+            )
+            edges, bin, patches = ax.hist(data, bins)
+            bin_cols = dag_get_col_vals(
+                col_vals=bin,
+                cmap=self.current_col_args['c_cmap'],
+                vmin=self.current_col_args['c_vmin'],
+                vmax=self.current_col_args['c_vmax'],
+            )
+            for j, p in enumerate(patches):
+                # Set face color
+                p.set_facecolor(bin_cols[j])                 
+            ax.set_title(f'Histogram of {vx_col_name}')            
+            self.current_hist = self.web_return_embedded_img(
+                fig=this_hist,
+                id='hist-figure',
+                className='hist-figure',
+            )
+        else:
+            self.current_hist = html.Div()
 
     def update_figure_with_color(self, disp_rgb):
         vx_update_time = time.time()

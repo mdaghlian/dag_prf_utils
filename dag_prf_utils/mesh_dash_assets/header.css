@@ -32,18 +32,12 @@ body {
     width: 200px;
     display: inline-block;
     background-color: #000000;
+    color: #00ff00;
 }
 
-.Select-control {
-    background-color: #000000; 
-}
-  
-.Select-menu-outer {
-    background-color: #000000; 
-}
-
-.Select-value-label {
-    background-color: #000000; 
+[class^="Select-"] {
+    color: #00ff00 !important;
+    background-color: #000000;
 }
 
 .mpl-figure {

@@ -22,6 +22,10 @@ def main(argv):
     # Load the fitting settings, add in the new info
     # [1] Setup parameters:
     pickle_file_path = argv[0]
+    if len(argv)>1:
+        port = argv[1]
+    else:
+        port = '8000'
     # Loading the variable from the pickle file
     with open(pickle_file_path, 'rb') as f:
         loaded_fs = pickle.load(f)
@@ -30,12 +34,12 @@ def main(argv):
     app = loaded_fs.web_launch_with_dash()
     # Open the app in a browser
     # Do not show it in the notebook
-    print(f'http://localhost:8000/')
-    app.run_server(host='127.0.0.1', port=8000, debug=False, use_reloader=False) 
+    print(f'http://localhost:{port}/')
+    app.run_server(host='127.0.0.1', port=port, debug=False, use_reloader=False) 
 
 
 
 if __name__ == "__main__":
     main(sys.argv[1:])    
 
-    
+

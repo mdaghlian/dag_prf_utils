@@ -1,0 +1,143 @@
+#!/usr/bin/env python
+#$ -j Y
+#$ -cwd
+#$ -V
+
+import os
+opj = os.path.join
+import pickle
+import sys
+import numpy as np
+import re
+from dag_prf_utils.prfpy_ts_plotter import TSPlotter
+from dag_prf_utils.mesh_dash import MeshDash, dag_mesh_pickle
+
+def main(argv):
+    '''
+    ---------------------------
+    Auto open a subject surface with either numpy or pickle values
+
+    Args:
+        path        path to pickle/numpy file file
+        sub         subject number
+        fs_dir      freesurfer director
+        outputdir   where to put it
+
+    '''
+    outputdir = opj(os.getcwd(), 'z_dump')#opj(os.environ['DPU_REPO_DIR'], 'z_dump')    
+    sub = None
+    fs_dir = os.environ['SUBJECTS_DIR']
+    dump = False
+    file_name = None
+    for i,arg in enumerate(argv):        
+        if '--path' in arg:                        
+            file_path = argv[i+1]            
+        elif '--sub' in arg:
+            sub = argv[i+1]
+        elif '--fs_dir' in arg:
+            fs_dir = argv[i+1]  
+        elif '--outputdir' in arg:
+            outputdir = argv[i+1]              
+        elif '--dump' in arg:
+            dump = True
+        elif '--file_name' in arg:
+            file_name = argv[i+1]
+        elif '-h' == arg:
+            print(main.__doc__)
+            sys.exit()
+
+    # Load the fitting settings, add in the new info
+    if sub is None:
+        sub = 'sub-'
+        sub += re.search(r'sub-(.*?)_', file_path).group(1)
+    
+    # Check for model info in the file path
+    model = None
+    if 'model' in file_path:
+        pattern = r'model-(.*?)_'
+        model = re.search(pattern, file_path).group(1)
+
+    data_info = {
+        'pars':[], 'prfpy_model':None, 'real_ts':None}
+    if '.pkl' in file_path:
+        # Assume store under pars
+        with open(file_path, 'rb') as f:
+            pickle_dict = pickle.load(f)
+        for k in data_info.keys():
+            if k in pickle_dict.keys():
+                data_info[k] = pickle_dict[k]
+        
+    elif '.npy' in file_path:
+        pars = np.load(file_path)
+
+    # Make the mesh dash object
+    fs = MeshDash(
+        sub=sub, 
+        fs_dir=fs_dir,
+        output_dir=outputdir,
+        )
+    # bloop
+    fs.web_get_ready()
+    
+    if model is not None:
+        prf_obj = TSPlotter(
+            prf_params=data_info['pars'],
+            model=model,
+            prfpy_model=data_info['prfpy_model'],
+            real_ts = data_info['real_ts'],            
+        )
+
+        for p in prf_obj.pd_params.keys():
+            data        = prf_obj.pd_params[p].to_numpy()
+            data4mask   = prf_obj.pd_params['rsq'].to_numpy()
+            if p=='pol':
+                cmap = 'marco_pol'
+                vmin,vmax = -np.pi, np.pi
+            elif p=='ecc':
+                cmap = 'ecc2'
+                vmin,vmax = 0, 5
+            else:
+                cmap,vmin,vmax = None,None,None
+            
+            fs.web_add_vx_col(
+                data=data, 
+                # data_alpha=data_alpha, 
+                data4mask = data4mask,
+                rsq_thresh=0.1, 
+                cmap=cmap, 
+                vmin=vmin, 
+                vmax=vmax, 
+                vx_col_name=p,    
+            )
+            # break
+        fs.web_add_mpl_fig_maker(
+            prf_obj.prf_ts_plot, f'plot',
+            mpl_kwargs={'return_fig':True},
+        )
+    else:
+        # We don't know what everything is... 
+        # assume last column is rsq
+        for p in np.arange(data_info['pars'].shape[1]):
+            data        = data_info['pars'][:,p]
+            data        = data_info['pars'][:,-1]            
+            fs.web_add_vx_col(
+                data=data, 
+                data4mask = data4mask,
+                rsq_thresh=0.1, 
+                vx_col_name=p,    
+            )
+    if dump:
+        dag_mesh_pickle(fs, file_name=file_name)
+        
+    app = fs.web_launch_with_dash()
+    # Open the app in a browser
+    # Do not show it in the notebook
+    print(f'http://localhost:8000/')
+    app.run_server(host='127.0.0.1', port=8000, debug=False, use_reloader=False) 
+
+
+
+if __name__ == "__main__":
+    main(sys.argv[1:])    
+
+

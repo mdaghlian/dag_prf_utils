@@ -36,13 +36,15 @@ path_to_utils = os.path.abspath(os.path.dirname(__file__))
 import pickle
 def dag_mesh_pickle(mesh_dash, **kwargs):
     # Path to the pickle file
+    file_name = kwargs.get('file_name', 'mesh_dash.pickle')
     pickle_file_path = opj(mesh_dash.output_dir, 'mesh_dash.pickle')
     print(f'pickling mesh_dash object to : {pickle_file_path}')
     if os.path.exists(pickle_file_path):
         os.remove(pickle_file_path)
     # Writing the variable to the pickle file
     with open(pickle_file_path, 'wb') as f:
-        pickle.dump(mesh_dash, f, **kwargs)
+        pickle.dump(mesh_dash, f,) 
+        #**kwargs)
 
 class MeshDash(GenMeshMaker):
     def __init__(self, sub, fs_dir=os.environ['SUBJECTS_DIR'], output_dir=[], **kwargs):
@@ -230,6 +232,7 @@ class MeshDash(GenMeshMaker):
         #     **kwargs)        
         self.hemi_count = len(self.web_hemi_list)
         self.roi_obj = []
+        self.roi_list = []
         self.web_vxcol = {}
         self.web_vxcol_list = []
 

@@ -13,12 +13,13 @@ from dag_prf_utils.plot_functions import *
 
 class TSPlotter(Prf1T1M):
 
-    def __init__(self, prf_params, model, prfpy_model, real_ts=None,  **kwargs):
+    def __init__(self, prf_params, model, prfpy_model=None, real_ts=None,  **kwargs):
         super().__init__(prf_params, model=model, **kwargs)
         self.real_ts = real_ts
         self.prfpy_model = prfpy_model
-        self.prfpy_stim = prfpy_model.stimulus
-        self.TR_in_s = self.prfpy_stim.TR
+        if self.prfpy_model is not None:
+            self.prfpy_stim = prfpy_model.stimulus
+            self.TR_in_s = self.prfpy_stim.TR
         if self.incl_rsq:
             self.pred_idx = -1 # When generating predictions don't include the last value (i.e., rsq)
         else:
@@ -32,10 +33,17 @@ class TSPlotter(Prf1T1M):
         
 
     def prf_ts_plot(self, idx, time_pt=None, return_fig=True, **kwargs):
-        if self.model in ['gauss', 'css']:
+        if self.prfpy_model is None:
+            # No model - just return the parameters
+            fig = plt.figure(figsize=(15,5))
+            param_text = self.make_prf_str(idx)
+            fig.text(x=0,y=.5, s=param_text)  
+                        
+        elif self.model in ['gauss', 'css']:
             fig = self.gauss1_ts_plot(idx, return_fig, **kwargs)
         elif self.model in ['norm', 'dog']:
             fig = self.gauss2_ts_plot(idx, time_pt, return_fig, **kwargs)        
+
         if return_fig:
             return fig
 

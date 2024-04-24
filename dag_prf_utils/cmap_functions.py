@@ -123,6 +123,8 @@ def dag_get_cmap(cmap_name, **kwargs):
     do_reverse : reverse the colormap
 
     '''
+    if cmap_name is None:
+        cmap_name = 'viridis'
     do_reverse = kwargs.get('reverse', False)    
     do_log = kwargs.get('log', False)
 

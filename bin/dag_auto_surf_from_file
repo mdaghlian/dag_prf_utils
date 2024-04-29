@@ -28,6 +28,7 @@ def main(argv):
     fs_dir = os.environ['SUBJECTS_DIR']
     dump = False
     file_name = 'mesh_dash.pickle'
+    model = None
     outputdir = opj(os.getcwd(), 'z_dump', file_name.replace('.pickle', ''))#opj(os.environ['DPU_REPO_DIR'], 'z_dump')    
     if not os.path.exists(outputdir):
         os.makedirs(outputdir)
@@ -37,6 +38,8 @@ def main(argv):
             file_path = argv[i+1]            
         elif '--sub' in arg:
             sub = argv[i+1]
+        elif '--model' in arg:
+            model = argv[i+1]            
         elif '--fs_dir' in arg:
             fs_dir = argv[i+1]  
         elif '--outputdir' in arg:
@@ -55,7 +58,7 @@ def main(argv):
         sub += re.search(r'sub-(.*?)_', file_path).group(1)
     
     # Check for model info in the file path
-    model = None
+    
     if 'model' in file_path:
         pattern = r'model-(.*?)_'
         model = re.search(pattern, file_path).group(1)
@@ -83,12 +86,22 @@ def main(argv):
     fs.web_get_ready()
     
     if model is not None:
-        prf_obj = TSPlotter(
-            prf_params=data_info['pars'],
-            model=model,
-            prfpy_model=data_info['prfpy_model'],
-            real_ts = data_info['real_ts'],            
-        )
+        try:
+            prf_obj = TSPlotter(
+                prf_params=data_info['pars'],
+                model=model,
+                prfpy_model=data_info['prfpy_model'],
+                real_ts = data_info['real_ts'],            
+                incl_hrf=True, 
+            )
+        except:
+            prf_obj = TSPlotter(
+                prf_params=data_info['pars'],
+                model=model,
+                prfpy_model=data_info['prfpy_model'],
+                real_ts = data_info['real_ts'],            
+                incl_hrf=False, 
+            )            
 
         for p in prf_obj.pd_params.keys():
             data        = prf_obj.pd_params[p].to_numpy()
@@ -122,7 +135,7 @@ def main(argv):
         # assume last column is rsq
         for p in np.arange(data_info['pars'].shape[1]):
             data        = data_info['pars'][:,p]
-            data        = data_info['pars'][:,-1]            
+            data4mask   = data_info['pars'][:,-1]            
             fs.web_add_vx_col(
                 data=data, 
                 data4mask = data4mask,

@@ -9,8 +9,10 @@ opj = os.path.join
 from dag_prf_utils.mesh_maker import *
 from dag_prf_utils.mesh_format import *
 # from dag_prf_utils.fs_tools import *
-
-blender_init = os.environ['BLENDER']
+try:
+    blender_init = os.environ['BLENDER']
+except:
+    blender_init = 'blender '
 
 
 class BlendMaker(GenMeshMaker):

@@ -367,11 +367,15 @@ class MeshDash(GenMeshMaker):
         # RETURN RGB & CMAP INFO
         make_rgb_time = time.time()
         if self.web_vxcol[vx_col_name]['rgb_direct']:            
-            disp_rgb = self._combine2maps(
+            disp_rgb_not_split = self._combine2maps(
                 data_col1=self.web_vxcol[vx_col_name]['data'], 
                 data_col2=self.get_us_cols('curv'),
                 data_alpha=(self.web_vxcol[vx_col_name]['data4mask']>self.web_vxcol[vx_col_name]['c_rsq_thresh'])*1.0,
             )
+            disp_rgb = {
+                'lh' : disp_rgb_not_split[:self.n_vx['lh'],:],
+                'rh' : disp_rgb_not_split[self.n_vx['lh']:,:],
+            }            
             cmap_fig = plt.figure()
         else:
             disp_rgb, cmap_dict = self.return_display_rgb(

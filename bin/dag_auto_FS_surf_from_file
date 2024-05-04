@@ -9,8 +9,9 @@ import pickle
 import sys
 import numpy as np
 import re
+from dag_prf_utils.utils import dag_arg_checker
 from dag_prf_utils.prfpy_ts_plotter import TSPlotter
-from dag_prf_utils.mesh_dash import MeshDash, dag_mesh_pickle
+from dag_prf_utils.fs_tools import FSMaker
 
 def main(argv):
     '''
@@ -26,13 +27,12 @@ def main(argv):
     '''
     sub = None
     fs_dir = os.environ['SUBJECTS_DIR']
-    dump = False
-    file_name = 'mesh_dash.pickle'
-    model = None
-    outputdir = opj(os.getcwd(), 'z_dump', file_name.replace('.pickle', ''))#opj(os.environ['DPU_REPO_DIR'], 'z_dump')    
-    if not os.path.exists(outputdir):
-        os.makedirs(outputdir)
-        
+    model = ''
+    file_name = None 
+    rsq_th = 0.1     
+    open_fs = True  
+    pars_to_plot = None
+    extra_kwargs = {}
     for i,arg in enumerate(argv):        
         if '--path' in arg:                        
             file_path = argv[i+1]            
@@ -42,48 +42,79 @@ def main(argv):
             model = argv[i+1]            
         elif '--fs_dir' in arg:
             fs_dir = argv[i+1]  
-        elif '--outputdir' in arg:
-            outputdir = argv[i+1]              
-        elif '--dump' in arg:
-            dump = True
         elif '--file_name' in arg:
             file_name = argv[i+1]
-        elif '-h' == arg:
+        elif '--rsq_th' in arg:
+            rsq_th = float(argv[i+1])     
+        elif '--do_not_open' in arg:
+            open_fs = False
+        elif '--pars_to_plot' in arg:
+            pars_to_plot = argv[i+1]
+            if ',' in pars_to_plot:
+                pars_to_plot = pars_to_plot.split(',')
+            if not isinstance(pars_to_plot, list):
+                pars_to_plot = [pars_to_plot]            
+
+        elif arg in ('-h', '--help'):
             print(main.__doc__)
             sys.exit()
+
+        elif '--' in arg: # ********** ARBITRARY KWARGS **********
+            # If argv[i] is an argument, then argv[i+1] is its value
+            this_kwarg_value = argv[i+1]
+            # Check if the value is a list
+            if ',' in this_kwarg_value:
+                this_kwarg_value = this_kwarg_value.split(',')
+                this_kwarg_value = [dag_arg_checker(arg) for arg in this_kwarg_value]
+            else:
+                this_kwarg_value = dag_arg_checker(this_kwarg_value)
+            # Add to kwargs
+            this_kwarg = arg.replace('--','')
+            extra_kwargs[this_kwarg] = this_kwarg_value
 
     # Load the fitting settings, add in the new info
     if sub is None:
         sub = 'sub-'
         sub += re.search(r'sub-(.*?)_', file_path).group(1)
-    
-    # Check for model info in the file path
-    
-    if 'model' in file_path:
+        
+    # Check for model info in the file path    
+    if ('model' in file_path) & (model is not None):
         pattern = r'model-(.*?)_'
         model = re.search(pattern, file_path).group(1)
+    
+    if 'task' in file_path:
+        pattern = r'task-(.*?)_'
+        task = re.search(pattern, file_path).group(1)
+    else:        
+        task = ''
+
+    if 'ses' in file_path:
+        pattern = r'ses-(.*?)_'
+        ses = re.search(pattern, file_path).group(1)
+    else:        
+        ses = ''
+
+    if file_name is None:
+        file_name = f'{sub}_{ses}_{model}_{task}'
 
     data_info = {
         'pars':[], 'prfpy_model':None, 'real_ts':None}
+
     if '.pkl' in file_path:
-        # Assume store under pars
         with open(file_path, 'rb') as f:
             pickle_dict = pickle.load(f)
         for k in data_info.keys():
             if k in pickle_dict.keys():
                 data_info[k] = pickle_dict[k]
-        
     elif '.npy' in file_path:
-        pars = np.load(file_path)
+        data_info['pars'] = np.load(file_path)
+        
 
     # Make the mesh dash object
-    fs = MeshDash(
+    fs = FSMaker(
         sub=sub, 
         fs_dir=fs_dir,
-        output_dir=outputdir,
         )
-    # bloop
-    fs.web_get_ready()
     
     if model is not None:
         try:
@@ -102,10 +133,12 @@ def main(argv):
                 real_ts = data_info['real_ts'],            
                 incl_hrf=False, 
             )            
-
-        for p in prf_obj.pd_params.keys():
+        if pars_to_plot is None:
+            pars_to_plot = list(prf_obj.pd_params.keys())
+        
+        for p in pars_to_plot:
             data        = prf_obj.pd_params[p].to_numpy()
-            data4mask   = prf_obj.pd_params['rsq'].to_numpy()
+            data_mask   = prf_obj.pd_params['rsq'].to_numpy()>rsq_th
             if p=='pol':
                 cmap = 'marco_pol'
                 vmin,vmax = -np.pi, np.pi
@@ -114,43 +147,32 @@ def main(argv):
                 cmap = 'ecc2'
                 vmin,vmax = 0, 5
                 kwargs = dict(cmap=cmap, vmin=vmin, vmax=vmax)
+            elif p=='rsq':
+                cmap='plasma'
+                vmin,vmax = 0,1
+                kwargs = dict(cmap=cmap, vmin=vmin, vmax=vmax)
             else:
                 kwargs = {}
             
-            fs.web_add_vx_col(
+            fs.add_surface(
                 data=data, 
-                # data_alpha=data_alpha, 
-                data4mask = data4mask,
-                rsq_thresh=0.1, 
-                vx_col_name=p,  
+                data_mask = data_mask,
+                surf_name=f'{file_name}_{p}',  
                 **kwargs,  
             )
-            # break
-        fs.web_add_mpl_fig_maker(
-            prf_obj.prf_ts_plot, f'plot',
-            mpl_kwargs={'return_fig':True},
-        )
     else:
         # We don't know what everything is... 
         # assume last column is rsq
         for p in np.arange(data_info['pars'].shape[1]):
             data        = data_info['pars'][:,p]
-            data4mask   = data_info['pars'][:,-1]            
-            fs.web_add_vx_col(
+            data_mask   = data_info['pars'][:,-1]>rsq_th            
+            fs.add_surface(
                 data=data, 
-                data4mask = data4mask,
-                rsq_thresh=0.1, 
-                vx_col_name=p,    
+                data_mask = data_mask, 
+                surf_name=f'{file_name}_{p}',
             )
-    if dump:
-        dag_mesh_pickle(fs, file_name=file_name)
-        return
-    app = fs.web_launch_with_dash()
-    # Open the app in a browser
-    # Do not show it in the notebook
-    print(f'http://localhost:8000/')
-    app.run_server(host='127.0.0.1', port=8000, debug=False, use_reloader=False) 
-
+    if open_fs:
+        fs.open_fs_surface(fs.surf_list, **extra_kwargs)
 
 
 if __name__ == "__main__":

@@ -52,7 +52,24 @@ def dag_make_backup(source_path, ow=False):
         print(f"Error creating backup: {e}")
 
 
+def dag_arg_checker(arg2check):
+    '''arg2check is a string, check if it's a number, return the number if so, otherwise return the string
+    Should be able to deal with negative numbers too
+    '''
+    if arg2check[0] == '-':
+        arg_valence = -1
+        arg2check = arg2check[1:]
+    else:
+        arg_valence = 1
 
+    if arg2check.isdigit():
+        arg_out = arg_valence * int(arg2check)
+    elif arg2check.replace('.','',1).isdigit():
+        arg_out = arg_valence * float(arg2check)                
+    else:
+        arg_out = arg2check   
+
+    return arg_out
 
 def dag_get_cores_used():
     user_name = os.environ['USER']

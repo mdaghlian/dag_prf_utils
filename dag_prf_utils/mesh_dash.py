@@ -246,8 +246,9 @@ class MeshDash(GenMeshMaker):
         - cmap_name : string, name of colormap
         - vmin : float vmin for cmap
         - vmax : float vmax for cmap        
+        - rgb_direct # ignore everything just put in the RGB values
         '''        
-        
+        rgb_direct = kwargs.get('rgb_direct', False)
         data4mask = kwargs.get('data4mask', np.ones_like(data))
         
         # c_ for properties we want to change at 
@@ -266,7 +267,8 @@ class MeshDash(GenMeshMaker):
         self.web_vxcol[vx_col_name]['c_vmin'] = c_vmin
         self.web_vxcol[vx_col_name]['c_vmax'] = c_vmax
         self.web_vxcol[vx_col_name]['c_cmap'] = c_cmap
-        # self.web_vxcol[vx_col_name]['c_rgb'] = [] # To be assigned
+        # RGB direct
+        self.web_vxcol[vx_col_name]['rgb_direct'] = rgb_direct # To be assigned
         self.web_vxcol_list.append(vx_col_name)
 
     def web_add_roi(self, roi_list, **kwargs):
@@ -364,22 +366,30 @@ class MeshDash(GenMeshMaker):
             
         # RETURN RGB & CMAP INFO
         make_rgb_time = time.time()
-        disp_rgb, cmap_dict = self.return_display_rgb(
-            return_cmap_dict=True, unit_rgb=True, split_hemi=True, 
-            data=self.web_vxcol[vx_col_name]['data'],
-            data_mask=self.web_vxcol[vx_col_name]['data4mask']>self.web_vxcol[vx_col_name]['c_rsq_thresh'],
-            cmap = self.web_vxcol[vx_col_name]['c_cmap'],
-            vmin = self.web_vxcol[vx_col_name]['c_vmin'],
-            vmax = self.web_vxcol[vx_col_name]['c_vmax'],
+        if self.web_vxcol[vx_col_name]['rgb_direct']:            
+            disp_rgb = self._combine2maps(
+                data_col1=self.web_vxcol[vx_col_name]['data'], 
+                data_col2=self.get_us_cols('curv'),
+                data_alpha=(self.web_vxcol[vx_col_name]['data4mask']>self.web_vxcol[vx_col_name]['c_rsq_thresh'])*1.0,
             )
+            cmap_fig = plt.figure()
+        else:
+            disp_rgb, cmap_dict = self.return_display_rgb(
+                return_cmap_dict=True, unit_rgb=True, split_hemi=True, 
+                data=self.web_vxcol[vx_col_name]['data'],
+                data_mask=self.web_vxcol[vx_col_name]['data4mask']>self.web_vxcol[vx_col_name]['c_rsq_thresh'],
+                cmap = self.web_vxcol[vx_col_name]['c_cmap'],
+                vmin = self.web_vxcol[vx_col_name]['c_vmin'],
+                vmax = self.web_vxcol[vx_col_name]['c_vmax'],
+                )
+            # Save CMAP to svg
+            cmap_fig = dag_cmap_plotter(
+                cmap=cmap_dict['cmap'], 
+                vmin=cmap_dict['vmin'], 
+                vmax=cmap_dict['vmax'], 
+                title=str(vx_col_name), 
+                return_fig=True, )
         print(f'Make RGB time = {time.time() - make_rgb_time}')
-        # Save CMAP to svg
-        cmap_fig = dag_cmap_plotter(
-            cmap=cmap_dict['cmap'], 
-            vmin=cmap_dict['vmin'], 
-            vmax=cmap_dict['vmax'], 
-            title=str(vx_col_name), 
-            return_fig=True, )
         
         cmap_fig.tight_layout()
         cmap_fig.canvas.draw()

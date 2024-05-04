@@ -53,31 +53,60 @@ if [[ $1 == "setup" ]]; then
   fi
 
   # activate conda environment
-  ACTIVATE_CONDA=1
   cmd="mamba" # YOU MAY NEED TO REPLACE THIS WITH CONDA
   echo "using ${cmd}"
+  echo "---------------------------------------------------------------------------------------------------"
+  echo "Dealing with conda environment"
 
-  if [[ ${ACTIVATE_CONDA} -eq 1 ]]; then
-
-    echo
-    echo "---------------------------------------------------------------------------------------------------"
-    echo "Dealing with conda environment"
-
-    env_name="dpu"
-    if [[ -z `conda info --envs | grep ${env_name}` ]]; then
-      ${cmd} env create --file ${REPO_DIR}/environment.yml --prefix=~/.conda/envs/${env_name}
-      if [[ $? -ne 0 ]]; then
-        echo "ERROR: conda install from environment.yml file did not complete"
-        exit 1
-      fi
-    else
-      echo "WARNING: conda environment \"${env_name}\" already exists. Edit \"env_name\" in setup file and rerun"
+  env_name="dpu"
+  if [[ -z `conda info --envs | grep ${env_name}` ]]; then
+    ${cmd} env create  --file ${REPO_DIR}/environment.yml --prefix=~/.conda/envs/${env_name}
+    if [[ $? -ne 0 ]]; then
+      echo "ERROR: conda install from environment.yml file did not complete"
       exit 1
     fi
-    conda activate ${env_name}
+  else
+    echo "WARNING: conda environment \"${env_name}\" already exists    
   fi
   
+  conda activate ${env_name}
 
+  # Save the current directory
+  original_dir=$(pwd)
+
+    # List of GitHub repos
+    repos=(
+        "https://github.com/mdaghlian/prfpy_csenf.git" # prfpy_csenf
+        "https://github.com/gallantlab/pycortex.git"
+    )    
+
+  # Clone repos and run setup.py for each
+  for repo in "${repos[@]}"; do
+      # Extract the repo name from the URL
+      repo_name=$(basename "$repo" .git)
+      
+      # Check if the directory already exists
+      if [ -d "~/programs/$repo_name" ]; then
+          echo "Directory for $repo_name already exists. Skipping cloning..."
+      else
+          echo "Cloning $repo_name..."
+          git clone "$repo" ~/programs/"$repo_name"
+      fi
+      
+      # Change directory into the cloned repo
+      cd ~/programs/"$repo_name" || continue
+      
+      # Check if setup.py exists
+      if [ -f "setup.py" ]; then
+          echo "Running setup.py for $repo_name..."
+          python setup.py develop
+      else
+          echo "setup.py not found for $repo_name."
+      fi
+      
+      # Return to the original directory
+      cd "$original_dir" || exit
+  done
   # scipy get installed by pip again, so uninstall and let mamba/conda sort it out
   pip uninstall scipy -y
   ${cmd} install -c conda-forge scipy -y

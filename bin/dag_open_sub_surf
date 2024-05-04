@@ -11,7 +11,7 @@ opj = os.path.join
 
 import numpy as np
 
-from dag_prf_utils.utils import dag_find_file_in_folder
+from dag_prf_utils.utils import dag_find_file_in_folder, dag_arg_checker
 from dag_prf_utils.fs_tools import FSMaker
 
 
@@ -88,9 +88,9 @@ def main(argv):
             # Check if the value is a list
             if ',' in this_kwarg_value:
                 this_kwarg_value = this_kwarg_value.split(',')
-                this_kwarg_value = [arg_checker(arg) for arg in this_kwarg_value]
+                this_kwarg_value = [dag_arg_checker(arg) for arg in this_kwarg_value]
             else:
-                this_kwarg_value = arg_checker(this_kwarg_value)
+                this_kwarg_value = dag_arg_checker(this_kwarg_value)
             # Add to kwargs
             this_kwarg = arg.replace('--','')
             kwargs[this_kwarg] = this_kwarg_value
@@ -156,24 +156,7 @@ def main(argv):
 
     fs.open_fs_surface(to_show, **kwargs)
 
-def arg_checker(arg2check):
-    '''arg2check is a string, check if it's a number, return the number if so, otherwise return the string
-    Should be able to deal with negative numbers too
-    '''
-    if arg2check[0] == '-':
-        arg_valence = -1
-        arg2check = arg2check[1:]
-    else:
-        arg_valence = 1
 
-    if arg2check.isdigit():
-        arg_out = arg_valence * int(arg2check)
-    elif arg2check.replace('.','',1).isdigit():
-        arg_out = arg_valence * float(arg2check)                
-    else:
-        arg_out = arg2check   
-
-    return arg_out
 
 if __name__ == "__main__":
     main(sys.argv[1:])    

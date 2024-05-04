@@ -36,6 +36,8 @@ def main(argv):
     sub = None
     search_incl = []
     search_excl = []
+    sub_folder = 'custom'
+    full_folder = False
     for i,arg in enumerate(argv):
         if '--sub' in arg:
             sub = f'sub-{argv[i+1]}'
@@ -51,10 +53,18 @@ def main(argv):
                 search_excl = search_excl.split(',')
             if not isinstance(search_excl, list):
                 search_excl = [search_excl]
-
+        elif '--sub_folder' in arg:
+            sub_folder = argv[i+1]
+        elif '--full_folder' in arg:
+            full_folder = True
         elif '-h' in arg:
             print(main.__doc__)
             sys.exit()
+        elif '--' in arg: 
+            print(f'{arg} not one of the options')
+            print(main.__doc__)
+            sys.exit()
+
 
     # [3] Check the arguments
     if sub is None:
@@ -62,8 +72,11 @@ def main(argv):
     
     fs_dir=os.environ['SUBJECTS_DIR']
     print(f'Looking in {fs_dir}')
-    custom_roi_dir = opj(fs_dir, sub, 'label', 'custom')
-    print(f'Looing in {custom_roi_dir}')
+    if full_folder:
+        custom_roi_dir = opj(fs_dir, sub, 'label')
+    else:
+        custom_roi_dir = opj(fs_dir, sub, 'label', sub_folder)
+    print(f'Looking in {custom_roi_dir}')
     
     # Find the ROIs
     roi_list = dag_find_file_in_folder(

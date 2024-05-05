@@ -12,6 +12,8 @@ opj = os.path.join
 import subprocess
 import shutil
 from datetime import datetime
+import matplotlib.image as mpimg
+from scipy import io, interpolate
 
 def dag_make_backup(source_path, ow=False):
     # Check if the source exists
@@ -50,6 +52,124 @@ def dag_make_backup(source_path, ow=False):
             print(f"Backup created: {backup_file}")
     except Exception as e:
         print(f"Error creating backup: {e}")
+
+def get_prfdesign(screenshot_path, n_pix=100, dm_edges_clipping=[0,0,0,0]):
+    """
+    get_prfdesign
+    Basically Marco's gist, but then incorporated in the repo. It takes the directory of screenshots and creates a vis_design.mat file, telling pRFpy at what point are certain stimulus was presented.
+    Parameters
+    ----------
+    screenshot_path: str
+        string describing the path to the directory with png-files
+    n_pix: int
+        size of the design matrix (basically resolution). The larger the number, the more demanding for the CPU. It's best to have some value which can be divided with 1080, as this is easier to downsample. Default is 40, but 270 seems to be a good trade-off between resolution and CPU-demands
+    dm_edges_clipping: list, dict, optional
+        people don't always see the entirety of the screen so it's important to check what the subject can actually see by showing them the cross of for instance the BOLD-screen (the matlab one, not the linux one) and clip the image accordingly. This is a list of 4 values, which are the number of pixels to clip from the left, right, top and bottom of the image. Default is [0,0,0,0], which means no clipping. Negative values will be set to 0.
+    Returns
+    ----------
+    numpy.ndarray
+        array with shape <n_pix,n_pix,timepoints> representing a binary paradigm
+    Example
+    ----------
+    >>> dm = get_prfdesign('path/to/dir/with/pngs', n_pix=270, dm_edges_clipping=[6,1,0,1])
+    """
+
+    image_list = os.listdir(screenshot_path)
+
+    # get first image to get screen size
+    img = (255*mpimg.imread(opj(screenshot_path, image_list[0]))).astype('int')
+
+    # there is one more MR image than screenshot
+    design_matrix = np.zeros((img.shape[0], img.shape[0], 1+len(image_list)))
+
+    for image_file in image_list:
+        
+        # assuming last three numbers before .png are the screenshot number
+        img_number = int(image_file[-7:-4])-1
+        
+        # subtract one to start from zero
+        img = (255*mpimg.imread(opj(screenshot_path, image_file))).astype('int')
+        
+        # make it square
+        if img.shape[0] != img.shape[1]:
+            offset = int((img.shape[1]-img.shape[0])/2)
+            img = img[:, offset:(offset+img.shape[0])]
+
+        # binarize image into dm matrix        
+        # assumes: standard RGB255 format; only colors present in image are black, white, grey, red, green.
+        # Check for black and white -> 
+        # img_idx = ((img[...,0] == 0) & (img[...,1] == 0)) #  black
+        # img_idx|= ((img[...,0] == 255) & (img[...,1] == 255)) # or white 
+
+        design_matrix[...,img_number][np.where(((img[...,0] == 0) & (
+            img[...,1] == 0)) | ((img[...,0] == 255) & (img[...,1] == 255)))] = 1
+
+        design_matrix[...,img_number][np.where(((img[...,0] == img[...,1]) & (
+            img[...,1] == img[...,2]) & (img[...,0] != 128)))] = 1
+
+    #clipping edges; top, bottom, left, right
+    if isinstance(dm_edges_clipping, dict):
+        dm_edges_clipping = [
+            dm_edges_clipping['top'],
+            dm_edges_clipping['bottom'],
+            dm_edges_clipping['left'],
+            dm_edges_clipping['right']]
+
+    # ensure absolute values; should be a list by now anyway
+    dm_edges_clipping = [abs(ele) for ele in dm_edges_clipping]
+
+    design_matrix[:dm_edges_clipping[0], :, :] = 0
+    design_matrix[(design_matrix.shape[0]-dm_edges_clipping[1]):, :, :] = 0
+    design_matrix[:, :dm_edges_clipping[2], :] = 0
+    design_matrix[:, (design_matrix.shape[0]-dm_edges_clipping[3]):, :] = 0
+
+    # downsample (resample2d can also deal with 3D input)
+    if n_pix != design_matrix.shape[0]:
+        dm_resampled = resample2d(design_matrix, n_pix)
+        dm_resampled[dm_resampled<0.9] = 0
+        return dm_resampled
+    else:
+        return design_matrix
+    
+
+def resample2d(array:np.ndarray, new_size:int, kind='linear'):
+    """resample2d
+    Resamples a 2D (or 3D) array with :func:`scipy.interpolate.interp2d` to `new_size`. If input is 2D, we'll loop over the final axis.
+    Parameters
+    ----------
+    array: np.ndarray
+        Array to be interpolated. Ideally axis have the same size.
+    new_size: int
+        New size of array
+    kind: str, optional
+        Interpolation method, by default 'linear'
+    Returns
+    ----------
+    np.ndarray
+        If 2D: resampled array of shape `(new_size,new_size)`
+        If 3D: resampled array of shape `(new_size,new_size, array.shape[-1])`
+    """
+    # set up interpolater
+    x = np.array(range(array.shape[0]))
+    y = np.array(range(array.shape[1]))
+
+    # define new grid
+    xnew = np.linspace(0, x.shape[0], new_size)
+    ynew = np.linspace(0, y.shape[0], new_size)
+
+    if array.ndim > 2:
+        new = np.zeros((new_size,new_size,array.shape[-1]))
+
+        for dd in range(array.shape[-1]):
+            f = interpolate.interp2d(x, y, array[...,dd], kind=kind)
+            new[...,dd] = f(xnew,ynew)
+
+        return new    
+    else:
+        f = interpolate.interp2d(x, y, array, kind=kind)
+        return f(xnew,ynew)
+    
+
 
 
 def dag_arg_checker(arg2check):
@@ -572,7 +692,7 @@ def dag_find_file_in_folder_OLD(filt, path, return_msg='error', exclude=None):
         return match_list
     
 
-def dag_find_file_in_folder(filt, path, return_msg='error', exclude=None, recursive=False, file_limit=9999):
+def dag_find_file_in_folder(filt, path, return_msg='error', exclude=None, recursive=False, file_limit=9999, inclusive_or=False):
     """get_file_from_substring
     Setup to be compatible with JH linescanning toolbox function (linescanning.utils.get_file_from_substring)
     
@@ -627,11 +747,15 @@ def dag_find_file_in_folder(filt, path, return_msg='error', exclude=None, recurs
 
     matching_files = []
     files_searched = 0
-    
+    if inclusive_or:
+        checker = any
+    else:
+        checker = all # AND 
+        
     if input_is_list:   # *** Prespecified list of files ***
         for file_name in files:
             # Check if the file name contains all strings in filt_incl
-            if all(string in file_name for string in filt_incl):                
+            if checker(string in file_name for string in filt_incl):                
                 # Check if the file name contains any strings in filt_excl, if provided
                 if filt_excl is not None and any(string in file_name for string in filt_excl):
                     continue
@@ -648,7 +772,7 @@ def dag_find_file_in_folder(filt, path, return_msg='error', exclude=None, recurs
                 file_path = os.path.join(root, file_name)
 
                 # Check the inclusion & exclusion criteria
-                file_match = dag_file_name_check(file_name, filt_incl, filt_excl)
+                file_match = dag_file_name_check(file_name, filt_incl, filt_excl, inclusive_or)
                 if file_match:
                     matching_files.append(file_path)
 
@@ -675,11 +799,16 @@ def dag_find_file_in_folder(filt, path, return_msg='error', exclude=None, recurs
     return match_list
 
 
-def dag_file_name_check(file_name, filt_incl, filt_excl):
+def dag_file_name_check(file_name, filt_incl, filt_excl, inclusive=False):
     file_match = False
-    # Check if the file name contains all strings in filt_incl
-    if all(string in file_name for string in filt_incl):
-        file_match = True
+    if not inclusive: # (AND search)
+        # Check if the file name contains all strings in filt_incl
+        if all(string in file_name for string in filt_incl):
+            file_match = True
+    else:
+        if any(string in file_name for string in filt_incl):
+            file_match = True
+
     
     # Check if the file name contains any strings in filt_excl
     if filt_excl is not None and any(string in file_name for string in filt_excl):

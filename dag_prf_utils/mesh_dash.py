@@ -235,6 +235,7 @@ class MeshDash(GenMeshMaker):
         self.roi_list = []
         self.web_vxcol = {}
         self.web_vxcol_list = []
+        self.web_inflated = kwargs.get('inflate_type', 'inflated')
 
     
     def web_add_vx_col(self, vx_col_name, data, **kwargs):
@@ -926,7 +927,7 @@ class MeshDash(GenMeshMaker):
             this_vx_coord.append(
                 dag_mesh_interpolate(
                     coords1=self.mesh_info['pial'][hemi]['coords'],
-                    coords2=self.mesh_info['inflated'][hemi]['coords'],
+                    coords2=self.mesh_info[self.web_inflated][hemi]['coords'],
                     interp=inflate,
                 )
             )
@@ -945,7 +946,7 @@ class MeshDash(GenMeshMaker):
             # INTERPOLATE
             new_vx_coords[hemi] = dag_mesh_interpolate(
                 coords1=self.mesh_info['pial'][hemi]['coords'],
-                coords2=self.mesh_info['inflated'][hemi]['coords'],
+                coords2=self.mesh_info[self.web_inflated][hemi]['coords'],
                 interp=inflate,
                 )
         # Update the vertex coordinates for each webmesh

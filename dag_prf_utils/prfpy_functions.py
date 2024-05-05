@@ -261,7 +261,7 @@ class Prf1T1M(object):
             self.params_dd['ecc'], self.params_dd['pol'] = dag_coord_convert(
                 self.params_dd['x'],self.params_dd['y'],'cart2pol')      
             # pol4roi
-            self.params_dd['pol4roi'] = np.abs(np.degrees(np.arctan2(self.params_dd['x'],self.params_dd['y'])))  #I know xy looks backwards 
+            # self.params_dd['pol4roi'] = np.abs(np.degrees(np.arctan2(self.params_dd['x'],self.params_dd['y'])))  #I know xy looks backwards 
 
         if self.model in ('norm', 'dog'):
             # -> size ratio:

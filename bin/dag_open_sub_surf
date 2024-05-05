@@ -46,6 +46,7 @@ def main(argv):
     do_search = False
     search_incl = []
     search_excl = []
+    inclusive_or = False
     fs_dir=os.environ['SUBJECTS_DIR']
     kwargs = {}
     for i,arg in enumerate(argv):
@@ -77,6 +78,8 @@ def main(argv):
             custom_only = True
         elif '--fs_dir' in arg:
             fs_dir = argv[i+1]
+        elif '--inclusive_or' in arg:            
+            inclusive_or=True
         elif ('-h' == arg) or ('--help' == arg):
             print(main.__doc__)
             sys.exit()
@@ -124,6 +127,7 @@ def main(argv):
             path=search_dir,
             exclude = search_excl + ['rh.', 'overlay', '.png'], # exclude right hemisphere in search to avoid duplicates
             recursive=True,
+            inclusive_or=inclusive_or,
             # return_msg=None
         )
         if isinstance(surf_list, str):

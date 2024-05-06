@@ -153,7 +153,7 @@ def dag_find_border_vx(roi_bool, mesh_info, return_type='bool'):
     
 
 def dag_find_border_vx_in_order(roi_bool, mesh_info, return_coords=False):
-    outer_edge_list = dag_get_roi_border_edge(roi_bool, mesh_info)
+    outer_edge_list = dag_get_roi_border_edge(roi_bool, mesh_info)    
     border_vx = dag_order_edges(outer_edge_list)
     if not return_coords:
         return border_vx
@@ -206,7 +206,7 @@ def dag_get_roi_border_edge(roi_bool, mesh_info):
 
 def dag_order_edges(edges):
     unique_vx = list(np.unique(edges.flatten()))
-
+    # print(unique_vx[0])
     # Step 1: Create an adjacency list
     adjacency_list = {}
     for i_edge in range(edges.shape[0]):

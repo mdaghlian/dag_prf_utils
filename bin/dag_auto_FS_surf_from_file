@@ -9,7 +9,7 @@ import pickle
 import sys
 import numpy as np
 import re
-from dag_prf_utils.utils import dag_arg_checker
+from dag_prf_utils.utils import dag_arg_checker, dag_hyphen_parse
 from dag_prf_utils.prfpy_ts_plotter import TSPlotter
 from dag_prf_utils.fs_tools import FSMaker
 
@@ -27,7 +27,7 @@ def main(argv):
     '''
     sub = None
     fs_dir = os.environ['SUBJECTS_DIR']
-    model = ''
+    model = None
     file_name = None 
     rsq_th = 0.1     
     open_fs = True  
@@ -37,7 +37,7 @@ def main(argv):
         if '--path' in arg:                        
             file_path = argv[i+1]            
         elif '--sub' in arg:
-            sub = argv[i+1]
+            sub = dag_hyphen_parse('sub', argv[i+1])
         elif '--model' in arg:
             model = argv[i+1]            
         elif '--fs_dir' in arg:
@@ -71,26 +71,32 @@ def main(argv):
             # Add to kwargs
             this_kwarg = arg.replace('--','')
             extra_kwargs[this_kwarg] = this_kwarg_value
+    
+    if '/' in file_path:
+        file_path_end = file_path.split('/')[-1]
+    else:
+        file_path_end = file_path
 
     # Load the fitting settings, add in the new info
     if sub is None:
         sub = 'sub-'
-        sub += re.search(r'sub-(.*?)_', file_path).group(1)
+        sub += re.search(r'sub-(.*?)_', file_path_end).group(1)
         
     # Check for model info in the file path    
-    if ('model' in file_path) & (model is not None):
-        pattern = r'model-(.*?)_'
-        model = re.search(pattern, file_path).group(1)
-    
-    if 'task' in file_path:
+    if model is None:
+        pattern = r'model-(.*?)*'
+        model = re.search(pattern, file_path_end).group(1)
+
+
+    if 'task' in file_path_end:
         pattern = r'task-(.*?)_'
-        task = re.search(pattern, file_path).group(1)
+        task = re.search(pattern, file_path_end).group(1)
     else:        
         task = ''
 
-    if 'ses' in file_path:
+    if 'ses' in file_path_end:
         pattern = r'ses-(.*?)_'
-        ses = re.search(pattern, file_path).group(1)
+        ses = re.search(pattern, file_path_end).group(1)
     else:        
         ses = ''
 

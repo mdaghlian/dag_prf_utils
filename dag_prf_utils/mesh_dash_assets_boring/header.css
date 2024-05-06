@@ -1,0 +1,57 @@
+body {
+    background-color: #ffffff; 
+}
+.container {
+    background-color: #ffffff; 
+    padding: 20px; /* Example padding */
+}
+
+.column {
+    width: 20%;
+    padding: 10px;
+    display: inline-block;
+    vertical-align: top;
+    background-color: #ffffff; 
+}
+
+.column2 {
+    width: 40%;
+    padding: 10px;
+    display: inline-block;
+    vertical-align: top;
+    background-color: #ffffff;
+}
+
+.label {
+    width: 200px;
+    display: inline-block;
+    font-size: 1em;
+}
+.dash-input {
+    font-size: 0.8em;
+    width: 200px;
+    display: inline-block;
+    background-color: #ffffff;
+    color: #000000;
+}
+
+[class^="Select-"] {
+    color: #000000 !important;
+    background-color: #ffffff;
+}
+
+.mpl-figure {
+    display: inline-block;
+    max-width: 800px;
+    width: 100%;
+    overflow-x: auto;
+    overflow-y:auto;
+}
+
+.colbar {
+    display: inline-block;
+    max-width: 400px;
+    width: 100%;
+    overflow-x: auto;
+    overflow-y:auto;    
+}

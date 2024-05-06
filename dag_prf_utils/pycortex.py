@@ -619,7 +619,7 @@ class PyctxMaker(GenMeshMaker):
         self.vertex_dict = {} 
         self.cmap_dict = {}
         self.fixed_unique = kwargs.get('fixed_unique', False) # Have we fixed the unique issue in pycortex? 
-        self.dud = kwargs.get('dud', True)
+        self.dud = kwargs.get('dud', False)
         if not os.path.exists(self.ctx_path):
             # import subject from freesurfer (will have the same names)
             cortex.freesurfer.import_subj(

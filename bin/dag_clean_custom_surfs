@@ -11,7 +11,7 @@ opj = os.path.join
 
 import numpy as np
 
-from dag_prf_utils.utils import dag_find_file_in_folder
+from dag_prf_utils.utils import dag_find_file_in_folder,dag_hyphen_parse
 
 
 
@@ -38,8 +38,7 @@ def main(argv):
     search_excl = []
     for i,arg in enumerate(argv):
         if '--sub' in arg:
-            sub = f'sub-{argv[i+1]}'
-
+            sub = dag_hyphen_parse('sub', argv[i+1])
         elif '--find' in arg:
             do_search = True
             search_incl = argv[i+1]

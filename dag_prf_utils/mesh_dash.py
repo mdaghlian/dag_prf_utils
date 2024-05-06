@@ -178,7 +178,8 @@ class MeshDash(GenMeshMaker):
             for i_roi,roi in enumerate(roi_list):
                 # Load roi index:
                 roi_bool = dag_load_roi(self.sub, roi, fs_dir=self.fs_dir, split_LR=True)[hemi]
-
+                if roi_bool.sum()==0:
+                    continue
                 border_vx_list = dag_find_border_vx_in_order(
                     roi_bool=roi_bool, 
                     mesh_info=self.mesh_info[mesh_name][hemi], 
@@ -284,6 +285,7 @@ class MeshDash(GenMeshMaker):
         if not isinstance(hemi_list, list):
             hemi_list = [hemi_list]
         mesh_name = kwargs.get('mesh_name', 'inflated')
+        combine_matches = kwargs.pop('combine_matches', False)
         # marker_kwargs = kwargs.get()
         roi_cols = dag_get_col_vals(
             np.arange(len(roi_list)),
@@ -293,8 +295,9 @@ class MeshDash(GenMeshMaker):
         for ih,hemi in enumerate(hemi_list):
             for i_roi,roi in enumerate(roi_list):
                 # Load roi index:
-                roi_bool = dag_load_roi(self.sub, roi, fs_dir=self.fs_dir, split_LR=True)[hemi]
-
+                roi_bool = dag_load_roi(self.sub, roi, fs_dir=self.fs_dir, split_LR=True, combine_matches=combine_matches)[hemi]                
+                if roi_bool.sum()==0:
+                    continue
                 border_vx_list = dag_find_border_vx_in_order(
                     roi_bool=roi_bool, 
                     mesh_info=self.mesh_info[mesh_name][hemi], 
@@ -467,9 +470,11 @@ class MeshDash(GenMeshMaker):
         > Add clicker position
         > hemi on & hemi off...
         '''
+        assets_type = kwargs.get('assets_type', 'boring')
+        assets_type = 'mesh_dash_assets_boring' if assets_type=='boring' else 'mesh_dash_assets'
         app = dash.Dash(
             __name__,
-            assets_folder=opj(os.path.dirname(__file__),'mesh_dash_assets')
+            assets_folder=opj(os.path.dirname(__file__),assets_type)
             )
         self.image_type = kwargs.get('image_type', 'png')                
         # plt.style.use('dark_background')
@@ -998,7 +1003,7 @@ class MeshDash(GenMeshMaker):
         return html.Div(figs, ) # className='mpl-figure')
 
 
-    def web_add_mpl_fig_maker(self, mpl_func, mpl_key, mpl_kwargs={}):
+    def web_add_mpl_fig_maker(self, mpl_func, mpl_key='mpl1', mpl_kwargs={}):
         '''
         Add a function to make a matplotlib figure
         '''

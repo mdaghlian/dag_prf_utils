@@ -279,6 +279,7 @@ def dag_load_roi(sub, roi, fs_dir=os.environ['SUBJECTS_DIR'], split_LR=False, do
     TODO - hemi specific idx...
     '''
     need_both_hemis = kwargs.get('need_both_hemis', False) # Need ROI in both hemispheres to return true
+    combine_matches = kwargs.get('combine_matches', False) # If multiple matches combine them...
     # Get number of vx in each hemi, and total overall...
     n_verts = dag_load_nverts(sub=sub, fs_dir=fs_dir)
     total_num_vx = np.sum(n_verts)
@@ -333,12 +334,6 @@ def dag_load_roi(sub, roi, fs_dir=os.environ['SUBJECTS_DIR'], split_LR=False, do
         else:
             do_not = False
         roi_file = {}
-        # try:
-        #     roi_file['lh'] = dag_find_file_in_folder([this_roi, '.thresh', '.label', 'lh'], roi_dir, recursive=True)    
-        #     roi_file['rh'] = dag_find_file_in_folder([this_roi, '.thresh', '.label', 'rh'], roi_dir, recursive=True)    
-        # except:
-        #     roi_file['lh'] = dag_find_file_in_folder([this_roi, '.label', 'lh'], roi_dir,exclude='._', recursive=True)    
-        #     roi_file['rh'] = dag_find_file_in_folder([this_roi, '.label', 'rh'], roi_dir,exclude='._', recursive=True)    
         missing_hemi = False # Do we have an ROI for both hemis? 
         for hemi in ['lh', 'rh']:
             roi_file[hemi] = dag_find_file_in_folder([this_roi, '.thresh', '.label', hemi], roi_dir, recursive=True, return_msg=None)
@@ -350,34 +345,49 @@ def dag_load_roi(sub, roi, fs_dir=os.environ['SUBJECTS_DIR'], split_LR=False, do
                 # If not make a note - no entry for this hemi
                 missing_hemi = True
             else:        
-                # If more than 1 match print the matches and raise error
-                if isinstance(roi_file[hemi], list):
+                if (isinstance(roi_file[hemi], list)) & (not combine_matches):
+                    # If we want an exact match (1 file only) 
+                    # BUT we find multiple files, raise an error                    
                     print(f'Multiple matches for {this_roi} in {roi_dir}')
-                    print(roi_file[hemi])
+                    print([i.split('/')[-1] for i in roi_file[hemi]])
                     raise ValueError
+                elif isinstance(roi_file[hemi], list):
+                    # Print which files we will be combining
+                    print('Combining')
+                    print([i.split('/')[-1] for i in roi_file[hemi]])
+                else:
+                    # 1 matched file - convert to list...
+                    # -> so we can loop through later
+                    roi_file[hemi] = [roi_file[hemi]]
+
+        # CHECK IF WE NEED BOTH HEMIS AND HAVE BOTH HEMIS!!
         if need_both_hemis and missing_hemi:
             print(f'Missing ROI in one hemisphere')
             print(roi_file)
             raise ValueError
 
+        # START LOOP TO GET BOOLEAN FOR THE ROI
         LR_bool = []
         for i,hemi in enumerate(['lh', 'rh']):
             if roi_file[hemi] is None:
                 idx_int = []
             else:
-                with open(roi_file[hemi]) as f:
-                    contents = f.readlines()            
-                idx_str = [contents[i].split(' ')[0] for i in range(2,len(contents))]
-                idx_int = [int(idx_str[i]) for i in range(len(idx_str))]
-                # val_str = [contents[i].split(' ')[-1].split('\n')[0] for i in range(2,len(contents))]
-                # val_int = [int(float(val_str[i])) for i in range(len(val_str))]
-
+                # Loop through the files to combine together...
+                # all the (numbered indexes of the roi files)
+                idx_int = []
+                for this_roi_file in roi_file[hemi]:
+                    with open(this_roi_file) as f:
+                        contents = f.readlines()            
+                    this_idx_str = [contents[i].split(' ')[0] for i in range(2,len(contents))]
+                    this_idx_int = [int(i) for i in this_idx_str]
+                    idx_int += this_idx_int
+                # Remove not unique values 
+                idx_int = list(set(idx_int))
+            # Option to make boolean array
             if do_bool:
                 this_bool = np.zeros(n_verts[i], dtype=int)
                 this_bool[idx_int] = True
-            # else:
-            #     this_bool = np.zeros(n_verts[i], dtype=bool)
-            #     this_bool[idx_int] = val_int
+
             if do_not:            
                 this_bool = ~this_bool
 

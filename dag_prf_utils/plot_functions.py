@@ -321,6 +321,7 @@ def dag_return_ecc_pol_bin(params2bin, ecc4bin, pol4bin, bin_weight=None, **kwar
         params_binned   list of np.ndarrays, binned by ecc and pol
     '''
     # TODO have option for converting X,Y...    
+    min_per_bin = kwargs.get('min_per_bin', False)
     ecc_bounds = kwargs.get("ecc_bounds", default_ecc_bounds)
     pol_bounds = kwargs.get("pol_bounds", default_pol_bounds)            
     n_params_gt_1 = False # If there is more than 1 parameter to bin
@@ -344,7 +345,11 @@ def dag_return_ecc_pol_bin(params2bin, ecc4bin, pol4bin, bin_weight=None, **kwar
                 ecc_idx =(ecc4bin >= ecc_lower) & (ecc4bin <=ecc_upper)
                 pol_idx =(pol4bin >= pol_lower) & (pol4bin <=pol_upper)        
                 bin_idx = pol_idx & ecc_idx
-
+                if min_per_bin is not False:
+                    if bin_idx.sum()<min_per_bin:
+                        # Not enough vx per bin
+                        print('Not enough vx per bing')
+                        bin_idx *= 0 # 
                 if bin_weight is not None: # If there is a bin weight, use it
                     bin_mean[i_ecc, i_pol] = (params2bin[i_param][bin_idx] * bin_weight[bin_idx]).sum() / bin_weight[bin_idx].sum()
                 else:
@@ -665,6 +670,7 @@ def dag_arrow_plot(ax, old_x, old_y, new_x, new_y, **kwargs):
     pol_bounds = kwargs.get("pol_bounds", default_pol_bounds)
     kwargs['ecc_bounds'] = ecc_bounds    
     kwargs['pol_bounds'] = pol_bounds
+    add_grid_lines = kwargs.get('add_grid_lines', True) 
 
     old_col = kwargs.get("old_col", 'k')
     new_col = kwargs.get("new_col", 'g')
@@ -685,16 +691,18 @@ def dag_arrow_plot(ax, old_x, old_y, new_x, new_y, **kwargs):
     
     if do_binning:
         # print("DOING BINNING") 
+        min_vx_per_bin = kwargs.get('min_vx_per_bin', False)
         old_ecc, old_pol = dag_coord_convert(old_x, old_y,old2new="cart2pol")
         old_bin_x, old_bin_y, new_bin_x, new_bin_y = dag_return_ecc_pol_bin(
             params2bin=[old_x, old_y, new_x, new_y], 
             ecc4bin=old_ecc, 
             pol4bin=old_pol, 
             bin_weight=bin_weight,
-            ecc_bounds=ecc_bounds, pol_bounds=pol_bounds)
+            ecc_bounds=ecc_bounds, pol_bounds=pol_bounds,
+            min_vx_per_bin=min_vx_per_bin,
+            )
     else:
         old_bin_x, old_bin_y, new_bin_x, new_bin_y = old_x, old_y, new_x, new_y
-    
     dx = new_bin_x - old_bin_x
     dy = new_bin_y - old_bin_y
 
@@ -716,8 +724,8 @@ def dag_arrow_plot(ax, old_x, old_y, new_x, new_y, **kwargs):
             q_col = q_cmap(q_norm(angle))                
         else:
             q_col = arrow_col
-        print(old_bin_x.shape)
-        ax.quiver(old_bin_x, old_bin_y, dx, dy, scale_units='xy', 
+
+        arrows = ax.quiver(old_bin_x, old_bin_y, dx, dy, scale_units='xy', 
                     angles='xy', alpha=dot_alpha,color=q_col,  **arrow_kwargs)
         
         # # For the colorbar
@@ -728,11 +736,52 @@ def dag_arrow_plot(ax, old_x, old_y, new_x, new_y, **kwargs):
         #     fig = plt.gcf()
         #     cb = fig.colorbar(scat_col, ax=ax)        
         #     cb.set_label(kwargs['dot_col'])
-
-    dag_add_ecc_pol_lines(ax, **kwargs)        
+    if add_grid_lines:
+        dag_add_ecc_pol_lines(ax, **kwargs)        
     dag_add_ax_basics(ax, **kwargs)    
-    # END FUNCTION 
+    return arrows
 
+def dag_arrow_coord_getter(old_x, old_y, new_x, new_y, **kwargs):
+    '''dag_arrow_plot
+    Description:
+        Plot arrows from old to new points. Includes the option to bin the points
+        Also various fun things such as color coding the arrows by angle, color coding the points, etc...
+    Input:
+        old_x           np.ndarray      x coord of old points
+        old_y           np.ndarray      y coord of old points
+        new_x           np.ndarray      x coord of new points
+        new_y           np.ndarray      y coord of new points
+        *Optional*
+        do_binning      bool            Whether to bin the points
+        bin_weight      np.ndarray      Weighted mean in each bin, not just the average
+        ecc_bounds      np.ndarray      eccentricity bounds
+        pol_bounds      np.ndarray      polar angle bounds
+    Return:
+        old_bin_x, old_bin_y, new_bin_x, new_bin_y, dx, dy
+    '''
+    # Get arguments related to plotting:
+    do_binning = kwargs.get("do_binning", False)
+    bin_weight = kwargs.get("bin_weight", None)
+    ecc_bounds = kwargs.get("ecc_bounds", default_ecc_bounds)
+    pol_bounds = kwargs.get("pol_bounds", default_pol_bounds)    
+    if do_binning:
+        # print("DOING BINNING") 
+        min_vx_per_bin = kwargs.get('min_vx_per_bin', False)
+        old_ecc, old_pol = dag_coord_convert(old_x, old_y,old2new="cart2pol")
+        old_bin_x, old_bin_y, new_bin_x, new_bin_y = dag_return_ecc_pol_bin(
+            params2bin=[old_x, old_y, new_x, new_y], 
+            ecc4bin=old_ecc, 
+            pol4bin=old_pol, 
+            bin_weight=bin_weight,
+            ecc_bounds=ecc_bounds, pol_bounds=pol_bounds,
+            min_vx_per_bin=min_vx_per_bin,
+            )
+    else:
+        old_bin_x, old_bin_y, new_bin_x, new_bin_y = old_x, old_y, new_x, new_y
+    
+    dx = new_bin_x - old_bin_x
+    dy = new_bin_y - old_bin_y    
+    return old_bin_x, old_bin_y, new_bin_x, new_bin_y, dx,dy
 # def dag_2d_density(X,Y, ax=None, **kwargs):
 #     '''
 #     https://towardsdatascience.com/simple-example-of-2d-density-plots-in-python-83b83b934f67

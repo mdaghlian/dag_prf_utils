@@ -753,7 +753,7 @@ class PrfMulti(object):
         vx_mask = self.return_vx_mask(th)        
         kwargs['title'] = kwargs.get('title', f'{pold}-{pnew}')
 
-        dag_arrow_plot(
+        arrow_out = dag_arrow_plot(
             ax, 
             old_x=self.prf_obj[pold].pd_params['x'][vx_mask], 
             old_y=self.prf_obj[pold].pd_params['y'][vx_mask], 
@@ -762,7 +762,8 @@ class PrfMulti(object):
             # arrow_col='angle', 
             **kwargs
             )
-
+        return arrow_out 
+    
     def visual_field(self, vf_obj, col_obj_p, th=None, **kwargs):
         '''Visual field scatter
         As with Prf1T1M -> but specify which object has the x,y, coordinates (vf_obj)
@@ -921,387 +922,387 @@ class PrfMean(object):
 # ******************************************************************************************************************
 # ******************************************************************************************************************
 
-class Prf2T1M(object):
-    '''
-    Used to hold parameters for 1 subject, ***2 tasks***, for 1model
-    & To return user specified masks 
+# class Prf2T1M(object):
+#     '''
+#     Used to hold parameters for 1 subject, ***2 tasks***, for 1model
+#     & To return user specified masks 
 
-    __init__ will set up the useful information into 3 pandas data frames
-    >> including: all the parameters in the numpy arrays input model specific
-        gauss: "x", "y", "a_sigma", "a_val", "bold_baseline", "rsq"
-        norm : "x", "y", "a_sigma", "a_val", "bold_baseline", "c_val", "n_sigma", "b_val", "d_val", "rsq"
-    >> & eccentricit, polar angle, 
-        "ecc", "pol",
+#     __init__ will set up the useful information into 3 pandas data frames
+#     >> including: all the parameters in the numpy arrays input model specific
+#         gauss: "x", "y", "a_sigma", "a_val", "bold_baseline", "rsq"
+#         norm : "x", "y", "a_sigma", "a_val", "bold_baseline", "c_val", "n_sigma", "b_val", "d_val", "rsq"
+#     >> & eccentricit, polar angle, 
+#         "ecc", "pol",
 
-    >> In addition we will also add the mean and difference of the different tasks...
+#     >> In addition we will also add the mean and difference of the different tasks...
     
-    Functions:
-    return_vx_mask: returns a mask for voxels, specified by the user
-    return_th_param: returns the specified parameters, masked
-    '''
-    def __init__(self, prf_params1, prf_params2, model, **kwargs):
-        '''
-        prf_params     np array, of all the parameters, i.e., output from prfpy
-        model          str, model: e.g., gauss or norm
-        '''
-        self.model = model
-        self.model_labels = prfpy_params_dict()[self.model] # Get names for different model parameters...
-        self.fixed_hrf = kwargs.get('fixed_hrf', False)
-        # What are the task names?
-        self.task1 = kwargs.get('task1', 'task1')        
-        self.task2 = kwargs.get('task2', 'task2')        
-        # Store the model parameters as np arrays
-        self.prf_params_np = {
-            self.task1 : prf_params1,
-            self.task2 : prf_params2,
-        }
-        # Get the number of voxels...
-        self.n_vox = self.prf_params_np[self.task1].shape[0]
+#     Functions:
+#     return_vx_mask: returns a mask for voxels, specified by the user
+#     return_th_param: returns the specified parameters, masked
+#     '''
+#     def __init__(self, prf_params1, prf_params2, model, **kwargs):
+#         '''
+#         prf_params     np array, of all the parameters, i.e., output from prfpy
+#         model          str, model: e.g., gauss or norm
+#         '''
+#         self.model = model
+#         self.model_labels = prfpy_params_dict()[self.model] # Get names for different model parameters...
+#         self.fixed_hrf = kwargs.get('fixed_hrf', False)
+#         # What are the task names?
+#         self.task1 = kwargs.get('task1', 'task1')        
+#         self.task2 = kwargs.get('task2', 'task2')        
+#         # Store the model parameters as np arrays
+#         self.prf_params_np = {
+#             self.task1 : prf_params1,
+#             self.task2 : prf_params2,
+#         }
+#         # Get the number of voxels...
+#         self.n_vox = self.prf_params_np[self.task1].shape[0]
         
-        # Now create dictionaries to turn into dataframes for easy retrieval of info...
-        all_task_dict = {
-            self.task1: {},
-            self.task2: {},
-            'diff' : {},
-            'mean' : {},
-        }
-        for i_task in [self.task1, self.task2]:
-            for i_label in self.model_labels.keys():
-                if ('hrf' in i_label) and self.fixed_hrf:
-                    continue
-                all_task_dict[i_task][i_label] = self.prf_params_np[i_task][:,self.model_labels[i_label]]
+#         # Now create dictionaries to turn into dataframes for easy retrieval of info...
+#         all_task_dict = {
+#             self.task1: {},
+#             self.task2: {},
+#             'diff' : {},
+#             'mean' : {},
+#         }
+#         for i_task in [self.task1, self.task2]:
+#             for i_label in self.model_labels.keys():
+#                 if ('hrf' in i_label) and self.fixed_hrf:
+#                     continue
+#                 all_task_dict[i_task][i_label] = self.prf_params_np[i_task][:,self.model_labels[i_label]]
                         
-            # Now add other interesting stuff:
-            if self.model in ['gauss', 'norm', 'css', 'dog']:
-                # Ecc, pol
-                all_task_dict[i_task]['ecc'],all_task_dict[i_task]['pol'] = dag_coord_convert(
-                    all_task_dict[i_task]['x'], all_task_dict[i_task]['y'], 'cart2pol'
-                )
-            if self.model in ['norm', 'dog']:
-                # -> size ratio:
-                all_task_dict[i_task]['size_ratio'] = all_task_dict[i_task]['size_2'] / all_task_dict[i_task]['size_1']
-                all_task_dict[i_task]['amp_ratio']  = all_task_dict[i_task]['amp_1']  / all_task_dict[i_task]['amp_2']
-            if self.model=='norm':
-                all_task_dict[i_task]['bd_ratio'] = all_task_dict[i_task]['b_val'] / all_task_dict[i_task]['d_val']
-            if self.model=='csf':
-                all_task_dict[i_task]['log10_SFp']  = np.log10(all_task_dict[i_task]['SFp'])
-                all_task_dict[i_task]['log10_CSp'] = np.log10(all_task_dict[i_task]['CSp'])
-                all_task_dict[i_task]['sfmax'] = np.nan_to_num(
-                    10**(np.sqrt(all_task_dict[i_task]['log10_CSp'] / (all_task_dict[i_task]['width_r']**2)) + \
-                                                all_task_dict[i_task]['log10_SFp']))            
-                all_task_dict[i_task]['sfmax'][all_task_dict[i_task]['sfmax']>100] = 100 # MAX VALUE
-                all_task_dict[i_task]['log10_sfmax'] = np.log10(all_task_dict[i_task]['sfmax'])
+#             # Now add other interesting stuff:
+#             if self.model in ['gauss', 'norm', 'css', 'dog']:
+#                 # Ecc, pol
+#                 all_task_dict[i_task]['ecc'],all_task_dict[i_task]['pol'] = dag_coord_convert(
+#                     all_task_dict[i_task]['x'], all_task_dict[i_task]['y'], 'cart2pol'
+#                 )
+#             if self.model in ['norm', 'dog']:
+#                 # -> size ratio:
+#                 all_task_dict[i_task]['size_ratio'] = all_task_dict[i_task]['size_2'] / all_task_dict[i_task]['size_1']
+#                 all_task_dict[i_task]['amp_ratio']  = all_task_dict[i_task]['amp_1']  / all_task_dict[i_task]['amp_2']
+#             if self.model=='norm':
+#                 all_task_dict[i_task]['bd_ratio'] = all_task_dict[i_task]['b_val'] / all_task_dict[i_task]['d_val']
+#             if self.model=='csf':
+#                 all_task_dict[i_task]['log10_SFp']  = np.log10(all_task_dict[i_task]['SFp'])
+#                 all_task_dict[i_task]['log10_CSp'] = np.log10(all_task_dict[i_task]['CSp'])
+#                 all_task_dict[i_task]['sfmax'] = np.nan_to_num(
+#                     10**(np.sqrt(all_task_dict[i_task]['log10_CSp'] / (all_task_dict[i_task]['width_r']**2)) + \
+#                                                 all_task_dict[i_task]['log10_SFp']))            
+#                 all_task_dict[i_task]['sfmax'][all_task_dict[i_task]['sfmax']>100] = 100 # MAX VALUE
+#                 all_task_dict[i_task]['log10_sfmax'] = np.log10(all_task_dict[i_task]['sfmax'])
         
-        # Complete list of model labels
-        self.model_labels_plus = list(all_task_dict[self.task1].keys())
-        # Now get mean and diff of parameters...
-        for i_label in self.model_labels:
-            if ('hrf' in i_label) and self.fixed_hrf:
-                continue            
-            # MEAN
-            all_task_dict['mean'][i_label] = (all_task_dict[self.task2][i_label] + all_task_dict[self.task1][i_label]) / 2
+#         # Complete list of model labels
+#         self.model_labels_plus = list(all_task_dict[self.task1].keys())
+#         # Now get mean and diff of parameters...
+#         for i_label in self.model_labels:
+#             if ('hrf' in i_label) and self.fixed_hrf:
+#                 continue            
+#             # MEAN
+#             all_task_dict['mean'][i_label] = (all_task_dict[self.task2][i_label] + all_task_dict[self.task1][i_label]) / 2
             
-            # DIFFERENCE            
-            all_task_dict['diff'][i_label] = all_task_dict[self.task2][i_label] - all_task_dict[self.task1][i_label]
+#             # DIFFERENCE            
+#             all_task_dict['diff'][i_label] = all_task_dict[self.task2][i_label] - all_task_dict[self.task1][i_label]
                 
-        # Recalculate the interesting stuff for mean and diff
-        for i_comp in ['mean', 'diff']:
-            # Now add other interesting stuff:
-            if self.model in ['gauss', 'norm', 'css', 'dog']:
-                # Ecc, pol
-                all_task_dict[i_comp]['ecc'], all_task_dict[i_comp]['pol'] = dag_coord_convert(
-                    all_task_dict[i_comp]['x'], all_task_dict[i_comp]['y'], 'cart2pol'
-                )
-            if self.model in ['norm', 'dog']:
-                # -> size ratio:
-                all_task_dict[i_comp]['size_ratio'] = all_task_dict[i_comp]['size_2'] / all_task_dict[i_comp]['size_1']
-                all_task_dict[i_comp]['amp_ratio']  = all_task_dict[i_comp]['amp_1']  / all_task_dict[i_comp]['amp_2']
-            if self.model=='norm':
-                all_task_dict[i_comp]['bd_ratio'] = all_task_dict[i_comp]['b_val'] / all_task_dict[i_comp]['d_val']
-            if self.model=='csf':
-                all_task_dict[i_comp]['log10_SFp']  = np.log10(all_task_dict[i_comp]['SFp'])
-                all_task_dict[i_comp]['log10_CSp'] = np.log10(all_task_dict[i_comp]['CSp'])
-                all_task_dict[i_comp]['sfmax'] = np.nan_to_num(
-                    10**(np.sqrt(all_task_dict[i_comp]['log10_CSp'] / (all_task_dict[i_comp]['width_r']**2)) + \
-                                                all_task_dict[i_comp]['log10_SFp']))            
-                all_task_dict[i_comp]['sfmax'][all_task_dict[i_comp]['sfmax']>100] = 100 # MAX VALUE
-                all_task_dict[i_comp]['log10_sfmax'] = np.log10(all_task_dict[i_comp]['sfmax'])
+#         # Recalculate the interesting stuff for mean and diff
+#         for i_comp in ['mean', 'diff']:
+#             # Now add other interesting stuff:
+#             if self.model in ['gauss', 'norm', 'css', 'dog']:
+#                 # Ecc, pol
+#                 all_task_dict[i_comp]['ecc'], all_task_dict[i_comp]['pol'] = dag_coord_convert(
+#                     all_task_dict[i_comp]['x'], all_task_dict[i_comp]['y'], 'cart2pol'
+#                 )
+#             if self.model in ['norm', 'dog']:
+#                 # -> size ratio:
+#                 all_task_dict[i_comp]['size_ratio'] = all_task_dict[i_comp]['size_2'] / all_task_dict[i_comp]['size_1']
+#                 all_task_dict[i_comp]['amp_ratio']  = all_task_dict[i_comp]['amp_1']  / all_task_dict[i_comp]['amp_2']
+#             if self.model=='norm':
+#                 all_task_dict[i_comp]['bd_ratio'] = all_task_dict[i_comp]['b_val'] / all_task_dict[i_comp]['d_val']
+#             if self.model=='csf':
+#                 all_task_dict[i_comp]['log10_SFp']  = np.log10(all_task_dict[i_comp]['SFp'])
+#                 all_task_dict[i_comp]['log10_CSp'] = np.log10(all_task_dict[i_comp]['CSp'])
+#                 all_task_dict[i_comp]['sfmax'] = np.nan_to_num(
+#                     10**(np.sqrt(all_task_dict[i_comp]['log10_CSp'] / (all_task_dict[i_comp]['width_r']**2)) + \
+#                                                 all_task_dict[i_comp]['log10_SFp']))            
+#                 all_task_dict[i_comp]['sfmax'][all_task_dict[i_comp]['sfmax']>100] = 100 # MAX VALUE
+#                 all_task_dict[i_comp]['log10_sfmax'] = np.log10(all_task_dict[i_comp]['sfmax'])
 
-        # Convert to PD
-        self.pd_params = {}
-        for i_task in all_task_dict.keys():
-            self.pd_params[i_task] = pd.DataFrame(all_task_dict[i_task])
+#         # Convert to PD
+#         self.pd_params = {}
+#         for i_task in all_task_dict.keys():
+#             self.pd_params[i_task] = pd.DataFrame(all_task_dict[i_task])
 
-    def return_vx_mask(self, th={}):
-        '''
-        return_vx_mask: returns a mask (boolean array) for voxels, specified by the user        
-        th keys must be split into 3 parts
-        'task-comparison-param' : value
-        e.g.: to exclude gauss fits with rsq less than 0.1
-        th = {'task1-min-rsq': 0.1 } 
-        task        -> task1, task2, diff, mean, all. (all means apply the threshold to both task1, and task2)
-        comparison  -> min, max, bound
-        param       -> any of... (model dependent e.g., 'x', 'y', 'ecc'...)
+#     def return_vx_mask(self, th={}):
+#         '''
+#         return_vx_mask: returns a mask (boolean array) for voxels, specified by the user        
+#         th keys must be split into 3 parts
+#         'task-comparison-param' : value
+#         e.g.: to exclude gauss fits with rsq less than 0.1
+#         th = {'task1-min-rsq': 0.1 } 
+#         task        -> task1, task2, diff, mean, all. (all means apply the threshold to both task1, and task2)
+#         comparison  -> min, max, bound
+#         param       -> any of... (model dependent e.g., 'x', 'y', 'ecc'...)
         
 
-        '''        
+#         '''        
 
-        # Start with EVRYTHING        
-        vx_mask = np.ones(self.n_vox, dtype=bool)
-        for th_key in th.keys():
-            th_key_str = str(th_key) # convert to string... 
-            if 'roi' in th_key_str:
-                # Input roi specification...
-                vx_mask &= th[th_key]
-                continue # now next item in key
+#         # Start with EVRYTHING        
+#         vx_mask = np.ones(self.n_vox, dtype=bool)
+#         for th_key in th.keys():
+#             th_key_str = str(th_key) # convert to string... 
+#             if 'roi' in th_key_str:
+#                 # Input roi specification...
+#                 vx_mask &= th[th_key]
+#                 continue # now next item in key
 
-            task, comp, p = th_key_str.split('-')
-            th_val = th[th_key]
-            if task=='all':
-                # Apply to both task1 and task2:
-                vx_mask &= self.return_vx_mask({
-                    f'{self.task1}-{comp}-{p}' : th_val,
-                    f'{self.task2}-{comp}-{p}' : th_val,
-                    })
-                continue # now next item in th_key...
+#             task, comp, p = th_key_str.split('-')
+#             th_val = th[th_key]
+#             if task=='all':
+#                 # Apply to both task1 and task2:
+#                 vx_mask &= self.return_vx_mask({
+#                     f'{self.task1}-{comp}-{p}' : th_val,
+#                     f'{self.task2}-{comp}-{p}' : th_val,
+#                     })
+#                 continue # now next item in th_key...
             
-            if comp=='min':
-                vx_mask &= self.pd_params[task][p].gt(th_val)
-            elif comp=='max':
-                vx_mask &= self.pd_params[task][p].lt(th_val)
-            elif comp=='bound':
-                vx_mask &= self.pd_params[task][p].gt(th_val[0])
-                vx_mask &= self.pd_params[task][p].lt(th_val[1])
-            else:
-                sys.exit()
-        if not isinstance(vx_mask, np.ndarray):
-            vx_mask = vx_mask.to_numpy()
-        return vx_mask
+#             if comp=='min':
+#                 vx_mask &= self.pd_params[task][p].gt(th_val)
+#             elif comp=='max':
+#                 vx_mask &= self.pd_params[task][p].lt(th_val)
+#             elif comp=='bound':
+#                 vx_mask &= self.pd_params[task][p].gt(th_val[0])
+#                 vx_mask &= self.pd_params[task][p].lt(th_val[1])
+#             else:
+#                 sys.exit()
+#         if not isinstance(vx_mask, np.ndarray):
+#             vx_mask = vx_mask.to_numpy()
+#         return vx_mask
     
-    def return_th_param(self, task, param, vx_mask=None):
-        '''
-        return all the parameters listed, masked by vx_mask        
-        '''
-        if vx_mask is None:
-            vx_mask = np.ones(self.n_vox, dtype=bool)
-        if not isinstance(param, list):
-            param = [param]        
-        param_out = []
-        for i_param in param:
-            param_out.append(self.pd_params[task][i_param][vx_mask].to_numpy())
+#     def return_th_param(self, task, param, vx_mask=None):
+#         '''
+#         return all the parameters listed, masked by vx_mask        
+#         '''
+#         if vx_mask is None:
+#             vx_mask = np.ones(self.n_vox, dtype=bool)
+#         if not isinstance(param, list):
+#             param = [param]        
+#         param_out = []
+#         for i_param in param:
+#             param_out.append(self.pd_params[task][i_param][vx_mask].to_numpy())
 
-        return param_out
+#         return param_out
 
-    def rapid_hist(self, task, param, th={'all-min-rsq':.1}, ax=None, **kwargs):
-        if ax==None:
-            ax = plt.axes()
-        vx_mask = self.return_vx_mask(th)        
-        ax.hist(self.pd_params[task][param][vx_mask].to_numpy())
-        ax.set_title(f'{task}-{param}')
-        dag_add_ax_basics(ax=ax, **kwargs)
+#     def rapid_hist(self, task, param, th={'all-min-rsq':.1}, ax=None, **kwargs):
+#         if ax==None:
+#             ax = plt.axes()
+#         vx_mask = self.return_vx_mask(th)        
+#         ax.hist(self.pd_params[task][param][vx_mask].to_numpy())
+#         ax.set_title(f'{task}-{param}')
+#         dag_add_ax_basics(ax=ax, **kwargs)
 
-    def rapid_arrow(self, ax=None, th={'all-min-rsq':.1, 'all-max-ecc':5}, **kwargs):
-        if ax==None:
-            ax = plt.gca()
-        vx_mask = self.return_vx_mask(th)        
-        plt.figure()        
-        dag_arrow_plot(
-            ax, 
-            old_x=self.pd_params[self.task1]['x'][vx_mask], 
-            old_y=self.pd_params[self.task1]['y'][vx_mask], 
-            new_x=self.pd_params[self.task2]['x'][vx_mask], 
-            new_y=self.pd_params[self.task2]['y'][vx_mask], 
-            arrow_col='angle', 
-            **kwargs
-            )
+#     def rapid_arrow(self, ax=None, th={'all-min-rsq':.1, 'all-max-ecc':5}, **kwargs):
+#         if ax==None:
+#             ax = plt.gca()
+#         vx_mask = self.return_vx_mask(th)        
+#         plt.figure()        
+#         dag_arrow_plot(
+#             ax, 
+#             old_x=self.pd_params[self.task1]['x'][vx_mask], 
+#             old_y=self.pd_params[self.task1]['y'][vx_mask], 
+#             new_x=self.pd_params[self.task2]['x'][vx_mask], 
+#             new_y=self.pd_params[self.task2]['y'][vx_mask], 
+#             arrow_col='angle', 
+#             **kwargs
+#             )
 
 
-class Prf1T1Mx2(object):
-    def __init__(self,prf_obj1, prf_obj2, **kwargs):
-        self.task1 = prf_obj1.task
-        self.task2 = prf_obj2.task
-        self.model1 = prf_obj1.model
-        self.model2 = prf_obj2.model
-        self.model_labels1 = list(prf_obj1.pd_params.keys())
-        self.model_labels2 = list(prf_obj2.pd_params.keys())
-        self.id1 = kwargs.get('id1', f'{self.task1}_{self.model1}')
-        self.id2 = kwargs.get('id2', f'{self.task2}_{self.model2}')
-        self.n_vox = prf_obj1.n_vox 
-        self.pd_params = {}
-        self.pd_params[self.id1] = prf_obj1.pd_params
-        self.pd_params[self.id2] = prf_obj2.pd_params
+# class Prf1T1Mx2(object):
+#     def __init__(self,prf_obj1, prf_obj2, **kwargs):
+#         self.task1 = prf_obj1.task
+#         self.task2 = prf_obj2.task
+#         self.model1 = prf_obj1.model
+#         self.model2 = prf_obj2.model
+#         self.model_labels1 = list(prf_obj1.pd_params.keys())
+#         self.model_labels2 = list(prf_obj2.pd_params.keys())
+#         self.id1 = kwargs.get('id1', f'{self.task1}_{self.model1}')
+#         self.id2 = kwargs.get('id2', f'{self.task2}_{self.model2}')
+#         self.n_vox = prf_obj1.n_vox 
+#         self.pd_params = {}
+#         self.pd_params[self.id1] = prf_obj1.pd_params
+#         self.pd_params[self.id2] = prf_obj2.pd_params
         
-        # Make mean and difference:
-        comp_dict = {'mean':{}, 'diff':{}}
-        for i_label in self.model_labels1:
-            if i_label not in self.model_labels2:
-                continue
-            comp_dict['mean'][i_label] = (self.pd_params[self.id1][i_label] +  self.pd_params[self.id2][i_label]) / 2
-            comp_dict['diff'][i_label] = self.pd_params[self.id2][i_label] -  self.pd_params[self.id1][i_label]
-        # For the position shift, find the direction and magnitude:
-        if ('x' in self.model_labels1) and ('x' in self.model_labels2):
-            comp_dict['diff']['shift_mag'], comp_dict['diff']['shift_dir'] = dag_coord_convert(
-                comp_dict['diff']['x'], comp_dict['diff']['y'], 'cart2pol'
-            )        
-        # # some stuff needs to be recalculated: (because they don't scale linearly... e.g. polar angle)
-        # # -> check which models...
-        # xy_model_list = ['gauss', 'norm', 'css', 'dog']
-        # both_with_xy =  (self.model1 in xy_model_list) & (self.model2 in xy_model_list)
-        # both_norm = (self.model1=='norm') & (self.model2=='norm')
-        # both_dog = (self.model1=='dog') & (self.model2=='dog')
-        # both_csf = (self.model1=='csf') & (self.model2=='csf')
-        # for i_comp in ['mean', 'diff']:
-        #     # Now add other interesting stuff:
-        #     if both_with_xy:
-        #         # Ecc, pol
-        #         comp_dict[i_comp]['ecc'], comp_dict[i_comp]['pol'] = dag_coord_convert(
-        #             comp_dict[i_comp]['x'], comp_dict[i_comp]['y'], 'cart2pol'
-        #         )
-        #     if both_norm or both_dog:
-        #         # -> size ratio:
-        #         comp_dict[i_comp]['size_ratio'] = comp_dict[i_comp]['size_2'] / comp_dict[i_comp]['size_1']
-        #         comp_dict[i_comp]['amp_ratio']  = comp_dict[i_comp]['amp_1']  / comp_dict[i_comp]['amp_2']
-        #     if both_norm:
-        #         comp_dict[i_comp]['bd_ratio'] = comp_dict[i_comp]['b_val'] / comp_dict[i_comp]['d_val']
-        #     if both_csf:
-        #         comp_dict[i_comp]['log10_SFp']  = np.log10(comp_dict[i_comp]['SFp'])
-        #         comp_dict[i_comp]['log10_CSp'] = np.log10(comp_dict[i_comp]['CSp'])
-        #         comp_dict[i_comp]['sfmax'] = np.nan_to_num(
-        #             10**(np.sqrt(comp_dict[i_comp]['log10_CSp'] / (comp_dict[i_comp]['width_r']**2)) + \
-        #                                         comp_dict[i_comp]['log10_SFp']))            
-        #         comp_dict[i_comp]['sfmax'][comp_dict[i_comp]['sfmax']>100] = 100 # MAX VALUE
-        #         comp_dict[i_comp]['log10_sfmax'] = np.log10(comp_dict[i_comp]['sfmax'])            
-        # Enter into pd data frame
-        self.pd_params['mean'] = pd.DataFrame(comp_dict['mean'])
-        self.pd_params['diff'] = pd.DataFrame(comp_dict['diff'])
+#         # Make mean and difference:
+#         comp_dict = {'mean':{}, 'diff':{}}
+#         for i_label in self.model_labels1:
+#             if i_label not in self.model_labels2:
+#                 continue
+#             comp_dict['mean'][i_label] = (self.pd_params[self.id1][i_label] +  self.pd_params[self.id2][i_label]) / 2
+#             comp_dict['diff'][i_label] = self.pd_params[self.id2][i_label] -  self.pd_params[self.id1][i_label]
+#         # For the position shift, find the direction and magnitude:
+#         if ('x' in self.model_labels1) and ('x' in self.model_labels2):
+#             comp_dict['diff']['shift_mag'], comp_dict['diff']['shift_dir'] = dag_coord_convert(
+#                 comp_dict['diff']['x'], comp_dict['diff']['y'], 'cart2pol'
+#             )        
+#         # # some stuff needs to be recalculated: (because they don't scale linearly... e.g. polar angle)
+#         # # -> check which models...
+#         # xy_model_list = ['gauss', 'norm', 'css', 'dog']
+#         # both_with_xy =  (self.model1 in xy_model_list) & (self.model2 in xy_model_list)
+#         # both_norm = (self.model1=='norm') & (self.model2=='norm')
+#         # both_dog = (self.model1=='dog') & (self.model2=='dog')
+#         # both_csf = (self.model1=='csf') & (self.model2=='csf')
+#         # for i_comp in ['mean', 'diff']:
+#         #     # Now add other interesting stuff:
+#         #     if both_with_xy:
+#         #         # Ecc, pol
+#         #         comp_dict[i_comp]['ecc'], comp_dict[i_comp]['pol'] = dag_coord_convert(
+#         #             comp_dict[i_comp]['x'], comp_dict[i_comp]['y'], 'cart2pol'
+#         #         )
+#         #     if both_norm or both_dog:
+#         #         # -> size ratio:
+#         #         comp_dict[i_comp]['size_ratio'] = comp_dict[i_comp]['size_2'] / comp_dict[i_comp]['size_1']
+#         #         comp_dict[i_comp]['amp_ratio']  = comp_dict[i_comp]['amp_1']  / comp_dict[i_comp]['amp_2']
+#         #     if both_norm:
+#         #         comp_dict[i_comp]['bd_ratio'] = comp_dict[i_comp]['b_val'] / comp_dict[i_comp]['d_val']
+#         #     if both_csf:
+#         #         comp_dict[i_comp]['log10_SFp']  = np.log10(comp_dict[i_comp]['SFp'])
+#         #         comp_dict[i_comp]['log10_CSp'] = np.log10(comp_dict[i_comp]['CSp'])
+#         #         comp_dict[i_comp]['sfmax'] = np.nan_to_num(
+#         #             10**(np.sqrt(comp_dict[i_comp]['log10_CSp'] / (comp_dict[i_comp]['width_r']**2)) + \
+#         #                                         comp_dict[i_comp]['log10_SFp']))            
+#         #         comp_dict[i_comp]['sfmax'][comp_dict[i_comp]['sfmax']>100] = 100 # MAX VALUE
+#         #         comp_dict[i_comp]['log10_sfmax'] = np.log10(comp_dict[i_comp]['sfmax'])            
+#         # Enter into pd data frame
+#         self.pd_params['mean'] = pd.DataFrame(comp_dict['mean'])
+#         self.pd_params['diff'] = pd.DataFrame(comp_dict['diff'])
     
-    def return_vx_mask(self, th={}):
-        '''
-        return_vx_mask: returns a mask (boolean array) for voxels, specified by the user        
-        th keys must be split into 3 parts
-        'task-comparison-param' : value
-        e.g.: to exclude gauss fits with rsq less than 0.1
-        th = {'AS0_gauss-min-rsq': 0.1 } 
-        task        -> task1, task2, diff, mean, all. (all means apply the threshold to both task1, and task2)
-        comparison  -> min, max, bound
-        param       -> any of... (model dependent e.g., 'x', 'y', 'ecc'...)
+#     def return_vx_mask(self, th={}):
+#         '''
+#         return_vx_mask: returns a mask (boolean array) for voxels, specified by the user        
+#         th keys must be split into 3 parts
+#         'task-comparison-param' : value
+#         e.g.: to exclude gauss fits with rsq less than 0.1
+#         th = {'AS0_gauss-min-rsq': 0.1 } 
+#         task        -> task1, task2, diff, mean, all. (all means apply the threshold to both task1, and task2)
+#         comparison  -> min, max, bound
+#         param       -> any of... (model dependent e.g., 'x', 'y', 'ecc'...)
         
 
-        '''        
+#         '''        
 
-        # Start with EVRYTHING        
-        vx_mask = np.ones(self.n_vox, dtype=bool)
-        for th_key in th.keys():
-            th_key_str = str(th_key) # convert to string... 
-            if 'roi' in th_key_str:
-                # Input roi specification...
-                vx_mask &= th[th_key]
-                continue # now next item in key
+#         # Start with EVRYTHING        
+#         vx_mask = np.ones(self.n_vox, dtype=bool)
+#         for th_key in th.keys():
+#             th_key_str = str(th_key) # convert to string... 
+#             if 'roi' in th_key_str:
+#                 # Input roi specification...
+#                 vx_mask &= th[th_key]
+#                 continue # now next item in key
 
-            id, comp, p = th_key_str.split('-')
-            th_val = th[th_key]
-            if id=='all':
-                # Apply to both task1 and task2:
-                if p in self.model_labels1:
-                    vx_mask &= self.return_vx_mask({
-                        f'{self.id1}-{comp}-{p}': th_val
-                    })
+#             id, comp, p = th_key_str.split('-')
+#             th_val = th[th_key]
+#             if id=='all':
+#                 # Apply to both task1 and task2:
+#                 if p in self.model_labels1:
+#                     vx_mask &= self.return_vx_mask({
+#                         f'{self.id1}-{comp}-{p}': th_val
+#                     })
                 
-                if p in self.model_labels2:
-                    vx_mask &= self.return_vx_mask({
-                        f'{self.id2}-{comp}-{p}': th_val
-                    })
+#                 if p in self.model_labels2:
+#                     vx_mask &= self.return_vx_mask({
+#                         f'{self.id2}-{comp}-{p}': th_val
+#                     })
 
-                continue # now next item in th_key...
+#                 continue # now next item in th_key...
             
-            if comp=='min':
-                vx_mask &= self.pd_params[id][p].gt(th_val)
-            elif comp=='max':
-                vx_mask &= self.pd_params[id][p].lt(th_val)
-            elif comp=='bound':
-                vx_mask &= self.pd_params[id][p].gt(th_val[0])
-                vx_mask &= self.pd_params[id][p].lt(th_val[1])
-            else:
-                sys.exit()
-        if hasattr(vx_mask, 'to_numpy'):
-            vx_mask = vx_mask.to_numpy()
-        return vx_mask
+#             if comp=='min':
+#                 vx_mask &= self.pd_params[id][p].gt(th_val)
+#             elif comp=='max':
+#                 vx_mask &= self.pd_params[id][p].lt(th_val)
+#             elif comp=='bound':
+#                 vx_mask &= self.pd_params[id][p].gt(th_val[0])
+#                 vx_mask &= self.pd_params[id][p].lt(th_val[1])
+#             else:
+#                 sys.exit()
+#         if hasattr(vx_mask, 'to_numpy'):
+#             vx_mask = vx_mask.to_numpy()
+#         return vx_mask
     
-    def rapid_hist(self, id, param, th={'all-min-rsq':.1}, ax=None, **kwargs):
-        if ax==None:
-            ax = plt.axes()
-        vx_mask = self.return_vx_mask(th)        
-        label = kwargs.get('label', f'{id}-{param}')
-        kwargs['label'] = label
-        ax.hist(self.pd_params[id][param][vx_mask].to_numpy(), **kwargs)
-        ax.set_title(f'{id}-{param}')
-        dag_add_ax_basics(ax=ax, **kwargs)
+#     def rapid_hist(self, id, param, th={'all-min-rsq':.1}, ax=None, **kwargs):
+#         if ax==None:
+#             ax = plt.axes()
+#         vx_mask = self.return_vx_mask(th)        
+#         label = kwargs.get('label', f'{id}-{param}')
+#         kwargs['label'] = label
+#         ax.hist(self.pd_params[id][param][vx_mask].to_numpy(), **kwargs)
+#         ax.set_title(f'{id}-{param}')
+#         dag_add_ax_basics(ax=ax, **kwargs)
 
-    def rapid_arrow(self, ax=None, th={'all-min-rsq':.1, 'all-max-ecc':5}, **kwargs):
-        if ax==None:
-            ax = plt.gca()
-        vx_mask = self.return_vx_mask(th)        
-        kwargs['title'] = kwargs.get('title', f'{self.id1}-{self.id2}')
+#     def rapid_arrow(self, ax=None, th={'all-min-rsq':.1, 'all-max-ecc':5}, **kwargs):
+#         if ax==None:
+#             ax = plt.gca()
+#         vx_mask = self.return_vx_mask(th)        
+#         kwargs['title'] = kwargs.get('title', f'{self.id1}-{self.id2}')
 
-        # arrow_col = kwargs.get('arrow_col', None)
-        # if isinstance(arrow_col:
-        #     # [1] Get change in d2 scotoma 
-        #     q_cmap = mpl.cm.__dict__['bwr_r']
-        #     q_norm = mpl.colors.Normalize()
-        #     q_norm.vmin = -1
-        #     q_norm.vmax = 1
-        #     arrow_col = q_cmap(q_norm(self.pd_params['diff'][f'd2s_{d2_task}']))
-        #     kwargs['arrow_col'] = arrow_col[vx_mask,:]
+#         # arrow_col = kwargs.get('arrow_col', None)
+#         # if isinstance(arrow_col:
+#         #     # [1] Get change in d2 scotoma 
+#         #     q_cmap = mpl.cm.__dict__['bwr_r']
+#         #     q_norm = mpl.colors.Normalize()
+#         #     q_norm.vmin = -1
+#         #     q_norm.vmax = 1
+#         #     arrow_col = q_cmap(q_norm(self.pd_params['diff'][f'd2s_{d2_task}']))
+#         #     kwargs['arrow_col'] = arrow_col[vx_mask,:]
 
-        dag_arrow_plot(
-            ax, 
-            old_x=self.pd_params[self.id1]['x'][vx_mask], 
-            old_y=self.pd_params[self.id1]['y'][vx_mask], 
-            new_x=self.pd_params[self.id2]['x'][vx_mask], 
-            new_y=self.pd_params[self.id2]['y'][vx_mask], 
-            # arrow_col='angle', 
-            **kwargs
-            )
-    def rapid_p_corr(self, px, py, th={'all-min-rsq':.1}, ax=None, **kwargs):
-        # dot_col = kwargs.get('dot_col', 'k')
-        # dot_alpha = kwargs.get('dot_alpha', None)
-        if ax==None:
-            ax = plt.axes()
-        vx_mask = self.return_vx_mask(th)
-        px_id, px_p = px.split('-')
-        py_id, py_p = py.split('-')
-        # ax.scatter(
-        #     self.pd_params[px_id][px_p][vx_mask],
-        #     self.pd_params[py_id][py_p][vx_mask],
-        #     c = dot_col,
-        #     alpha=dot_alpha,
-        # )
-        # corr_xy = np.corrcoef(
-        #     self.pd_params[px_id][px_p][vx_mask],
-        #     self.pd_params[py_id][py_p][vx_mask],
-        #     )[0,1]
+#         dag_arrow_plot(
+#             ax, 
+#             old_x=self.pd_params[self.id1]['x'][vx_mask], 
+#             old_y=self.pd_params[self.id1]['y'][vx_mask], 
+#             new_x=self.pd_params[self.id2]['x'][vx_mask], 
+#             new_y=self.pd_params[self.id2]['y'][vx_mask], 
+#             # arrow_col='angle', 
+#             **kwargs
+#             )
+#     def rapid_p_corr(self, px, py, th={'all-min-rsq':.1}, ax=None, **kwargs):
+#         # dot_col = kwargs.get('dot_col', 'k')
+#         # dot_alpha = kwargs.get('dot_alpha', None)
+#         if ax==None:
+#             ax = plt.axes()
+#         vx_mask = self.return_vx_mask(th)
+#         px_id, px_p = px.split('-')
+#         py_id, py_p = py.split('-')
+#         # ax.scatter(
+#         #     self.pd_params[px_id][px_p][vx_mask],
+#         #     self.pd_params[py_id][py_p][vx_mask],
+#         #     c = dot_col,
+#         #     alpha=dot_alpha,
+#         # )
+#         # corr_xy = np.corrcoef(
+#         #     self.pd_params[px_id][px_p][vx_mask],
+#         #     self.pd_params[py_id][py_p][vx_mask],
+#         #     )[0,1]
         
-        # ax.set_title(f'corr {px}, {py} = {corr_xy:.3f}')
-        dag_scatter(
-            ax=ax,
-            X=self.pd_params[px_id][px_p][vx_mask],
-            Y=self.pd_params[py_id][py_p][vx_mask],
-            **kwargs
-        )                
-        ax.set_xlabel(px)        
-        ax.set_ylabel(py)
+#         # ax.set_title(f'corr {px}, {py} = {corr_xy:.3f}')
+#         dag_scatter(
+#             ax=ax,
+#             X=self.pd_params[px_id][px_p][vx_mask],
+#             Y=self.pd_params[py_id][py_p][vx_mask],
+#             **kwargs
+#         )                
+#         ax.set_xlabel(px)        
+#         ax.set_ylabel(py)
 
 
-    # def rapid_scatter(self, th={'all-min-rsq':.1}, ax=None, dot_col='k', **kwargs):
-    #     if ax==None:
-    #         ax = plt.axes()
-    #     vx_mask = self.return_vx_mask(th)
+#     # def rapid_scatter(self, th={'all-min-rsq':.1}, ax=None, dot_col='k', **kwargs):
+#     #     if ax==None:
+#     #         ax = plt.axes()
+#     #     vx_mask = self.return_vx_mask(th)
                 
-    #     dag_visual_field_scatter(
-    #         ax=ax, 
-    #         dot_x=self.pd_params['x'][vx_mask],
-    #         dot_y=self.pd_params['y'][vx_mask],
-    #         dot_col = dot_col,
-    #         **kwargs
-    #     )                          
+#     #     dag_visual_field_scatter(
+#     #         ax=ax, 
+#     #         dot_x=self.pd_params['x'][vx_mask],
+#     #         dot_y=self.pd_params['y'][vx_mask],
+#     #         dot_col = dot_col,
+#     #         **kwargs
+#     #     )                          
 

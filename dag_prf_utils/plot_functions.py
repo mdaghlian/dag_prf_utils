@@ -322,6 +322,7 @@ def dag_return_ecc_pol_bin(params2bin, ecc4bin, pol4bin, bin_weight=None, **kwar
     '''
     # TODO have option for converting X,Y...    
     min_per_bin = kwargs.get('min_per_bin', False)
+    return_by_bin = kwargs.get('return_by_bin', False)
     ecc_bounds = kwargs.get("ecc_bounds", default_ecc_bounds)
     pol_bounds = kwargs.get("pol_bounds", default_pol_bounds)            
     n_params_gt_1 = False # If there is more than 1 parameter to bin
@@ -331,6 +332,7 @@ def dag_return_ecc_pol_bin(params2bin, ecc4bin, pol4bin, bin_weight=None, **kwar
 
     total_n_bins = (len(ecc_bounds)-1) * (len(pol_bounds)-1) 
     params_binned = []
+    params_binned_no_reshape = []
     for i_param in range(len(params2bin)): # Loop through the parameters to bin
         bin_mean = np.zeros((len(ecc_bounds)-1, len(pol_bounds)-1)) 
         bin_idx = []
@@ -350,16 +352,21 @@ def dag_return_ecc_pol_bin(params2bin, ecc4bin, pol4bin, bin_weight=None, **kwar
                         # Not enough vx per bin
                         print('Not enough vx per bing')
                         bin_idx *= 0 # 
+                
                 if bin_weight is not None: # If there is a bin weight, use it
                     bin_mean[i_ecc, i_pol] = (params2bin[i_param][bin_idx] * bin_weight[bin_idx]).sum() / bin_weight[bin_idx].sum()
                 else:
                     # bin_mean[i_ecc, i_pol] = np.mean(params2bin[i_param][bin_idx])
                     bin_mean[i_ecc, i_pol] = np.median(params2bin[i_param][bin_idx])
 
-        bin_mean = np.reshape(bin_mean, total_n_bins)
-        # REMOVE ANY NANS
-        bin_mean = bin_mean[~np.isnan(bin_mean)]
+        if not return_by_bin:
+            # reshape, remove the nans
+            bin_mean = np.reshape(bin_mean, total_n_bins)
+            # -> REMOVE ANY NANS
+            bin_mean = bin_mean[~np.isnan(bin_mean)]
+        
         params_binned.append(bin_mean)
+
     if n_params_gt_1:
         params_binned = params_binned[0] 
     return params_binned
@@ -686,9 +693,14 @@ def dag_arrow_plot(ax, old_x, old_y, new_x, new_y, **kwargs):
         'scale'     : 1,                                    # ALWAYS 1 -> exact pt to exact pt 
         'width'     : kwargs.get('arrow_width', .01),       # of shaft (relative to plot )
         'headwidth' : kwargs.get('arrow_headwidth', 1.5),    # relative to width
-
     }    
     
+    # arrow_kwargs = {
+    #     'width'     : kwargs.get('arrow_width', .01),       # of shaft (relative to plot )
+    #     'head_width' : kwargs.get('arrow_headwidth', .3),    # relative to width
+    #     'length_includes_head' : True, 
+    # }    
+
     if do_binning:
         # print("DOING BINNING") 
         min_vx_per_bin = kwargs.get('min_vx_per_bin', False)
@@ -725,8 +737,19 @@ def dag_arrow_plot(ax, old_x, old_y, new_x, new_y, **kwargs):
         else:
             q_col = arrow_col
 
-        arrows = ax.quiver(old_bin_x, old_bin_y, dx, dy, scale_units='xy', 
-                    angles='xy', alpha=dot_alpha,color=q_col,  **arrow_kwargs)
+        arrows = ax.quiver(
+            old_bin_x, old_bin_y, dx, dy, scale_units='xy',
+            angles='xy', alpha=dot_alpha,color=q_col,  **arrow_kwargs)
+
+        # arrows = []
+        # for i in range(len(old_bin_x)):
+        #     arrows.append(ax.arrow(
+        #         x=old_bin_x[i], y=old_bin_y[i], dx=dx[i], dy=dy[i], 
+        #         alpha=dot_alpha,color=q_col,
+        #         # scale_units='xy',
+        #         # angles='xy',
+        #         **arrow_kwargs
+        #         ))
         
         # # For the colorbar
         # if isinstance(dot_col, np.ndarray):
@@ -760,21 +783,21 @@ def dag_arrow_coord_getter(old_x, old_y, new_x, new_y, **kwargs):
         old_bin_x, old_bin_y, new_bin_x, new_bin_y, dx, dy
     '''
     # Get arguments related to plotting:
-    do_binning = kwargs.get("do_binning", False)
-    bin_weight = kwargs.get("bin_weight", None)
-    ecc_bounds = kwargs.get("ecc_bounds", default_ecc_bounds)
-    pol_bounds = kwargs.get("pol_bounds", default_pol_bounds)    
+    do_binning = kwargs.pop("do_binning", True)
+    # bin_weight = kwargs.get("bin_weight", None)
+    # ecc_bounds = kwargs.get("ecc_bounds", default_ecc_bounds)
+    # pol_bounds = kwargs.get("pol_bounds", default_pol_bounds)    
     if do_binning:
         # print("DOING BINNING") 
-        min_vx_per_bin = kwargs.get('min_vx_per_bin', False)
         old_ecc, old_pol = dag_coord_convert(old_x, old_y,old2new="cart2pol")
         old_bin_x, old_bin_y, new_bin_x, new_bin_y = dag_return_ecc_pol_bin(
             params2bin=[old_x, old_y, new_x, new_y], 
             ecc4bin=old_ecc, 
             pol4bin=old_pol, 
-            bin_weight=bin_weight,
-            ecc_bounds=ecc_bounds, pol_bounds=pol_bounds,
-            min_vx_per_bin=min_vx_per_bin,
+            # bin_weight=bin_weight,
+            # ecc_bounds=ecc_bounds, pol_bounds=pol_bounds,
+            # min_vx_per_bin=min_vx_per_bin,
+            **kwargs
             )
     else:
         old_bin_x, old_bin_y, new_bin_x, new_bin_y = old_x, old_y, new_x, new_y

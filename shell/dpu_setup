@@ -1,4 +1,4 @@
-# #!/usr/bin/env bash
+#!/usr/bin/env bash
 
 # specify the folder where dag_prf_utils is held
 DPU_SETUP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

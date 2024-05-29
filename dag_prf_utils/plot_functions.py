@@ -153,8 +153,8 @@ def dag_add_ax_basics(ax, **kwargs):
     ax.set_ylabel(ylabel)
     ax.set_title(title)
     ax.set_xlim(x_lim)
-    ax.set_ylim(y_lim)
-    ax.legend()
+    ax.set_ylim(y_lim)    
+    # ax.legend()
     if despine:
         ax.spines['right'].set_visible(False)
         ax.spines['top'].set_visible(False)        
@@ -759,6 +759,8 @@ def dag_arrow_plot(ax, old_x, old_y, new_x, new_y, **kwargs):
         #     fig = plt.gcf()
         #     cb = fig.colorbar(scat_col, ax=ax)        
         #     cb.set_label(kwargs['dot_col'])
+    else:
+        arrows = None
     if add_grid_lines:
         dag_add_ecc_pol_lines(ax, **kwargs)        
     dag_add_ax_basics(ax, **kwargs)    

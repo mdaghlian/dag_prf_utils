@@ -9,8 +9,17 @@ import pickle
 import sys
 import numpy as np
 import re
+import scipy.io
+try:
+    from prfpy_csenf.stimulus import PRFStimulus2D
+    from prfpy_csenf.model import Iso2DGaussianModel, Norm_Iso2DGaussianModel, DoG_Iso2DGaussianModel, CSS_Iso2DGaussianModel, CSenFModel
+except:
+    from prfpy.stimulus import PRFStimulus2D
+    from prfpy.model import Iso2DGaussianModel, Norm_Iso2DGaussianModel, DoG_Iso2DGaussianModel, CSS_Iso2DGaussianModel
+
 from dag_prf_utils.prfpy_ts_plotter import TSPlotter
 from dag_prf_utils.mesh_dash import MeshDash, dag_mesh_pickle
+from dag_prf_utils.utils import dag_hyphen_parse
 
 def main(argv):
     '''
@@ -30,12 +39,13 @@ def main(argv):
     file_name = 'mesh_dash.pickle'
     model = None
     outputdir = opj(os.getcwd(), 'z_dump', file_name.replace('.pickle', ''))#opj(os.environ['DPU_REPO_DIR'], 'z_dump')    
-        
+    real_ts = None
+    dm_file = None
     for i,arg in enumerate(argv):        
         if '--path' in arg:                        
             file_path = argv[i+1]            
         elif '--sub' in arg:
-            sub = argv[i+1]
+            sub = dag_hyphen_parse('sub', argv[i+1])
         elif '--model' in arg:
             model = argv[i+1]            
         elif '--fs_dir' in arg:
@@ -46,6 +56,10 @@ def main(argv):
             dump = True
         elif '--file_name' in arg:
             file_name = argv[i+1]
+        elif '--real_ts' in arg:
+            real_ts = argv[i+1]
+        elif '--dm_file' in arg:
+            dm_file = argv[i+1]            
         elif arg in ('-h', '--help'):
             print(main.__doc__)
             sys.exit()
@@ -62,7 +76,11 @@ def main(argv):
         model = re.search(pattern, file_path).group(1)
 
     data_info = {
-        'pars':[], 'prfpy_model':None, 'real_ts':None}
+        'pars':[], 
+        'prfpy_model':None, 
+        'real_ts':None, 
+        'settings': None
+        }
     if '.pkl' in file_path:
         # Assume store under pars
         with open(file_path, 'rb') as f:
@@ -74,6 +92,38 @@ def main(argv):
     elif '.npy' in file_path:
         data_info['pars'] = np.load(file_path)
     
+    # Can we find the real timeseries somewhere else?
+    if (real_ts is not None) and (data_info['real_ts'] is None):
+        data_info['real_ts'] = np.load(real_ts)
+        # Quick check, is it nvx X time?
+        if data_info['real_ts'].shape[0]<data_info['real_ts'].shape[1]:
+            data_info['real_ts'] = data_info['real_ts'].T
+
+    
+    # Can we remake the prfpy model?
+    if (data_info['prfpy_model'] is None) and (dm_file is not None) and (model is not None):
+        if '.mat' in dm_file:
+            dm_npy = scipy.io.loadmat(dm_file)['stim']
+        else:
+            dm_npy = np.load(dm_file)
+        cut_vols = data_info['settings'].get('cut_vols', None)        
+        prfpy_stim = PRFStimulus2D(
+            screen_size_cm=data_info['settings']['screen_size_cm'],
+            screen_distance_cm=data_info['settings']['screen_distance_cm'],
+            design_matrix=dm_npy[:,:,cut_vols:], 
+            axis=0,
+            TR=data_info['settings']['TR']
+            )    
+        if 'gauss' in model:
+            data_info['prfpy_model'] = Iso2DGaussianModel(prfpy_stim)
+        elif 'norm' in model:
+            data_info['prfpy_model'] = Norm_Iso2DGaussianModel(prfpy_stim)
+        elif 'dog' in model:
+            data_info['prfpy_model'] = DoG_Iso2DGaussianModel(prfpy_stim) 
+        elif 'css' in model:
+            data_info['prfpy_model'] = CSS_Iso2DGaussianModel(prfpy_stim)                       
+        
+        
     if not os.path.exists(outputdir):
         os.makedirs(outputdir)
     # Make the mesh dash object
@@ -81,7 +131,7 @@ def main(argv):
         sub=sub, 
         fs_dir=fs_dir,
         output_dir=outputdir,
-        )
+        )    
     # bloop
     fs.web_get_ready()
     

@@ -100,7 +100,7 @@ if [[ $1 == "setup" ]]; then
       if [ -f "setup.py" ]; then
           echo "Running setup.py for $repo_name..."
           # python setup.py develop
-          pip install -e 
+          pip install -e .
       else
           echo "setup.py not found for $repo_name."
       fi

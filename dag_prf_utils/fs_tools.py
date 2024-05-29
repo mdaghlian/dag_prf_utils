@@ -18,7 +18,7 @@ class FSMaker(object):
     Will create a curv file in subjects freesurfer dir, and load it a specific colormap 
     saved as the relevant command
     '''
-    def __init__(self, sub, fs_dir=os.environ['SUBJECTS_DIR']):
+    def __init__(self, sub, fs_dir=os.environ['SUBJECTS_DIR'], **kwargs):
         
         self.sub = sub        
         self.fs_dir = fs_dir        # Where the freesurfer files are        

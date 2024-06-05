@@ -274,7 +274,7 @@ class TSPlotter(Prf1T1M):
         )
         return ncsf_info
     
-    def csf_ts_plot(self, idx, time_pt=None, **kwargs):
+    def csf_ts_plot(self, idx, return_fig=False, time_pt=None, **kwargs):
         '''csf_ts_plot
         Do a nice representation of the CSF timeseries model
         '''
@@ -283,7 +283,7 @@ class TSPlotter(Prf1T1M):
         do_stim_info = kwargs.get('do_stim_info', True)
         time_pt_col = kwargs.get('time_pt_col', '#42eff5')
         do_2_row = kwargs.get('do_2_row', False)
-        return_fig = kwargs.get('return_fig', True)
+        # return_fig = kwargs.get('return_fig', True)
         dpi = kwargs.get('dpi', 100)
         # Load the specified info 
         ncsf_info = self.csf_ts_plot_get_info(idx)

@@ -969,7 +969,7 @@ class MeshDash(GenMeshMaker):
         for key in self.mpl_fig_makers.keys():
             this_fig = self.mpl_fig_makers[key]['func'](
                 idx, **self.mpl_fig_makers[key]['kwargs'])
-            this_fig.suptitle = f'{key} - {idx} - {this_fig._suptitle}'
+            this_fig.suptitle(f'{key} - {idx} - {this_fig._suptitle}')
             this_fig.tight_layout()
             this_fig.canvas.draw()
             # get title 

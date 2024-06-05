@@ -873,7 +873,7 @@ def dag_multi_scatter(data_in, **kwargs):
     '''
     Many parameters to correlate do x,y... etc    
     '''
-    dag_scatter = kwargs.get('dag_scatter', False)
+    do_dag_scatter = kwargs.get('dag_scatter', False)
     skip_hist = kwargs.get('skip_hist', False)
     if isinstance(data_in, np.ndarray):
         n_pdim = data_in.shape[-1]
@@ -904,7 +904,7 @@ def dag_multi_scatter(data_in, **kwargs):
                 if i1==i2:
                     ax.hist(data_dict[x_param])
                 else:
-                    if not dag_scatter:
+                    if not do_dag_scatter:
                         ax.set_ylabel(y_param)
                         ax.scatter(
                             data_dict[x_param],
@@ -1368,7 +1368,6 @@ def dag_shaded_line(line_data, xdata, **kwargs):
         line_ste = np.nanstd(line_data, axis=1) / np.sqrt(line_data.shape[1])
         lower_line = m_line - line_ste
         upper_line = m_line + line_ste
-
     ax.plot(
         xdata, 
         m_line, 

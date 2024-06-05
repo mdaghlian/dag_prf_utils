@@ -22,8 +22,11 @@ def main(argv):
 
     Args (optional):
         --sub               subject number
-        --find 
-        --exclude 
+        --fs_dir            freesurfer directory (default is $SUBJECTS_DIR)        
+        --find              comma separated list of strings to include in the search 
+        --exclude           comma separated list of strings to exclude in the search 
+        --sub_folder        subfolder in the custom folder to look in (default is 'custom')
+        --full_folder       look in the full folder (default is False)
         # 
         -h          help
     
@@ -36,10 +39,14 @@ def main(argv):
     sub = None
     search_incl = []
     search_excl = []
+    fs_dir = os.environ['SUBJECTS_DIR']    
     for i,arg in enumerate(argv):
         if '--sub' in arg:
             sub = f'sub-{argv[i+1]}'
-
+        elif '--fs_dir' in arg:
+            fs_dir = argv[i+1]
+            if not os.path.exists(fs_dir):
+                raise ValueError(f'{fs_dir} does not exist')
         elif '--find' in arg:
             search_incl = argv[i+1]
             if ',' in search_incl:
@@ -52,7 +59,10 @@ def main(argv):
                 search_excl = search_excl.split(',')
             if not isinstance(search_excl, list):
                 search_excl = [search_excl]
-
+        elif '--sub_folder' in arg:
+            sub_folder = argv[i+1]
+        elif '--full_folder' in arg:
+            full_folder = True
         elif '-h' in arg:
             print(main.__doc__)
             sys.exit()
@@ -61,7 +71,6 @@ def main(argv):
     if sub is None:
         raise ValueError('Subject number not specified')
     
-    fs_dir=os.environ['SUBJECTS_DIR']
     print(f'Looking in {fs_dir}')
     custom_surf_dir = opj(fs_dir, sub, 'surf', 'custom')
     print(f'Looing in {custom_surf_dir}')

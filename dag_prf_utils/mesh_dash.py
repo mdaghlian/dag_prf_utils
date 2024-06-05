@@ -51,6 +51,7 @@ class MeshDash(GenMeshMaker):
         '''Meshes are the plotly stuff'''
         super().__init__(sub, fs_dir, output_dir, **kwargs)
 
+    #region PLOTLY FUNCTIONS
     def plotly_return_mesh_dict(self, data, **kwargs):
         '''Return a dict with mesh info [x,y,z,i,j,k,intensity,vertexcolor]
         '''
@@ -157,7 +158,6 @@ class MeshDash(GenMeshMaker):
 
         return fig
     
-
     def plotly_return_roi_obj(self, roi_list, **kwargs):
         '''
         Return a plotly object for a given roi
@@ -616,7 +616,7 @@ class MeshDash(GenMeshMaker):
             # INFLATE
             print('INFLATE CALLBACK')
             if inflate is not None:            
-                self.update_figure_inflate_NEW(inflate)
+                self.update_figure_inflate(inflate)
             else:
                 raise dash.exceptions.PreventUpdate 
             return self.dash_fig
@@ -925,26 +925,8 @@ class MeshDash(GenMeshMaker):
             self.dash_fig.data[i].update(vertexcolor=disp_rgb[ih])        
         print(f'Vertex update time = {time.time() - vx_update_time}')
 
-    def update_figure_inflate(self, inflate):
-        this_vx_coord = []
-        for hemi in self.web_hemi_list:
-            # INTERPOLATE
-            this_vx_coord.append(
-                dag_mesh_interpolate(
-                    coords1=self.mesh_info['pial'][hemi]['coords'],
-                    coords2=self.mesh_info[self.web_inflated][hemi]['coords'],
-                    interp=inflate,
-                )
-            )
-        # Update facecolor for each mesh trace
-        for i in range(len(self.web_mesh)):
-            self.dash_fig.data[i].update(
-                x=this_vx_coord[i][:,0],
-                y=this_vx_coord[i][:,1],
-                z=this_vx_coord[i][:,2],
-                )
 
-    def update_figure_inflate_NEW(self, inflate):
+    def update_figure_inflate(self, inflate):
         inflate_time = time.time()
         new_vx_coords = {}
         for hemi in self.web_hemi_list:
@@ -1044,3 +1026,169 @@ class MeshDash(GenMeshMaker):
         )
         return image4html        
     #endregion DASH FUNCTIONS
+
+
+    #startregion HTML functions
+    def html_get_ready(self, **kwargs):
+        '''For making a single html file
+        Not messing with dash
+        '''
+        self.html_hemi_list = kwargs.get('hemi_list', ['lh', 'rh'])
+        self.html_mesh_name = kwargs.get('mesh_name', 'inflated')
+        if not isinstance(self.html_hemi_list, list):
+            self.html_hemi_list = [self.html_hemi_list]
+        self.html_multi = {}
+        self.html_cmaps = {}
+    
+    def html_add_surf(self, data, surf_name, **kwargs):
+        '''Add surfaces...
+        '''
+        # Update kwargs
+        kwargs['hemi_list'] = kwargs.get('hemi_list', self.html_hemi_list)
+        kwargs['mesh_name'] = kwargs.get('mesh_name', self.html_mesh_name)
+        self.html_multi[surf_name] = self.add_plotly_surface(
+            data=data, 
+            return_mesh_obj=True,
+            **kwargs
+        )
+        _,cmap_dict = self.return_display_rgb(
+                return_cmap_dict=True, unit_rgb=True, 
+                data=data,
+                **kwargs
+                )
+        this_cmap = dag_cmap_plotter(
+                cmap=cmap_dict['cmap'], 
+                vmin=cmap_dict['vmin'], 
+                vmax=cmap_dict['vmax'], 
+                title=surf_name, 
+                return_fig=True, )
+        this_cmap.tight_layout()
+        image_buffer = io.BytesIO()
+        this_cmap.savefig(image_buffer, format='png')
+        image_buffer.seek(0)
+        self.html_cmaps[surf_name] = "data:image/png;base64," +  base64.b64encode(image_buffer.getvalue()).decode("utf-8")
+        # self.html_cmaps[surf_name] = Image.open(image_buffer)        
+    
+
+    def html_make(self, **kwargs):
+        
+        do_multi = kwargs.get('do_multi', True)
+        mesh_list = list(self.html_multi.keys())
+        n_plots = len(mesh_list)
+        # If do multi: subfigures 
+        if do_multi:
+            from plotly.subplots import make_subplots
+            n_cols = int(np.ceil(np.sqrt(n_plots)))
+            n_rows = int(np.ceil(n_plots / n_cols))
+            fig = make_subplots(
+                rows=n_rows, 
+                cols=n_cols, specs=[[{'type': 'surface'}]*n_cols]*n_rows, )  
+            i_plot = 0
+            
+            for i_row in np.arange(1, n_rows+1):
+                for i_col in np.arange(1, n_cols+1):
+                    key = mesh_list[i_plot]
+                    for this_mesh in self.html_multi[key]:
+                        fig.append_trace(this_mesh, row=i_row, col=i_col)
+
+                    # Now add the matplotlib figure self.html_cmaps[key] to the same subplot
+                    # Calculate size of colorbar relative to subplot dimensions
+                    colorbar_size = min(0.2, 0.5 / max(n_rows, n_cols))                    
+                    fig.add_layout_image(
+                            dict(
+                                source=self.html_cmaps[key],
+                                xref=f"x{i_col}", yref=f"y{i_row}",
+                                x=0.5, y=-0.2,  # x is centered, y is below the plot
+                                xanchor="center", yanchor="top",
+                                sizex=1, sizey=colorbar_size,
+                                sizing="contain",
+                                opacity=0.5,
+                                layer="above"
+
+                            ),
+                    )
+                        
+                    # fig.update_scenes(
+                    #     aspectmode="manual",
+                    #     xaxis_visible=False, yaxis_visible=False,zaxis_visible=False,
+                    #     row=i_row, col=i_col,
+                    # )
+                    # fig.update_yaxes(showgrid=False, row=i_row, col=i_col)
+                    i_plot += 1     
+
+            fig.update_layout(
+                # width=800,
+                # height=900,
+                autosize=True,
+                margin=dict(t=0, b=0, l=0, r=0),
+                template="plotly_white",
+            )                    
+        else:
+
+            fig = go.Figure()
+            for key in self.html_multi.keys():
+                for this_mesh in self.html_multi[key]:
+                    fig.add_trace(this_mesh)
+                # Now add the matplotlib figure self.html_cmaps[key] to the same subplot
+
+            # Create buttons list:
+            button_info_for_list = []
+            for key in self.html_multi.keys():
+                this_col_list = []
+                for this_mesh in self.html_multi[key]:
+                    this_col_list.append(this_mesh)
+                
+                this_button_entry = dict(
+                    args=[{"vxcol": this_col_list}],
+                    label=key,
+                    method="restyle"
+                )
+                button_info_for_list.append(this_button_entry)
+
+            # Update plot sizing
+            fig.update_layout(
+                # width=800,
+                # height=900,
+                autosize=True,
+                margin=dict(t=0, b=0, l=0, r=0),
+                template="plotly_white",
+            )
+
+            # Update 3D scene options
+            fig.update_scenes(
+                # aspectratio=dict(x=1, y=1, z=0.7),
+                aspectmode="manual"
+            )
+
+            # Add dropdown
+            fig.update_layout(
+                updatemenus=[
+                    dict(
+                        type="buttons",
+                        direction="left",
+                        buttons=button_info_for_list,
+                        pad={"r": 10, "t": 10},
+                        showactive=True,
+                        x=0.11,
+                        xanchor="left",
+                        y=1.1,
+                        yanchor="top"
+                    ),
+                ]
+            )
+
+            # Add annotation
+            fig.update_layout(
+                annotations=[
+                    dict(text="Surface color scale:", showarrow=False,
+                        x=0, y=1.08, yref="paper", align="left")
+                ]
+            )        
+
+        return fig
+
+
+            
+    
+
+    #endregion HTML functions

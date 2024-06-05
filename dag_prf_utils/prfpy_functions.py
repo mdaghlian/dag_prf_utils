@@ -437,7 +437,10 @@ class Prf1T1M(object):
             X=self.pd_params[px][vx_mask],
             Y=self.pd_params[py][vx_mask],
             **kwargs
-        )        
+        )    
+        ax.set_xlabel(px)
+        ax.set_ylabel(py)
+            
 
     def make_prf_str(self, idx, pid_list=None):
         '''make_prf_str
@@ -723,7 +726,7 @@ class PrfMulti(object):
             X=self.prf_obj[px_id].pd_params[px_p][vx_mask],
             Y=self.prf_obj[py_id].pd_params[py_p][vx_mask],
             **kwargs
-        )                
+        )              
         ax.set_xlabel(px)        
         ax.set_ylabel(py)                        
 

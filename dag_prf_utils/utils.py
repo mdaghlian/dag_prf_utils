@@ -176,6 +176,20 @@ def dag_arg_checker(arg2check):
     '''arg2check is a string, check if it's a number, return the number if so, otherwise return the string
     Should be able to deal with negative numbers too
     '''
+    # [1] Check if it is a list of arguments
+    if ',' in arg2check:
+        arg2check_list = arg2check.split(',')
+        arg_out = [dag_arg_checker(i) for i in arg2check_list]
+        return arg_out
+    # [2] Check for common strings
+    if arg2check.lower() == 'true':
+        return True
+    elif arg2check.lower() == 'false':
+        return False
+    elif arg2check.lower() == 'none':
+        return None
+    
+    # [3] Check for numbers
     if arg2check[0] == '-':
         arg_valence = -1
         arg2check = arg2check[1:]

@@ -3,6 +3,7 @@ import matplotlib.pyplot as plt
 import os
 import pandas as pd
 import pickle
+from copy import deepcopy
 import sys
 opj = os.path.join
 
@@ -200,6 +201,33 @@ def make_vx_wise_bounds(n_vx, bounds_in, **kwargs):
 
     return vx_wise_bounds
 
+def quick_rf(x, y, size, **kwargs):
+    '''quick_rf
+    Quick calculation of a gaussian rf
+    '''
+    prfpy_stim = kwargs.get('prfpy_stim', None)
+    normalize_RFs = kwargs.get('normalize_RFs', False)
+    x_coords = kwargs.get('x_coords', None)
+    y_coords = kwargs.get('y_coords', None)
+    if (prfpy_stim is None) & (x_coords is None):        
+        print('x and y coords not given, making some up')
+        x_coords = np.linspace(-10,10,100)
+        y_coords = np.linspace(-10,10,100)
+        x_coords, y_coords = np.meshgrid(x_coords, y_coords)    
+    elif x_coords is None:
+        x_coords = prfpy_stim.x_coordinates
+        y_coords = prfpy_stim.y_coordinates
+    elif len(x_coords.shape)==1:
+        x_coords, y_coords = np.meshgrid(x_coords, y_coords)
+        
+    rf = np.rot90(gauss2D_iso_cart(
+        x=x_coords[...,np.newaxis],
+        y=y_coords[...,np.newaxis],
+        mu=(x,y),
+        sigma=size,
+        normalize_RFs=normalize_RFs).T,axes=(1,2))
+    return rf
+
 # ********** PRF OBJECTS
 class Prf1T1M(object):
     '''Prf1T1M
@@ -235,7 +263,7 @@ class Prf1T1M(object):
         '''
         self.model = model        
         self.model_labels = prfpy_params_dict()[self.model] # Get names for different model parameters...
-        self.prf_params_np = prf_params
+        self.prf_params_np = prf_params.copy()
         self.saved_kwargs = kwargs
         self.incl_hrf = kwargs.get('incl_hrf', True)
         self.incl_rsq = kwargs.get('incl_rsq', True)
@@ -492,6 +520,15 @@ class Prf1T1M(object):
         self.wm_param = wm_param
         return wm_param
     
+    def multi_scatter(self, px_list, th={'min-rsq':.1}, **kwargs):
+        '''multi_scatter
+        Several scatter plots... multiple comparisons...
+        i.e., creates a grid of scatter plots
+        '''
+        tmp_dict = self.return_th_params(px_list, th, **kwargs)
+        fig, ax_list = dag_multi_scatter(tmp_dict, **kwargs)            
+        return fig, ax_list
+
 
 
 
@@ -533,11 +570,11 @@ class PrfMulti(object):
         prf_obj_list    list, of Prf1T1M objects
         id_list         list, of strings, to label the prf_obj_list        
         '''
-        self.id_list = id_list
+        self.id_list = id_list.copy()
         self.prf_obj = {}
         self.n_vox = prf_obj_list[0].n_vox
         for i,this_id in enumerate(id_list):
-            self.prf_obj[this_id] = prf_obj_list[i]
+            self.prf_obj[this_id] = deepcopy(prf_obj_list[i])
         total_dict = {}
         for this_id in id_list:
             for p in self.prf_obj[this_id].pd_params.keys():
@@ -576,6 +613,8 @@ class PrfMulti(object):
 
         # Start with EVRYTHING        
         vx_mask = np.ones(self.n_vox, dtype=bool)
+        if th is None:
+            return vx_mask
         for th_key in th.keys():
             th_key_str = str(th_key) # convert to string... 
             if 'roi' in th_key_str:
@@ -588,7 +627,7 @@ class PrfMulti(object):
                 idx_mask[th[th_key]] = True
                 vx_mask &= idx_mask
                 continue            
-
+            print(th)
             id, comp, p = th_key_str.split('-')
             th_val = th[th_key]
             if id=='all':
@@ -637,17 +676,22 @@ class PrfMulti(object):
             tmp_dict[f'{i_px_id}-{i_px_p}'] = self.prf_obj[i_px_id].pd_params[i_px_p][vx_mask].to_numpy()
         return tmp_dict
     
-    def add_prf(self, new_prf, new_id):
+    def add_prf(self, new_prf, new_id, ow=True):
         '''add_prf_obj
         Add a new prf_obj to the list
         '''
         if new_id in self.id_list:
             print(f'{new_id} already exists')
+            if not ow:
+                print('Not overwriting...')
+                return
+        
         else:
-            self.prf_obj[new_id] = new_prf
             self.id_list += [new_id]
-            for p in  new_prf.pd_params.keys():
-                self.pd_params[f'{new_id}-{p}'] = new_prf.pd_params[p].to_numpy()
+
+        self.prf_obj[new_id] = new_prf
+        for p in  new_prf.pd_params.keys():
+            self.pd_params[f'{new_id}-{p}'] = new_prf.pd_params[p].to_numpy()
 
 
     def add_prf_diff(self, id1, id2, new_id=None):
@@ -735,7 +779,7 @@ class PrfMulti(object):
         Several scatter plots... multiple comparisons...
         i.e., creates a grid of scatter plots
         '''
-        tmp_dict = self.return_th_params(px_list, th, **kwargs)
+        tmp_dict = self.return_th_params(px_list=px_list, th=th, **kwargs)
         fig, ax_list = dag_multi_scatter(tmp_dict, **kwargs)            
         return fig, ax_list
     

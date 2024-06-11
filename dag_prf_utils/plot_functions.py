@@ -835,14 +835,17 @@ def dag_scatter(X,Y,ax=None, **kwargs):
     vmax = kwargs.get('vmax', None)
     dot_label=kwargs.get('dot_label')
     do_corr = kwargs.get('do_corr', False)
-
+    do_colbar = kwargs.get('do_colbar', False)
     if do_scatter:        
         scat_col = ax.scatter(
             X,Y, c=dot_col, alpha=dot_alpha, label=dot_label,
             cmap=dot_cmap, vmin=vmin, vmax=vmax) # added **kwargs
-        if dot_col is not None:
+        # if dot_col is not None:
+        if do_colbar:
             fig = plt.gcf()
-            # cb = fig.colorbar(scat_col, ax=ax)        
+            cb = fig.colorbar(scat_col, ax=ax)        
+            cb.set_alpha(1)
+            cb.draw_all()
     if do_line:
         dag_plot_bin_line(ax=ax, X=X,Y=Y, bin_using=X, **kwargs)
     
@@ -869,39 +872,72 @@ def dag_scatter(X,Y,ax=None, **kwargs):
     dag_add_ax_basics(ax=ax, **kwargs)
 
 
+
 def dag_multi_scatter(data_in, **kwargs):
     '''
     Many parameters to correlate do x,y... etc    
     '''
     do_dag_scatter = kwargs.get('dag_scatter', False)
     skip_hist = kwargs.get('skip_hist', False)
+    # Which labels for x and y?
+    p_labels = kwargs.get('p_labels', None)
+    transpose_subplots = kwargs.get('transpose_subplots', False)
+    do_all_comb = False
     if isinstance(data_in, np.ndarray):
+        print('numpy array: only n x n. Assuming each column is a parameter')
         n_pdim = data_in.shape[-1]
-        p_labels = kwargs.get('p_labels', np.arange(n_pdim))
+        n_px = n_pdim
+        n_py = n_pdim
+        if p_labels is None:
+            p_labels = np.arange(n_pdim)    
+            p_labels = [f'p{i}' for i in p_labels]
         data_dict = {}
         for i,p in enumerate(p_labels):
             data_dict[p] = data_in[:,i]
     else:
+        p_labels = kwargs.get('p_labels', list(data_in.keys()))
+        px_labels = kwargs.get('px_labels', p_labels)
+        py_labels = kwargs.get('py_labels', p_labels)    
         data_dict = data_in
-        p_labels = kwargs.get('p_labels', data_dict.keys())
-        n_pdim = len(p_labels)
+        n_px = len(px_labels)
+        n_py = len(py_labels)        
+
+        if (px_labels!=py_labels):
+            skip_hist = False
+            do_all_comb = True
 
     fig = kwargs.get('fig', plt.figure())    
-    rows = n_pdim
-    cols = n_pdim
+    rows = n_py
+    cols = n_px
+    if skip_hist:
+        px_labels = list(px_labels)[1::]
+    if skip_hist:
+        cols -= 1
+
+    if transpose_subplots: # Transpose the subplots
+        rows_new = cols
+        cols_new = rows
+        rows = rows_new
+        cols = cols_new
+
     plot_i = 1
     ax_list = {}
 
-    for i1,y_param in enumerate(p_labels):
+    for i1,y_param in enumerate(py_labels):
         ax_list[i1] = {}
-        for i2,x_param in enumerate(p_labels):
+        for i2,x_param in enumerate(px_labels):
             ax = fig.add_subplot(rows,cols,plot_i)
-            ax_list[i1][i2] = ax
-            if i1>i2:
+            if transpose_subplots:
+                i1 = i1 % n_px
+                i2 = i2 % n_py
+                
+            if (i1>i2) and (not do_all_comb):
                 ax.axis('off')
             else:
                 ax.set_xlabel(x_param)
-                if i1==i2:
+                # if (i1==i2) and (not skip_hist):
+                #     ax.hist(data_dict[x_param])
+                if (x_param==y_param) and (not skip_hist):
                     ax.hist(data_dict[x_param])
                 else:
                     if not do_dag_scatter:

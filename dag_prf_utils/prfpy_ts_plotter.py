@@ -1,5 +1,6 @@
 import numpy as np
 import sys
+from copy import deepcopy
 import matplotlib.pyplot as plt
 try: 
     from prfpy_csenf.rf import *
@@ -15,8 +16,8 @@ class TSPlotter(Prf1T1M):
 
     def __init__(self, prf_params, model, prfpy_model=None, real_ts=None,  **kwargs):
         super().__init__(prf_params, model=model, **kwargs)
-        self.real_ts = real_ts
-        self.prfpy_model = prfpy_model
+        self.real_ts = deepcopy(real_ts)
+        self.prfpy_model = deepcopy(prfpy_model)
         if self.prfpy_model is not None:
             self.prfpy_stim = prfpy_model.stimulus
             if 'csf' in self.model:
@@ -56,9 +57,12 @@ class TSPlotter(Prf1T1M):
             return fig
 
     def real_ts_plot(self, ax, idx, **kwargs):
-        this_real_ts = self.real_ts[idx,:]
-        ts_x = np.arange(this_real_ts.shape[-1]) * self.TR_in_s
-        ax.plot(ts_x,this_real_ts, ':^', color='k', markersize=5, lw=2, alpha=.5)        
+        try:
+            this_real_ts = self.real_ts[idx,:]
+            ts_x = np.arange(this_real_ts.shape[-1]) * self.TR_in_s
+            ax.plot(ts_x,this_real_ts, ':^', color='k', markersize=5, lw=2, alpha=.5)        
+        except:
+            pass
 
     def gauss1_ts_plot(self, idx, return_fig=False, **kwargs):
         '''
@@ -76,7 +80,7 @@ class TSPlotter(Prf1T1M):
                 y=self.prfpy_stim.y_coordinates[...,np.newaxis],
                 mu=(self.pd_params['x'][idx], self.pd_params['y'][idx]),
                 sigma=self.pd_params['size_1'][idx],
-                normalize_RFs=False).T,axes=(1,2))
+                normalize_RFs=self.prfpy_model.normalize_RFs).T,axes=(1,2))
         this_rf = np.squeeze(this_rf)
         this_pred_ts = np.squeeze(self.prfpy_model.return_prediction(*list(self.prf_params_np[idx,:-1])))
         ts_x = np.arange(this_pred_ts.shape[-1]) * self.TR_in_s
@@ -128,14 +132,14 @@ class TSPlotter(Prf1T1M):
                 y=self.prfpy_stim.y_coordinates[...,np.newaxis],
                 mu=(self.pd_params['x'][idx], self.pd_params['y'][idx]),
                 sigma=self.pd_params['size_1'][idx],
-                normalize_RFs=False).T,axes=(1,2))
+                normalize_RFs=self.prfpy_model.normalize_RFs).T,axes=(1,2))
         this_arf = np.squeeze(this_arf)
         this_srf = np.rot90(gauss2D_iso_cart(
                 x=self.prfpy_stim.x_coordinates[...,np.newaxis],
                 y=self.prfpy_stim.y_coordinates[...,np.newaxis],
                 mu=(self.pd_params['x'][idx], self.pd_params['y'][idx]),
                 sigma=self.pd_params['size_2'][idx],
-                normalize_RFs=False).T,axes=(1,2))
+                normalize_RFs=self.prfpy_model.normalize_RFs).T,axes=(1,2))
         this_srf = np.squeeze(this_srf)
         this_rf = [this_arf, this_srf]
 

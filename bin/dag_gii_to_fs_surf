@@ -1,0 +1,175 @@
+#!/usr/bin/env python
+#$ -j Y
+#$ -cwd
+#$ -V
+
+## qsub eg...
+import sys
+import getopt
+import re
+import os
+opj = os.path.join
+
+import numpy as np
+import nibabel as nib
+
+from dag_prf_utils.utils import *
+from dag_prf_utils.stats import *
+from dag_prf_utils.fs_tools import FSMaker
+
+def main(argv):
+    '''
+    ---------------------------
+    * find .gii files, save as freesurfer surfaces 
+    
+    Args:
+        --gii_file          path to the .gii file. In this case will check for the hemisphere and load both lh and rh
+        --include           If searching for files: include only files with this in the name
+        --exclude           If searching for files: exclude files with this in the name
+        --path              path to search for .gii files. If not specified use current path
+        --surf_name         what to call it (if only doing one file)
+        --sub               subject name
+        --hemi              hemisphere
+        --fs_dir            freesurfer directory        
+        --open            open the surface in freeview
+    ---------------------------
+    '''
+    gii_file = None
+    search_incl = None
+    search_excl = None
+    path = os.getcwd()
+    hemi_markers = ['lh', 'rh']
+    surf_name = None
+    sub = None
+    open_surf = False
+    fs_dir = os.environ['SUBJECTS_DIR']
+    extra_kwargs = {}
+    for i,arg in enumerate(argv):
+        if '--gii_file' in arg:
+            gii_file = argv[i+1]
+        elif '--surf_name' in arg:
+            surf_name = argv[i+1]
+        elif '--include' in arg:
+            search_incl = argv[i+1]
+            if ',' in search_incl:
+                search_incl = search_incl.split(',')
+            if not isinstance(search_incl, list):
+                search_incl = [search_incl]
+        elif '--exclude' in arg:
+            search_excl = argv[i+1]
+            if ',' in search_excl:
+                search_excl = search_excl.split(',')
+            if not isinstance(search_excl, list):
+                search_excl = [search_excl]
+        elif '--path' in arg:
+            path = argv[i+1]
+        elif '--hemi_markers' in arg:
+            hemi_markers = argv[i+1].split(',')            
+        elif '--fs_dir' in arg:
+            fs_dir = argv[i+1]
+        elif '--sub' in arg:
+            sub = dag_hyphen_parse('sub', argv[i+1])        
+        elif '--open' in arg:
+            open_surf = True
+        elif arg in ('-h', '--help'):
+            print(main.__doc__)
+            return
+        elif '--' in arg:
+            this_kwarg = arg.replace('--', '')
+            this_kwarg_value = dag_arg_checker(argv[i+1])
+            extra_kwargs[this_kwarg] = this_kwarg_value
+            print(f'Unknown arg: {arg}')        
+    
+    # If subject name is not given, try to get it from the input path
+    if sub is None:
+        sub = 'sub-'
+        sub += re.search(r'sub-(.*?)_', gii_file).group(1)
+
+    # Sort out how we id hemisphere
+    # -> people (me) are annoyingly inconsistent with how they hame there hemispheres (I'm working on it)
+    mlh = [i for i in hemi_markers if 'l' in i.lower()][0]
+    mrh = [i for i in hemi_markers if 'r' in i.lower()][0]
+        
+    # [5] Locate the .gii files    
+    if gii_file is not None:
+        # .gii has been specified        
+        if mlh in gii_file:
+            lh_gii_files = [gii_file]
+            rh_gii_files = [gii_file.replace(mlh, mrh)]
+        else:
+            rh_gii_files = [gii_file]
+            lh_gii_files = [gii_file.replace(mrh, mlh)]
+    else:
+        # Need to search for the files
+        print(['.gii', mlh, *search_incl])
+        lh_gii_files = dag_find_file_in_folder(
+            ['.gii', mlh, *search_incl],
+            path,
+            exclude = search_excl,
+            return_msg=None,
+        )    
+            
+        rh_gii_files = dag_find_file_in_folder(
+            ['.gii', mrh, *search_incl],
+            path,
+            exclude = search_excl,
+            return_msg=None,
+        )
+
+        if lh_gii_files is None or rh_gii_files is None:
+            print(f'No .gii files found ')            
+            print(f'Looking in folder {gii_file}')
+            print(f'lh found {lh_gii_files}')
+            print(f'rh found {rh_gii_files}')
+            return
+    if not isinstance(lh_gii_files, list):
+        lh_gii_files = [lh_gii_files]
+    if not isinstance(rh_gii_files, list):
+        rh_gii_files = [rh_gii_files]
+    assert len(lh_gii_files)==len(rh_gii_files) ; print(f'lh: {lh_gii_files} rh: {rh_gii_files}')
+    # Sort them (to make sure they're in order)
+    lh_gii_files.sort()
+    rh_gii_files.sort()
+    
+    # Load subject fs object
+    fs = FSMaker(
+        sub=sub, 
+        fs_dir=fs_dir,
+        )
+    
+    # Load the .gii files
+    data_for_surf = {}
+    surf_names = []
+    for i_file in range(len(lh_gii_files)):
+        # ASSUMING LH and RH have same naming...
+        if surf_name is not None:
+            surf_names.append(surf_name)
+        else:
+            new_surf_name = lh_gii_files[i_file].split('/')[-1]
+            new_surf_name = new_surf_name.replace(mlh, '')
+            new_surf_name = new_surf_name.replace('-', '_')
+            new_surf_name = new_surf_name.replace('.gii', '')
+            new_surf_name = new_surf_name.replace('.func', '')
+            new_surf_name = new_surf_name.replace('.', '_')
+            surf_names.append(new_surf_name)
+            
+        lh_gii_data = nib.load(lh_gii_files[i_file])
+        lh_gii_data = [i.data for i in lh_gii_data.darrays]
+        lh_gii_data = np.vstack(lh_gii_data).squeeze()
+        rh_gii_data = nib.load(rh_gii_files[i_file])
+        rh_gii_data = [i.data for i in rh_gii_data.darrays]
+        rh_gii_data = np.vstack(rh_gii_data).squeeze()    
+        data_for_surf[surf_names[i_file]] =  np.concatenate([lh_gii_data, rh_gii_data], axis=0)
+    for surf in surf_names:
+        fs.add_surface(
+            data=data_for_surf[surf], 
+            surf_name=surf,
+            **extra_kwargs
+        )        
+    if open_surf:
+        fs.open_fs_surface(
+            fs.surf_list,
+            **extra_kwargs
+        )
+if __name__ == "__main__":
+    main(sys.argv[1:])    

@@ -317,6 +317,9 @@ class FSMaker(object):
     def get_overlay_str(self, surf_name, overlay_cmap=None, **kwargs):
         overlay_str_ow = kwargs.get('overlay_str', None)
         if overlay_str_ow is not None:
+            if isinstance(overlay_str_ow, list):
+                # join together as a string
+                overlay_str_ow = ','.join(overlay_str_ow)
             # :colormap=grayscale
             return overlay_str_ow
         

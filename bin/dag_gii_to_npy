@@ -111,12 +111,6 @@ def main(argv):
     lh_gii_data = []
     rh_gii_data = []
     for i_file in range(len(lh_gii_files)):
-        # ASSUMING LH and RH have same naming...
-        new_file_name = lh_gii_files[i_file].split('/')[-1]
-        new_file_name = new_file_name.replace('hemi-L', 'BOTH-HEMI')
-        new_file_name = new_file_name.replace('.gii', '')
-        new_file_name = new_file_name.replace('.func', '')
-
         lh_run_data = nib.load(lh_gii_files[i_file])
         lh_run_cat = [i.data for i in lh_run_data.darrays]        
         lh_run_cat = np.vstack(lh_run_cat).T # [n_vx, n_tr]

@@ -23,6 +23,12 @@ class TSPlotter(Prf1T1M):
             if 'csf' in self.model:
                 self.edge_type = self.prfpy_model.edge_type
             self.TR_in_s = self.prfpy_stim.TR
+        if (self.real_ts is not None) and (self.prfpy_model is not None):
+            # check for same number of time points
+            if self.model != 'csf':
+                assert self.real_ts.shape[-1] == self.prfpy_model.stimulus.design_matrix.shape[-1], 'real_ts and prfpy_model have different number of time points'
+            else:
+                assert self.real_ts.shape[-1] == self.prfpy_model.stimulus.n_TRs, 'real_ts and prfpy_model have different number of time points'
 
         if 'csf' in self.model:
             self._sort_SF_list(**kwargs)            

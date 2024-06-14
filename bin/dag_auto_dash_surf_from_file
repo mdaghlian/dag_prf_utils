@@ -19,7 +19,7 @@ except:
 
 from dag_prf_utils.prfpy_ts_plotter import TSPlotter
 from dag_prf_utils.mesh_dash import MeshDash, dag_mesh_pickle
-from dag_prf_utils.utils import dag_hyphen_parse
+from dag_prf_utils.utils import dag_hyphen_parse, dag_arg_checker
 
 def main(argv):
     '''
@@ -38,9 +38,10 @@ def main(argv):
     dump = False
     file_name = 'mesh_dash.pickle'
     model = None
-    outputdir = opj(os.getcwd(), 'z_dump', file_name.replace('.pickle', ''))#opj(os.environ['DPU_REPO_DIR'], 'z_dump')    
+    outputdir = opj(os.getcwd(), 'z_dump')#opj(os.environ['DPU_REPO_DIR'], 'z_dump')    
     real_ts = None
     dm_file = None
+    extra_kwargs = {}
     for i,arg in enumerate(argv):        
         if '--path' in arg:                        
             file_path = argv[i+1]            
@@ -64,6 +65,12 @@ def main(argv):
             print(main.__doc__)
             sys.exit()
 
+        elif '--' in arg:
+            this_kwarg = arg.replace('--', '')
+            this_kwarg_value = dag_arg_checker(argv[i+1])
+            extra_kwargs[this_kwarg] = this_kwarg_value
+            print(f'Unknown arg: {arg}')
+
     # Load the fitting settings, add in the new info
     if sub is None:
         sub = 'sub-'
@@ -79,7 +86,7 @@ def main(argv):
         'pars':[], 
         'prfpy_model':None, 
         'real_ts':None, 
-        'settings': None
+        'settings': {},
         }
     if '.pkl' in file_path:
         # Assume store under pars
@@ -92,13 +99,13 @@ def main(argv):
     elif '.npy' in file_path:
         data_info['pars'] = np.load(file_path)
     
+    cut_vols = data_info['settings'].get('cut_vols', None)
     # Can we find the real timeseries somewhere else?
     if (real_ts is not None) and (data_info['real_ts'] is None):
         data_info['real_ts'] = np.load(real_ts)
         # Quick check, is it nvx X time?
         if data_info['real_ts'].shape[0]<data_info['real_ts'].shape[1]:
             data_info['real_ts'] = data_info['real_ts'].T
-
     
     # Can we remake the prfpy model?
     if (data_info['prfpy_model'] is None) and (dm_file is not None) and (model is not None):
@@ -121,7 +128,7 @@ def main(argv):
         elif 'dog' in model:
             data_info['prfpy_model'] = DoG_Iso2DGaussianModel(prfpy_stim) 
         elif 'css' in model:
-            data_info['prfpy_model'] = CSS_Iso2DGaussianModel(prfpy_stim)                       
+            data_info['prfpy_model'] = CSS_Iso2DGaussianModel(prfpy_stim)                                   
         
         
     if not os.path.exists(outputdir):
@@ -151,8 +158,7 @@ def main(argv):
                 prfpy_model=data_info['prfpy_model'],
                 real_ts = data_info['real_ts'],            
                 incl_hrf=False, 
-            )            
-
+            )
         for p in prf_obj.pd_params.keys():
             data        = prf_obj.pd_params[p].to_numpy()
             data4mask   = prf_obj.pd_params['rsq'].to_numpy()
@@ -181,7 +187,8 @@ def main(argv):
             )
             # break
         fs.web_add_mpl_fig_maker(
-            prf_obj.prf_ts_plot, f'plot',
+            mpl_func=prf_obj.prf_ts_plot, 
+            mpl_key='plot',
             mpl_kwargs={'return_fig':True},
         )
     else:

@@ -853,7 +853,9 @@ class MeshDash(GenMeshMaker):
                     full_point_index = self.n_vx['lh']+point_index
                 else:
                     full_point_index = point_index
-                click_str = f'Clicked hemi: {hemi_name}, vx id: {point_index}, full_id {full_point_index}'
+                # Get value of vertex in current overlay                
+                vx_value = self.web_vxcol[self.current_col_args['vx_col']]['data'][full_point_index]
+                click_str = f'Clicked hemi: {hemi_name}, vx id: {point_index}, full_id {full_point_index}, value = {vx_value:.3f}'
                 mpl_figs = self.web_return_mpl_figs(full_point_index), click_str                
                 self.last_clicktime = time.time()
                 finished_now = time.time()

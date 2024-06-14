@@ -389,6 +389,7 @@ class MeshDash(GenMeshMaker):
                 cmap = self.web_vxcol[vx_col_name]['c_cmap'],
                 vmin = self.web_vxcol[vx_col_name]['c_vmin'],
                 vmax = self.web_vxcol[vx_col_name]['c_vmax'],
+                clear_lower=self.clear_lower,
                 )
             # Save CMAP to svg
             cmap_fig = dag_cmap_plotter(
@@ -477,13 +478,14 @@ class MeshDash(GenMeshMaker):
             assets_folder=opj(os.path.dirname(__file__),assets_type)
             )
         self.image_type = kwargs.get('image_type', 'png')                
+        self.clear_lower = kwargs.get('clear_lower', False) # Clear lower values (i.e., vmin)
         # plt.style.use('dark_background')
         self.create_figure()
         init_vx_col = self.web_vxcol_list[0]
         init_vmin = self.web_vxcol[init_vx_col]['c_vmin']
         init_vmax = self.web_vxcol[init_vx_col]['c_vmax']
         init_rsq_thresh = self.web_vxcol[init_vx_col]['c_rsq_thresh']
-        init_cmap = self.web_vxcol[init_vx_col]['c_cmap']
+        init_cmap = self.web_vxcol[init_vx_col]['c_cmap']        
 
         num_input_args = dict(type='number', n_submit=0, debounce=True)
         if self.roi_list==[]:
@@ -554,7 +556,11 @@ class MeshDash(GenMeshMaker):
                 id='mpl-figure-output',                
                 # style={'maxWidth': '800px', 'width': '100%', 'overflowX': 'auto', 'overflowY': 'auto'},
             ),  # Plot the output of the figure (based on click)
-            
+            # Add clear lower arg
+            dcc.Checklist(id='clear-lower-toggle',
+                options=[{'label': 'clear lower', 'value': 'on'}],
+                value=[]
+            ),
             # Add histogram
             dcc.Checklist(id='hist-toggle',
                 options=[{'label': 'histogram', 'value': 'on'}],
@@ -791,6 +797,31 @@ class MeshDash(GenMeshMaker):
                     
                     return html.Div()
             raise dash.exceptions.PreventUpdate
+        
+        # COLOR [6] clear lower
+        self.clear_lower = False
+        @app.callback(
+            Output('color-chain', 'children', allow_duplicate=True),
+            Input('clear-lower-toggle', 'value'),
+            prevent_initial_call='initial_duplicate'
+        )
+        def update_clear_lower(value):    
+            print('CLEAR LOWER CALLBACK')
+            if 'on' in value:
+                new_value = True                
+            else:
+                new_value = False
+            if new_value != self.clear_lower:
+                self.clear_lower = new_value
+                selected_color = self.current_col_args['vx_col']
+                disp_rgb, _ = self.get_web_vx_col_info(
+                    vx_col_name=selected_color,          
+                )                                    
+                self.update_figure_with_color(disp_rgb)
+            else:
+                raise dash.exceptions.PreventUpdate
+                
+
         # # Histogram?
         self.hist_on = False
         self.current_hist = None

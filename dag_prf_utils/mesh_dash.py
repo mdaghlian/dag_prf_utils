@@ -236,7 +236,6 @@ class MeshDash(GenMeshMaker):
         self.roi_list = []
         self.web_vxcol = {}
         self.web_vxcol_list = []
-        self.web_inflated = kwargs.get('inflate_type', 'inflated')
 
     
     def web_add_vx_col(self, vx_col_name, data, **kwargs):
@@ -597,7 +596,6 @@ class MeshDash(GenMeshMaker):
             prevent_initial_call=True
         )
         def update_figure_radius(radius):
-            # INFLATE
             print('RADIUS CALLBACK')
             # CHECK FOR RADIUS CHANGE
             if (radius is not None) & (radius != 0):
@@ -613,6 +611,7 @@ class MeshDash(GenMeshMaker):
             else:
                 raise dash.exceptions.PreventUpdate 
             return self.dash_fig
+        
         # INFLATE 
         @app.callback(
             Output('mesh-plot', 'figure'),
@@ -962,11 +961,24 @@ class MeshDash(GenMeshMaker):
     def update_figure_inflate(self, inflate):
         inflate_time = time.time()
         new_vx_coords = {}
+        if inflate > 2:
+            old_mesh = 'sphere'
+            new_mesh = 'flat'
+            inflate -= 2
+        elif inflate >=1:   
+            old_mesh = 'inflated'
+            new_mesh = 'sphere'
+            inflate -= 1
+        else:
+            old_mesh = 'pial'
+            new_mesh = 'inflated'            
+
         for hemi in self.web_hemi_list:
             # INTERPOLATE
+
             new_vx_coords[hemi] = dag_mesh_interpolate(
-                coords1=self.mesh_info['pial'][hemi]['coords'],
-                coords2=self.mesh_info[self.web_inflated][hemi]['coords'],
+                coords1=self.mesh_info[old_mesh][hemi]['coords'],
+                coords2=self.mesh_info[new_mesh][hemi]['coords'],
                 interp=inflate,
                 )
         # Update the vertex coordinates for each webmesh

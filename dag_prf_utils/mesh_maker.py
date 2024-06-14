@@ -45,7 +45,7 @@ class GenMeshMaker(FSMaker):
         # [1] Load mesh info
         # PULL FROM FREESURFER
         self.mesh_info = {}        
-        for mesh_name in ['inflated', 'sphere', 'pial']:
+        for mesh_name in ['inflated', 'sphere', 'pial', ]:
             self.mesh_info[mesh_name] = self._return_fs_mesh_coords_both_hemis(mesh=mesh_name)
         # [2] Load under surf values
         self.us_values = {}

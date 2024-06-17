@@ -140,7 +140,7 @@ def main(argv):
         output_dir=outputdir,
         )    
     # bloop
-    fs.web_get_ready()
+    fs.web_get_ready(**extra_kwargs)
     
     if model is not None:
         try:

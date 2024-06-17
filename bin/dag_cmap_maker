@@ -10,6 +10,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 from dag_prf_utils.plot_functions import *
+from dag_prf_utils.utils import dag_arg_checker
+
 # Load custom color maps
 # path_to_utils = os.path.abspath(os.path.dirname(dpu.__file__))
 # custom_col_path = opj(path_to_utils, 'cmaps.json')
@@ -23,52 +25,96 @@ def main(argv):
     Create a custom colormap
 
     Args (optional):
-        --vmin      min color value
-        --vmax      max color value
-        --n_steps   number of points in the cmap...
-        --init      starting point for the cmap (i.e., use an old cmap)
+        --vmin          min color value
+        --vmax          max color value
+        --n_steps       number of points in the cmap...
+        --init          starting point for the cmap (i.e., use an old cmap)
+        --cmap_stack    stack these colormaps on top of each other
+        --col_stack     stack these colors on top of each other
+        --open_gui      open the gui for the colormap? If not assume saving
+        --cmap_name     name of the colormap to save
     Example:
     ---------------------------------------------------------------------------------------------------
     """
     vmin = None
     vmax = None
     n_steps = None
-    init = 'hsv'
+    init = None
+    cmap_stack = None
+    col_stack = None   
+    open_gui = False
+    cmap_name = None 
+    extra_kwargs = {}
 
-    try:
-        opts = getopt.getopt(argv,"h:",["vmin=", "vmax=","n_steps=", "init="])[0]
-    except getopt.GetoptError:
-        print(main.__doc__)
-        sys.exit(2)
-
-    for opt, arg in opts:
-        if opt == '-q':
+    for i,arg in enumerate(argv):        
+        if arg == '-q':
             print(main.__doc__)
             sys.exit()
+        elif arg=="--vmin":
+            vmin = float(argv[i+1])
+        elif arg=="--vmax":
+            vmax = float(argv[i+1])
+        elif arg=="--n_steps":
+            n_steps = int(argv[i+1])
+        elif arg=="--init":
+            init = argv[i+1]
+        elif arg=="--cmap_stack":
+            cmap_stack = (argv[i+1]).split(',')
+        elif arg=="--col_stack":
+            col_stack = (argv[i+1]).split(',')
+        elif arg=="--open_gui":
+            open_gui = True
+        elif arg=="--cmap_name":
+            cmap_name = argv[i+1]            
+        elif arg in ('-h', '--help'):
+            print(main.__doc__)
+            sys.exit()
+        elif '--' in arg:
+            this_kwarg = arg.replace('--', '')
+            this_kwarg_value = dag_arg_checker(argv[i+1])
+            extra_kwargs[this_kwarg] = this_kwarg_value
+            print(f'Unknown arg: {arg}')
+    # If init is is not none then we need the gui
+    if init is not None:
+        open_gui = True
 
-        elif opt=="--vmin":
-            vmin = float(arg)
-        elif opt=="--vmax":
-            vmax = float(arg)
-        elif opt=="--n_steps":
-            n_steps = int(arg)
-        elif opt=="--init":
-            init = arg            
+    # [1] Make the initial colormap
+    if cmap_stack is not None:
+        print(cmap_stack)    
+        dag_cmap = dag_stack_cmaps(
+            cmap_list=cmap_stack, 
+            save_cmap=True,
+            new_cmap_name=cmap_name,
+            )
+    elif col_stack is not None:
+        print(col_stack)    
+        dag_cmap = dag_make_custom_cmap(
+            col_list=col_stack, 
+            col_steps=np.arange(n_steps), 
+            cmap_name=cmap_name, 
+            save_cmap=True)
+    elif init is not None:
+        dag_cmap = dag_get_cmap(init)
+        cmap_name = init
+    else:
+        dag_cmap = dag_get_cmap('hsv')
+        cmap_name = 'hsv'
     
+    if not open_gui:
+        # If we are not opening the gui, then we are saving the cmap
+        return
     # Define the callback function for clicking on points
     class RGB_Control():
-        def __init__(self, vmin, vmax, n_steps, init):            
+        def __init__(self, vmin, vmax, n_steps, init_cmap, init_name):            
             self.vmin = vmin
             self.vmax = vmax
-            self.n_steps = n_steps
+            self.n_steps = n_steps            
             #
             vmin = None
             vmax = None
             n_steps = None
             #
-            print(init)
-            print(self.n_steps)
-            if init in custom_col_dict.keys():                    
+            if init_name in custom_col_dict.keys():                    
                 # If init is a custom color map (i.e., in our json file)
                 # & vmin, vmax, or n_steps are not specified; we take them from the json file ...
                 if self.vmin is None:
@@ -89,20 +135,13 @@ def main(argv):
             self.x_vals = np.around(np.linspace(self.vmin,self.vmax,self.n_steps), 3)
             # Now find the 'y' values for the cmap... 
             # If not specifying a starting point, random...
-            if init is not None:
-                init_cmap = dag_get_cmap(init)
-                init_norm = mpl.colors.Normalize()
-                init_norm.vmin = self.vmin
-                init_norm.vmax = self.vmax
-                rgb_cols = init_cmap(init_norm(self.x_vals))
-                y1 = np.array([rgb_cols[i,0] for i in range(self.n_steps)])
-                y2 = np.array([rgb_cols[i,1] for i in range(self.n_steps)])
-                y3 = np.array([rgb_cols[i,2] for i in range(self.n_steps)])
-            else:
-                # Initialize the data
-                y1 = np.random.rand(self.n_steps)
-                y2 = np.random.rand(self.n_steps)
-                y3 = np.random.rand(self.n_steps)
+            init_norm = mpl.colors.Normalize()
+            init_norm.vmin = self.vmin
+            init_norm.vmax = self.vmax
+            rgb_cols = init_cmap(init_norm(self.x_vals))
+            y1 = np.array([rgb_cols[i,0] for i in range(self.n_steps)])
+            y2 = np.array([rgb_cols[i,1] for i in range(self.n_steps)])
+            y3 = np.array([rgb_cols[i,2] for i in range(self.n_steps)])
 
             #
             self.selected_line = None
@@ -199,8 +238,8 @@ def main(argv):
             self.ax2.set_aspect(.2)
             self.ax2.set_yticks([])        
             self.ax2.set_xticks(self.x_vals)                
-    rgb_control = RGB_Control(vmin=vmin, vmax=vmax, n_steps=n_steps, init=init)
 
+    rgb_control = RGB_Control(vmin=vmin, vmax=vmax, n_steps=n_steps, init_cmap=dag_cmap, init_name=cmap_name)
     # Connect the event handlers
     rgb_control.fig.canvas.mpl_connect('button_press_event', rgb_control.on_click)
     rgb_control.fig.canvas.mpl_connect('motion_notify_event', rgb_control.on_motion)

@@ -4,8 +4,12 @@ from copy import deepcopy
 import matplotlib.pyplot as plt
 try: 
     from prfpy_csenf.rf import *
+    from prfpy_csenf.stimulus import *
+    from prfpy_csenf.model import *
 except:
     from prfpy.rf import *
+    from prfpy.stimulus import *
+    from prfpy.model import *
 
 from dag_prf_utils.prfpy_functions import *
 from dag_prf_utils.utils import *
@@ -23,6 +27,37 @@ class TSPlotter(Prf1T1M):
             if 'csf' in self.model:
                 self.edge_type = self.prfpy_model.edge_type
             self.TR_in_s = self.prfpy_stim.TR
+        else: 
+            print('MAKING UP A PRFPY STIMULUS FOR PLOTTING PURPOSE')
+            if 'csf' in self.model:
+                self.edge_type = kwargs.get('edge_type', 'gaussian')
+                self.TR_in_s = kwargs.get('TR_in_s', 1.5)
+                self.prfpy_stim = CSenFStimulus(
+                    SF_seq=[0,0],
+                    CON_seq=[0,0],
+                    TR=self.TR_in_s,
+                )
+                self.prfpy_model = CSenFModel(
+                    stimulus=self.prfpy_stim,
+                    edge_type=self.edge_type,
+                )
+            else:
+                self.TR_in_s = kwargs.get('TR_in_s', 1.5)
+                self.prfpy_stim = PRFStimulus2D(
+                    TR=self.TR_in_s,
+                    design_matrix=np.zeros((100,100,3)),
+                    screen_size_cm=60, # Roughly 10 deg radius
+                    screen_distance_cm=200,
+                )
+                if self.model == 'gauss':
+                    self.prfpy_model = Iso2DGaussianModel(stimulus=self.prfpy_stim)
+                elif self.model == 'css':
+                    self.prfpy_model = CSS_Iso2DGaussianModel(stimulus=self.prfpy_stim)
+                elif self.model == 'norm':
+                    self.prfpy_model = Norm_Iso2DGaussianModel(stimulus=self.prfpy_stim)
+                elif self.model == 'dog':
+                    self.prfpy_model = DoG_Iso2DGaussianModel(stimulus=self.prfpy_stim)
+            
         if (self.real_ts is not None) and (self.prfpy_model is not None):
             # check for same number of time points
             if self.model != 'csf':

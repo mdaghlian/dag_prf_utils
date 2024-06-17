@@ -172,10 +172,26 @@ def resample2d(array:np.ndarray, new_size:int, kind='linear'):
 
 
 
-def dag_arg_checker(arg2check):
+def dag_arg_checker(arg2check, idx=None):
     '''arg2check is a string, check if it's a number, return the number if so, otherwise return the string
     Should be able to deal with negative numbers too
     '''
+    if idx is not None:
+        try: 
+            arg2check = arg2check[idx]
+        except:
+            print(f'Index {idx} not found in {arg2check}')
+            print('assuming it is a flag to say something is TRUE --flag ')
+            return True
+        if arg2check == '':
+            print(f'Index {idx} is empty in {arg2check}')
+            print('assuming it is a flag to say something is TRUE --flag ')
+            return True
+        elif '--' in arg2check:
+            print(f'Index {idx} is a flag in {arg2check}')
+            return True              
+
+            
     # [1] Check if it is a list of arguments
     if ',' in arg2check:
         arg2check_list = arg2check.split(',')

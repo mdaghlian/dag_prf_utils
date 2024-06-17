@@ -71,7 +71,7 @@ def main(argv):
             sys.exit()
         elif '--' in arg:
             this_kwarg = arg.replace('--', '')
-            this_kwarg_value = dag_arg_checker(argv[i+1])
+            this_kwarg_value = dag_arg_checker(argv, i+1)
             extra_kwargs[this_kwarg] = this_kwarg_value
             print(f'Unknown arg: {arg}')
     # If init is is not none then we need the gui

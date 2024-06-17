@@ -87,13 +87,7 @@ def main(argv):
             
         elif '--' in arg: # ********** ARBITRARY KWARGS **********
             # If argv[i] is an argument, then argv[i+1] is its value
-            this_kwarg_value = argv[i+1]
-            # Check if the value is a list
-            if ',' in this_kwarg_value:
-                this_kwarg_value = this_kwarg_value.split(',')
-                this_kwarg_value = [dag_arg_checker(arg) for arg in this_kwarg_value]
-            else:
-                this_kwarg_value = dag_arg_checker(this_kwarg_value)
+            this_kwarg_value = dag_arg_checker(argv, i+1)
             # Add to kwargs
             this_kwarg = arg.replace('--','')
             kwargs[this_kwarg] = this_kwarg_value

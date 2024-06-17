@@ -293,7 +293,8 @@ def dag_load_roi(sub, roi, fs_dir=os.environ['SUBJECTS_DIR'], split_LR=False, do
     TODO - hemi specific idx...
     '''
     need_both_hemis = kwargs.get('need_both_hemis', False) # Need ROI in both hemispheres to return true
-    combine_matches = kwargs.get('combine_matches', False) # If multiple matches combine them...
+    combine_matches = kwargs.get('combine_matches', False) # If multiple matches combine them...    
+    recursive_search = kwargs.get('recursive_search', False) # If multiple matches, return a dict of them...
     # Get number of vx in each hemi, and total overall...
     n_verts = dag_load_nverts(sub=sub, fs_dir=fs_dir)
     total_num_vx = np.sum(n_verts)
@@ -365,6 +366,7 @@ def dag_load_roi(sub, roi, fs_dir=os.environ['SUBJECTS_DIR'], split_LR=False, do
                     print(f'Multiple matches for {this_roi} in {roi_dir}')
                     print([i.split('/')[-1] for i in roi_file[hemi]])
                     raise ValueError
+                                
                 elif isinstance(roi_file[hemi], list):
                     # Print which files we will be combining
                     print('Combining')
@@ -427,6 +429,24 @@ def dag_load_roi(sub, roi, fs_dir=os.environ['SUBJECTS_DIR'], split_LR=False, do
         return roi_idx_split
     else:
         return roi_idx
+
+def dag_roi_list_expand(sub, roi_list, fs_dir=os.environ['SUBJECTS_DIR'] ):
+    if not isinstance(roi_list, list):
+        roi_list = [roi_list]
+    roi_dir = opj(fs_dir, sub, 'label')    
+    roi_list_expanded = []
+    for roi in roi_list:                
+        roi_files = dag_find_file_in_folder([roi, '.label'], roi_dir,exclude='._', recursive=True, return_msg = None)                        
+        for this_roi_file in roi_files:
+            this_roi_file = this_roi_file.split('/')[-1]
+            this_roi_file = this_roi_file.replace('.label', '')
+            this_roi_file = this_roi_file.replace('lh.', '')
+            this_roi_file = this_roi_file.replace('rh.', '')
+            roi_list_expanded.append(this_roi_file)
+    # remove duplicates
+    roi_list_expanded = list(set(roi_list_expanded))
+    return roi_list_expanded
+
 
 def dag_id_occ_ctx(sub, fs_dir, split_LR=False, max_y=-35):
     '''

@@ -232,10 +232,13 @@ class MeshDash(GenMeshMaker):
         #     return_mesh_obj=True,
         #     **kwargs)        
         self.hemi_count = len(self.web_hemi_list)
-        self.roi_obj = []
-        self.roi_list = []
         self.web_vxcol = {}
         self.web_vxcol_list = []
+        # Add rois 
+        self.roi_obj = []
+        self.roi_list = kwargs.get('roi_list', [])
+        self.roi_list = dag_roi_list_expand(sub=self.sub, roi_list=self.roi_list, fs_dir=self.fs_dir)
+        self.web_add_roi(self.roi_list)
 
     
     def web_add_vx_col(self, vx_col_name, data, **kwargs):
@@ -288,35 +291,45 @@ class MeshDash(GenMeshMaker):
         # marker_kwargs = kwargs.get()
         roi_cols = dag_get_col_vals(
             np.arange(len(roi_list)),
-            vmin = -1, vmax=7, cmap='jet'
+            vmin = -1, vmax=17, cmap='jet'
         )
         self.roi_obj = []
-        for ih,hemi in enumerate(hemi_list):
-            for i_roi,roi in enumerate(roi_list):
-                # Load roi index:
-                roi_bool = dag_load_roi(self.sub, roi, fs_dir=self.fs_dir, split_LR=True, combine_matches=combine_matches)[hemi]                
-                if roi_bool.sum()==0:
-                    continue
-                border_vx_list = dag_find_border_vx_in_order(
-                    roi_bool=roi_bool, 
-                    mesh_info=self.mesh_info[mesh_name][hemi], 
-                    return_coords=False,
-                    )
-                # If more than one closed path (e.g., v2v and v2d)...
-                this_roi_col = '#{:02x}{:02x}{:02x}'.format(*(roi_cols[i_roi]*255).astype(int))
+        roi_count = -1
+        for i_roi,roi in enumerate(roi_list):
+            roi_bool = dag_load_roi(self.sub, roi, fs_dir=self.fs_dir, split_LR=True, combine_matches=combine_matches, recursive_search=True)
+            if 'lh' not in roi_bool.keys():
+                # We found extra matches!!!
+                print(f'Found extra matches for {roi}')
+                extra_roi_list = list(roi_bool.keys())
+            else:
+                extra_roi_list = [roi]
+                roi_bool = {roi : roi_bool}
+            
+            for i_roi_extra, roi_extra in enumerate(extra_roi_list):
+                roi_count += 1
+                for ih,hemi in enumerate(hemi_list):
+                    if roi_bool[roi_extra][hemi].sum()==0:
+                        continue
+                    border_vx_list = dag_find_border_vx_in_order(
+                        roi_bool=roi_bool[roi_extra][hemi], 
+                        mesh_info=self.mesh_info[mesh_name][hemi], 
+                        return_coords=False,
+                        )
+                    # If more than one closed path (e.g., v2v and v2d)...
+                    this_roi_col = '#{:02x}{:02x}{:02x}'.format(*(roi_cols[i_roi]*255).astype(int))
 
-                for ibvx,border_vx in enumerate(border_vx_list):
-                    first_instance = (ih==0) & (ibvx==0) # Only show legend for first instance
-                    this_roi_dict = {
-                        'hemi' : hemi,
-                        'roi' : roi,
-                        'border_vx' : border_vx,
-                        'roi_col' : this_roi_col,
-                        'border_line' : None,
-                        'data_id' : None,
-                        'first_instance' : first_instance,
-                    }
-                    self.roi_obj.append(this_roi_dict)        
+                    for ibvx,border_vx in enumerate(border_vx_list):
+                        first_instance = (ih==0) & (ibvx==0) # Only show legend for first instance
+                        this_roi_dict = {
+                            'hemi' : hemi,
+                            'roi' : roi_extra,
+                            'border_vx' : border_vx,
+                            'roi_col' : this_roi_col,
+                            'border_line' : None,
+                            'data_id' : None,
+                            'first_instance' : first_instance,
+                        }
+                        self.roi_obj.append(this_roi_dict)        
     
     def web_remake_roi(self):
         mesh_name = 'inflated'
@@ -867,7 +880,7 @@ class MeshDash(GenMeshMaker):
                 print('Toggled OFF')
                 raise dash.exceptions.PreventUpdate 
             now = time.time()
-            if (now - self.last_clicktime)<5:
+            if (now - self.last_clicktime)<1.5:
                 print('Clicked too soon...')
                 raise dash.exceptions.PreventUpdate 
             else:

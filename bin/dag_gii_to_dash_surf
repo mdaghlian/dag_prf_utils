@@ -145,7 +145,7 @@ def main(argv):
         fs_dir=fs_dir,
         output_dir=outputdir,
         )    
-    fs.web_get_ready()    
+    fs.web_get_ready(**extra_kwargs)    
 
     # Load the .gii files
     data_for_surf = {}

@@ -118,10 +118,10 @@ def main(argv):
                 # If init is a custom color map (i.e., in our json file)
                 # & vmin, vmax, or n_steps are not specified; we take them from the json file ...
                 if self.vmin is None:
-                    self.vmin = custom_col_dict[init]['col_steps'][0]
-                    self.vmax = custom_col_dict[init]['col_steps'][-1]                    
+                    self.vmin = custom_col_dict[init_name]['col_steps'][0]
+                    self.vmax = custom_col_dict[init_name]['col_steps'][-1]                    
                 if self.n_steps is None:
-                    self.n_steps = len(custom_col_dict[init]['col_steps'])            
+                    self.n_steps = len(custom_col_dict[init_name]['col_steps'])            
             else: 
                 # If init is a matplotlib colormap. 
                 # & vmin, vmax, or n_steps are not specified; we use defaults

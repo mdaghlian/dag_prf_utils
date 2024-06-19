@@ -16,3 +16,5 @@ mkl-service
 shapely==2.0.1
 mock
 sphinx_rtd_theme
+plotly
+dash

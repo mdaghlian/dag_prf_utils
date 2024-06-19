@@ -44,7 +44,11 @@ def dag_auto_surf_function(surf_type, **kwargs):
     param_path = kwargs.pop('param_path', None)   
     specific_param_path = kwargs.pop('specific_param_path', None)
     sub = kwargs.pop('sub', None)
-    fs_dir = os.environ['SUBJECTS_DIR']
+    fs_dir = os.environ['SUBJECTS_DIR']    
+    if not os.path.exists(fs_dir):
+        print('Could not find SUBJECTS_DIR')
+        print(fs_dir)
+        sys.exit()
     outputdir = kwargs.pop('outputdir', os.getcwd())
     file_name = kwargs.pop('file_name', 'auto_surf')
     hemi_markers = kwargs.pop('hemi_markers', ['lh', 'rh'])
@@ -145,7 +149,6 @@ def dag_auto_surf_function(surf_type, **kwargs):
         except:
             print('Could not make prfpy model')                    
 
-    
     # DASH OBJECT
     if surf_type == 'dash':
         
@@ -155,7 +158,7 @@ def dag_auto_surf_function(surf_type, **kwargs):
             fs_dir=fs_dir,
             output_dir=outputdir,
             )    
-        # bloop
+
         fs.web_get_ready(**extra_kwargs)
         
         if model is not None:

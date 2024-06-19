@@ -88,7 +88,6 @@ def main(argv):
             this_kwarg_value = dag_arg_checker(argv, i+1)
             extra_kwargs[this_kwarg] = this_kwarg_value
             print(f'Unknown arg: {arg}')
-    print('bloop')
     dag_auto_surf_function(
         surf_type=surf_type,
         param_path=param_path,

@@ -258,8 +258,12 @@ class MeshDash(GenMeshMaker):
         # c_ for properties we want to change at 
         c_rsq_thresh = kwargs.get('rsq_thresh', 0)
         c_data_mask = data4mask>c_rsq_thresh
-        c_vmin = kwargs.get('vmin', np.nanmin(data[c_data_mask]))
-        c_vmax = kwargs.get('vmax', np.nanmax(data[c_data_mask]))
+        try:
+            c_vmin = kwargs.get('vmin', np.nanmin(data[c_data_mask]))
+            c_vmax = kwargs.get('vmax', np.nanmax(data[c_data_mask]))
+        except:
+            c_vmin = kwargs.get('vmin', np.nanmin(data))
+            c_vmax = kwargs.get('vmax', np.nanmax(data))
 
         c_cmap = kwargs.get('cmap', 'viridis')
         

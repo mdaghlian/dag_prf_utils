@@ -51,6 +51,7 @@ def main(argv):
     real_ts = None
     dm_file = None
     hemi_markers = ['lh', 'rh']
+    param_path = None
     specific_param_path = {}
     extra_kwargs = {}
     for i,arg in enumerate(argv):        

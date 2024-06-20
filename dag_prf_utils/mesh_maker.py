@@ -118,8 +118,12 @@ class GenMeshMaker(FSMaker):
         
         # Load colormap properties: (cmap, vmin, vmax)
         cmap = kwargs.get('cmap', 'viridis')    
-        vmin = kwargs.get('vmin', np.nanmin(data[data_mask]))
-        vmax = kwargs.get('vmax', np.nanmax(data[data_mask]))
+        try:
+            vmin = kwargs.get('vmin', np.nanmin(data[data_mask]))
+            vmax = kwargs.get('vmax', np.nanmax(data[data_mask]))
+        except:
+            vmin = kwargs.get('vmin', np.nanmin(data))
+            vmax = kwargs.get('vmax', np.nanmax(data))
         # By default use vmin as mask...
         if clear_lower:
             data_alpha[data<vmin] = 0

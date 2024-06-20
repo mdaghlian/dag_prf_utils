@@ -73,7 +73,7 @@ def dag_auto_surf_function(surf_type, **kwargs):
     elif specific_param_path is not None:
         key_to_check = list(specific_param_path.keys())[0]
         # Check if specific_param_path
-        if sub is not None:
+        if sub is None:
             sub = 'sub-'
             sub += re.search(r'sub-(.*?)_', specific_param_path[key_to_check]).group(1)
         if (model is None) & ('model' in specific_param_path[key_to_check]):
@@ -83,7 +83,7 @@ def dag_auto_surf_function(surf_type, **kwargs):
     # Load some data...
     data_info = {
         'pars':[], 
-        'pars_dict' : None, 
+        'pars_dict' : {}, 
         'prfpy_model':None, 
         'real_ts':None, 
         'settings': {},
@@ -112,10 +112,11 @@ def dag_auto_surf_function(surf_type, **kwargs):
         if model is not None:
             n_pars = len(prfpy_params_dict()[model])
             n_vx = data_info['pars_dict'][list(data_info['pars_dict'].keys())[0]].shape[0]
-            data_info['pars'] = np.zeros((n_pars, n_vx))
+            data_info['pars'] = np.zeros((n_vx, n_pars))
+            data_info['pars'][:,-1] = 1 # for rsq thresh
             for k in data_info['pars_dict'].keys():
                 idx = prfpy_params_dict()[model][k]
-                data_info['pars'][:,k] = data_info['pars_dict'][k]
+                data_info['pars'][:,idx] = data_info['pars_dict'][k].squeeze()
 
     # Can we find the real timeseries somewhere else?
     if (real_ts is not None) and (data_info['real_ts'] is None):
@@ -200,7 +201,6 @@ def dag_auto_surf_function(surf_type, **kwargs):
                     data=data, 
                     # data_alpha=data_alpha, 
                     data4mask = data4mask,
-                    rsq_thresh=0.1, 
                     vx_col_name=p,  
                     **kwargs,  
                 )
@@ -210,7 +210,7 @@ def dag_auto_surf_function(surf_type, **kwargs):
                 mpl_key='plot',
                 mpl_kwargs={'return_fig':True},
             )
-        elif data_info['pars_dict'] is not None:
+        elif len(data_info['pars_dict']) > 0:
             for k in data_info['pars_dict'].keys():
                 fs.web_add_vx_col(
                     data=data_info['pars_dict'][k], 
@@ -224,7 +224,6 @@ def dag_auto_surf_function(surf_type, **kwargs):
                 fs.web_add_vx_col(
                     data=data, 
                     data4mask = data4mask,
-                    rsq_thresh=0.1, 
                     vx_col_name=p,    
                 )
         if dump:
@@ -312,13 +311,17 @@ def load_mgz_or_gii(mgz_or_gii_path, hemi_markers=['lh', 'rh']):
     else:
         rh_file = copy(mgz_or_gii_path)
         lh_file = mgz_or_gii_path.replace(mrh, mlh)
-        
-    lh_data = nib.load(lh_file)
-    lh_data = [i.data for i in lh_data.darrays]
-    lh_data = np.vstack(lh_data).squeeze()
-    rh_data = nib.load(rh_file)
-    rh_data = [i.data for i in rh_data.darrays]
-    rh_data = np.vstack(rh_data).squeeze()
+    if '.gii' in lh_file:
+        lh_data = nib.load(lh_file)
+        lh_data = [i.data for i in lh_data.darrays]
+        lh_data = np.vstack(lh_data).squeeze()
+        rh_data = nib.load(rh_file)
+        rh_data = [i.data for i in rh_data.darrays]
+        rh_data = np.vstack(rh_data).squeeze()
+        # mgz_or_gii_data = np.concatenate([lh_data, rh_data], axis=0)
+    else:
+        lh_data = nib.load(lh_file).get_fdata().squeeze()[...,np.newaxis]
+        rh_data = nib.load(rh_file).get_fdata().squeeze()[...,np.newaxis]
     mgz_or_gii_data = np.concatenate([lh_data, rh_data], axis=0)
 
     return mgz_or_gii_data

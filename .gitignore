@@ -1,0 +1,7 @@
+.vscode
+*.egg-info
+*/__pycache__/*
+*z_*
+*.cpython*
+*/__pycache__
+*.bu

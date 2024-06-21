@@ -213,7 +213,13 @@ class GenMeshMaker(FSMaker):
         # Put it into x,y,z, i,j,k format. Plus add offset to x
         mesh_info = {}                                    
         mesh_info['x']=this_mesh_info['coords'][:,0]
-        mesh_info['x'] += 50 if hemi=='rh' else -50
+        if 'sphere' in mesh:
+            mesh_info['x'] += 100 if hemi=='rh' else -100
+        elif 'inflated' in mesh:
+            mesh_info['x'] += 50 if hemi=='rh' else -50
+        elif 'pial' in mesh:
+            mesh_info['x'] += 25 if hemi=='rh' else -25
+
         mesh_info['y']=this_mesh_info['coords'][:,1]
         mesh_info['z']=this_mesh_info['coords'][:,2]
         mesh_info['i']=this_mesh_info['faces'][:,0]

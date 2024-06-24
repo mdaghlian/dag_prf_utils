@@ -209,7 +209,11 @@ class GenMeshMaker(FSMaker):
     def _return_fs_mesh_coords(self, mesh, hemi):
         '''Return dict with the vx and faces of mesh specified
         '''
-        this_mesh_info = dag_read_fs_mesh(opj(self.sub_surf_dir, f'{hemi}.{mesh}'))
+        try:
+            this_mesh_info = dag_read_fs_mesh(opj(self.sub_surf_dir, f'{hemi}.{mesh}'))
+        except:
+            this_mesh_info = dag_read_fs_mesh(opj(self.sub_surf_dir, f'{hemi}.{mesh}.T1'))
+
         # Put it into x,y,z, i,j,k format. Plus add offset to x
         mesh_info = {}                                    
         mesh_info['x']=this_mesh_info['coords'][:,0]

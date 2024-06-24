@@ -896,17 +896,43 @@ def dag_merge_dicts(a: dict, b: dict, max_depth=3, path=[]):
             merged_dict[key] = b[key]  # If the key is not in 'merged_dict', add it
     return merged_dict    
 
-def dag_split_mat_with_idx(mat, batch_num, batch_id, axis=0): 
-    
-    chunks = np.array_split(mat, batch_num, axis=0)    
-    # Generate the indices for each chunk
-    chunk_indices = []
-    start_idx = 0
-    for chunk in chunks:
-        end_idx = start_idx + len(chunk)
-        chunk_indices.append(np.arange(start_idx, end_idx))
-        start_idx = end_idx    
-    return chunks[batch_id], chunk_indices[batch_id]    
+def dag_split_mat_with_idx(mat, batch_num, batch_id, axis=0, split_method='standard'): 
+    '''split matrix into chunks
+    mat         : matrix to split
+    batch_num   : number of chunks
+    batch_id    : which chunk to return
+    axis        : axis to split along
+    split_method: 'default', uses np.array_split
+                    'distributed' takes every nth element
+    '''
+    if split_method=='standard':
+        full_chunk_idx = np.arange(mat.shape[axis])
+        chunks = np.array_split(mat, batch_num, axis=axis)
+        chunks_idx = np.array_split(full_chunk_idx, batch_num)
+    elif split_method=='distributed':
+        # Create an empty list of lists to store chunks
+        chunks = [[] for _ in range(batch_num)]
+        indices = [[] for _ in range(batch_num)]        
+        # Distribute elements to the respective chunks
+        for i in range(mat.shape[axis]):
+            chunk_index = i % batch_num
+            # use np.index_exp to create an index along axis             
+            chunks[chunk_index].append(dag_slice_by_axis(mat, i, axis))
+            indices[chunk_index].append(i)
+        
+        # Convert lists to numpy arrays
+        chunks = [np.array(chunk) for chunk in chunks]
+        indices = [np.array(index) for index in indices]
+    return chunks[batch_id], chunks_idx[batch_id]
+
+def dag_slice_by_axis(numpy_matrix, idx, axis):
+    # Create a list of slice(None) for each axis
+    slicer = [slice(None)] * numpy_matrix.ndim
+    # Replace the slice for the specified axis with the index
+    slicer[axis] = idx
+    # Convert the list to a tuple and use it to index the array
+    return numpy_matrix[tuple(slicer)]    
+
 
 # ***********************************************************************************************************************
 # STUFF COPIED FROM NIBABEL

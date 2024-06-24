@@ -904,7 +904,7 @@ def dag_split_mat_with_idx(mat, batch_num, batch_id, axis=0):
     start_idx = 0
     for chunk in chunks:
         end_idx = start_idx + len(chunk)
-        chunk_indices.append((start_idx, end_idx))
+        chunk_indices.append(np.arange(start_idx, end_idx))
         start_idx = end_idx    
     return chunks[batch_id], chunk_indices[batch_id]    
 

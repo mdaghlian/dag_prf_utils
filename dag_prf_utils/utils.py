@@ -896,6 +896,17 @@ def dag_merge_dicts(a: dict, b: dict, max_depth=3, path=[]):
             merged_dict[key] = b[key]  # If the key is not in 'merged_dict', add it
     return merged_dict    
 
+def dag_split_mat_with_idx(mat, batch_num, batch_id, axis=0): 
+    
+    chunks = np.array_split(mat, batch_num, axis=0)    
+    # Generate the indices for each chunk
+    chunk_indices = []
+    start_idx = 0
+    for chunk in chunks:
+        end_idx = start_idx + len(chunk)
+        chunk_indices.append((start_idx, end_idx))
+        start_idx = end_idx    
+    return chunks[batch_id], chunk_indices[batch_id]    
 
 # ***********************************************************************************************************************
 # STUFF COPIED FROM NIBABEL

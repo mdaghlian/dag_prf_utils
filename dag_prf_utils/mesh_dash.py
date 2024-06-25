@@ -406,6 +406,7 @@ class MeshDash(GenMeshMaker):
                 vmin = self.web_vxcol[vx_col_name]['c_vmin'],
                 vmax = self.web_vxcol[vx_col_name]['c_vmax'],
                 clear_lower=self.clear_lower,
+                clear_upper=self.clear_upper,
                 )
             # Save CMAP to svg
             cmap_fig = dag_cmap_plotter(
@@ -495,6 +496,7 @@ class MeshDash(GenMeshMaker):
             )
         self.image_type = kwargs.get('image_type', 'png')                
         self.clear_lower = kwargs.get('clear_lower', False) # Clear lower values (i.e., vmin)
+        self.clear_upper = kwargs.get('clear_upper', False) # Clear upper values (i.e., vmax)
         # plt.style.use('dark_background')
         self.create_figure()
         init_vx_col = self.web_vxcol_list[0]
@@ -577,6 +579,11 @@ class MeshDash(GenMeshMaker):
                 options=[{'label': 'clear lower', 'value': 'on'}],
                 value=[]
             ),
+            # Add clear upper arg
+            dcc.Checklist(id='clear-upper-toggle',
+                options=[{'label': 'clear upper', 'value': 'on'}],
+                value=[]
+            ),            
             # Add histogram
             dcc.Checklist(id='hist-toggle',
                 options=[{'label': 'histogram', 'value': 'on'}],
@@ -836,7 +843,29 @@ class MeshDash(GenMeshMaker):
                 self.update_figure_with_color(disp_rgb)
             else:
                 raise dash.exceptions.PreventUpdate
-                
+        # COLOR [7] clear upper
+        self.clear_upper = False
+        @app.callback(
+            Output('color-chain', 'children', allow_duplicate=True),
+            Input('clear-upper-toggle', 'value'),
+            prevent_initial_call='initial_duplicate'
+        )
+        def update_clear_upper(value):    
+            print('CLEAR UPPER CALLBACK')
+            if 'on' in value:
+                new_value = True                
+            else:
+                new_value = False
+            if new_value != self.clear_upper:
+                self.clear_upper = new_value
+                selected_color = self.current_col_args['vx_col']
+                disp_rgb, _ = self.get_web_vx_col_info(
+                    vx_col_name=selected_color,          
+                )                                    
+                self.update_figure_with_color(disp_rgb)
+            else:
+                raise dash.exceptions.PreventUpdate
+                                
 
         # # Histogram?
         self.hist_on = False

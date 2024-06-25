@@ -182,7 +182,11 @@ class GenMeshMaker(FSMaker):
         Simple mapping from values to colors
         '''                        
         # Create rgb values mapping from data to cmap
-        data_cmap = dag_get_cmap(cmap)
+        try: 
+            data_cmap = dag_get_cmap(cmap)  
+        except:
+            data_cmap = dag_cmap_from_str(cmap)
+        # data_cmap = dag_get_cmap(cmap)
         data_norm = mpl.colors.Normalize()
         data_norm.vmin = vmin
         data_norm.vmax = vmax

@@ -188,12 +188,17 @@ def dag_auto_surf_function(surf_type, **kwargs):
                     kwargs = dict(cmap=cmap, vmin=vmin, vmax=vmax)
                 elif p=='ecc':
                     cmap = 'ecc2'
-                    vmin,vmax = 0, 5
+                    vmin,vmax = 0, int(np.nanmax(data))
                     kwargs = dict(cmap=cmap, vmin=vmin, vmax=vmax)
                 elif p=='rsq':
                     cmap='plasma'
                     vmin,vmax = 0,1
                     kwargs = dict(cmap=cmap, vmin=vmin, vmax=vmax)                
+                elif p in ('x', 'y'):
+                    cmap = 'RdBu'
+                    vmin,vmax = -int(np.nanmax(data)), int(np.nanmax(data))
+                    kwargs = dict(cmap=cmap, vmin=vmin, vmax=vmax)
+
                 else:
                     kwargs = {}
                 

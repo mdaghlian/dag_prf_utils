@@ -679,6 +679,8 @@ class MeshDash(GenMeshMaker):
         )
         def color_chain(color_chain):
             print('COLOR CHAIN')
+            # close figures to avoid memory leak
+            plt.close('all')
             self.update_hist()        
             return self.dash_fig, self.current_col_bar, self.current_hist
         
@@ -983,6 +985,7 @@ class MeshDash(GenMeshMaker):
                 cmap=self.current_col_args['c_cmap'],
                 vmin=self.current_col_args['c_vmin'],
                 vmax=self.current_col_args['c_vmax'],
+                str_search=True, 
             )
             for j, p in enumerate(patches):
                 # Set face color

@@ -28,7 +28,11 @@ def dag_cmap_plotter(cmap, vmin=None, vmax=None, title='', **kwargs):
     if ax is None:
         figsize = kwargs.get('figsize', (10,2))
         fig, ax = plt.subplots(figsize=figsize)        
-    cmap = dag_get_cmap(cmap)
+    try:
+        cmap = dag_get_cmap(cmap)
+    except:
+        cmap = dag_cmap_from_str(cmap)
+
     mpl.colorbar.ColorbarBase(
         ax, orientation='horizontal', cmap=cmap, 
         norm=mpl.colors.Normalize(vmin, vmax)

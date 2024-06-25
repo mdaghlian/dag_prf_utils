@@ -508,23 +508,30 @@ def dag_hyphen_parse(str_prefix, str_in):
         str_out = str_out.replace('--', '-')
     return str_out
     
-def dag_rescale_bw(data_in, old_min=None, old_max=None, new_min=0, new_max=1):
-    '''dag_rescale_bw
+def dag_rescale_bw(data_in, **kwargs):
+    '''dag_rescale_bw    
+    rescale data between 2 values
 
-    
+    data_in     data to rescale
+    old_min     minimum value of data_in
+    old_max     maximum value of data_in
+    new_min     minimum value of rescaled data
+    new_max     maximum value of rescaled data
+    log         log spacing?
     '''
     data_out = np.copy(data_in)
-    if old_min is not None:
-        data_out[data_in<old_min] = old_min
-    else:
-        old_min = np.nanmin(data_in)
-    if old_max is not None:
-        data_out[data_in>old_max] = old_max
-    else:
-        old_max = np.nanmax(data_in)
-    
+    old_min = kwargs.get('old_min', np.nanmin(data_in))
+    old_max = kwargs.get('old_max', np.nanmax(data_in))
+    new_min = kwargs.get('new_min', 0)
+    new_max = kwargs.get('new_min', 1)
+    do_log = kwargs.get('log', False)    
+    data_out[data_in<old_min] = old_min
+    data_out[data_in>old_max] = old_max    
     data_out = (data_out - old_min) / (old_max - old_min) # Scaled bw 0 and 1
     data_out = data_out * (new_max-new_min) + new_min # Scale bw new values
+    if do_log:
+        data_out = np.log(data_out+1)
+        data_out /= np.nanmax(data_out)
     return data_out
 
 def dag_get_rsq(tc_target, tc_fit):

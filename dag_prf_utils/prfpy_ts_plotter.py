@@ -61,9 +61,18 @@ class TSPlotter(Prf1T1M):
         if (self.real_ts is not None) and (self.prfpy_model is not None):
             # check for same number of time points
             if self.model != 'csf':
-                assert self.real_ts.shape[-1] == self.prfpy_model.stimulus.design_matrix.shape[-1], 'real_ts and prfpy_model have different number of time points'
+                n_time_pt_stim = self.prfpy_model.stimulus.design_matrix.shape[-1]
             else:
-                assert self.real_ts.shape[-1] == self.prfpy_model.stimulus.n_TRs, 'real_ts and prfpy_model have different number of time points'
+                n_time_pt_stim = self.prfpy_model.stimulus.n_TRs
+            
+            n_time_pt_ts = self.real_ts.shape[-1]
+            if n_time_pt_stim != n_time_pt_ts:
+                print('real_ts and prfpy_model have different number of time points')
+                if self.model=='csf':
+                    return
+                print('cutting the difference')
+                diff = n_time_pt_stim - n_time_pt_ts                     
+                self.prfpy_model.stimulus.design_matrix = self.prfpy_model.stimulus.design_matrix[:,:,diff:]
 
         if 'csf' in self.model:
             self._sort_SF_list(**kwargs)            

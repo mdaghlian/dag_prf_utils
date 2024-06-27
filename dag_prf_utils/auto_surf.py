@@ -60,6 +60,7 @@ def dag_auto_surf_function(surf_type, **kwargs):
     extra_kwargs = copy(kwargs)
     dump = kwargs.pop('dump', False)
     open_surf = kwargs.pop('open', False)
+    port = kwargs.pop('port', 8000)
 
     # Check for missing stuff in param_path name
     if param_path is not None:
@@ -237,8 +238,8 @@ def dag_auto_surf_function(surf_type, **kwargs):
             app = fs.web_launch_with_dash()
             # Open the app in a browser
             # Do not show it in the notebook
-            print(f'http://localhost:8000/')
-            app.run_server(host='127.0.0.1', port=8000, debug=False, use_reloader=False)             
+            print(f'http://localhost:{port}/')
+            app.run_server(host='127.0.0.1', port=port, debug=False, use_reloader=False)             
     else:
         # FS OBJECT
         fs = FSMaker(

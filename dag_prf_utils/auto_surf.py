@@ -61,7 +61,9 @@ def dag_auto_surf_function(surf_type, **kwargs):
     dump = kwargs.pop('dump', False)
     open_surf = kwargs.pop('open', False)
     port = kwargs.pop('port', 8000)
-
+    pars_to_plot = kwargs.pop('pars_to_plot', None)
+    rsq_th = kwargs.pop('rsq_th', 0.1)
+    
     # Check for missing stuff in param_path name
     if param_path is not None:
         if sub is None:

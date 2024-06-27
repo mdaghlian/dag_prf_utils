@@ -3,6 +3,7 @@ import os
 opj = os.path.join
 import numpy as np
 import re
+from copy import copy
 import matplotlib as mpl
 import matplotlib.colors as mcolors
 import matplotlib.pyplot as plt
@@ -28,17 +29,17 @@ def dag_cmap_from_str(cmap_name, **kwargs):
     '''
     try:
         cmap = dag_get_cmap(cmap_name)
+        print(f'{cmap_name} exists')
         return cmap
     except:
         pass
-    print(cmap_name)
     # Check for reverse
     if '_rev_' in cmap_name:
         do_reverse = True
         cmap_name = cmap_name.replace('_rev_', '')
     else:
         do_reverse = False
-
+        
     if '_log_' in cmap_name:
         do_log = True
         cmap_name = cmap_name.replace('_log_', '')
@@ -64,16 +65,15 @@ def dag_cmap_from_str(cmap_name, **kwargs):
         'save_cmap' : True,
         'ow' : True, 
     }
-    if '*' in cmap_name: # Stack cmaps (existing)
-        cmap_list = cmap_name.split('*')
+    if '&' in cmap_name: # Stack cmaps (existing)
+        cmap_list = cmap_name.split('&')
         cmap = dag_stack_cmaps(cmap_list=cmap_list, **save_cmap_kwargs)    
         temp_cmap_name = 'temp'
-    elif '.' in cmap_name: # Stack colors 
-        cmap = dag_make_custom_cmap(col_list=cmap_name.split('.'), **save_cmap_kwargs)
+    elif '*' in cmap_name: # Stack colors 
+        cmap = dag_make_custom_cmap(col_list=cmap_name.split('*'), **save_cmap_kwargs)
         temp_cmap_name = 'temp'
     else:
         temp_cmap_name = cmap_name    
-    # else:
 
     cmap = dag_get_cmap(temp_cmap_name, **get_cmap_kwargs)    
     
@@ -128,8 +128,10 @@ def dag_stack_cmaps(cmap_list, save_cmap=False, **kwargs):
     # Now list of col vals
     col_list = []
     for i_cmap in cmap_list:
-        print(i_cmap)
-        this_cmap = dag_get_cmap(i_cmap)
+        try:
+            this_cmap = dag_get_cmap(i_cmap)
+        except:
+            this_cmap = dag_cmap_from_str(i_cmap)
         c_norm = mpl.colors.Normalize()
         c_norm.vmin = 0
         c_norm.vmax = 1
@@ -181,10 +183,16 @@ def dag_make_custom_cmap(col_list, col_steps=None, **kwargs):
     # Change any values to rgb tuple
     conv2rgb = mcolors.ColorConverter().to_rgb
     for i_col,v_col in enumerate(col_list):
+        if isinstance(v_col, str) & ('(' in v_col) or ('[' in v_col):
+            # Convert string to tuple
+            v_col = eval(v_col)
+            col_list[i_col] = v_col
         if isinstance(v_col, np.ndarray):
             v_col = tuple(v_col)
+            col_list[i_col] = v_col
         if (not isinstance(v_col, tuple)) and (not isinstance(v_col, list)):
             col_list[i_col] = conv2rgb(v_col) 
+            print(col_list[i_col])
     # Check whether it is in 255 format (should be b/w 0 and 1)
     is_255 = False
     for i_col, v_col in enumerate(col_list):
@@ -229,8 +237,7 @@ def dag_get_cmap(cmap_name, **kwargs):
         cmap_name = 'viridis'
     if isinstance(cmap_name, mpl.colors.LinearSegmentedColormap):
         return cmap_name
-    
-    do_reverse = kwargs.get('reverse', False)        
+    do_reverse = kwargs.get('reverse', False)     
     do_log = kwargs.get('log', False)
     do_rotation = kwargs.get('rotation', False)
 
@@ -264,12 +271,13 @@ def dag_get_cmap(cmap_name, **kwargs):
         this_cmap = mpl.cm.__dict__[cmap_name]
         if do_log:
             col_list = this_cmap(np.linspace(0,1,100))
-            this_cmap = dag_make_custom_cmap(col_list=col_list, log=True)
-    if do_reverse:
-        this_cmap = this_cmap.reversed()
-    
+            this_cmap = dag_make_custom_cmap(col_list=col_list, log=True)    
     if do_rotation:
         this_cmap = dag_rotate_cmap(this_cmap, do_rotation, **kwargs)
+
+    if do_reverse:
+        this_cmap = this_cmap.reversed()
+
 
     return this_cmap
 

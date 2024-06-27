@@ -29,7 +29,6 @@ def main(argv):
     # Loading the variable from the pickle file
     with open(pickle_file_path, 'rb') as f:
         loaded_fs = pickle.load(f)
-    print(loaded_fs.keys())
     # Assume in the correct path
     loaded_fs.output_dir = './'
     app = loaded_fs.web_launch_with_dash()

@@ -44,7 +44,7 @@ def dag_auto_surf_function(surf_type, **kwargs):
     param_path = kwargs.pop('param_path', None)   
     specific_param_path = kwargs.pop('specific_param_path', None)
     sub = kwargs.pop('sub', None)
-    fs_dir = os.environ['SUBJECTS_DIR']    
+    fs_dir = kwargs.pop('fs_dir', os.environ['SUBJECTS_DIR'])    
     if not os.path.exists(fs_dir):
         print('Could not find SUBJECTS_DIR')
         print(fs_dir)

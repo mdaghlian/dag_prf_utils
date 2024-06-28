@@ -7,35 +7,69 @@ import os
 opj = os.path.join
 import pickle
 import sys
-
+from dag_prf_utils.mesh_dash import dag_mesh_combine,dag_mesh_pickle
 
 def main(argv):
     '''
     ---------------------------
-    Open the freesurfer surfaces for a subject
+    Open the dash freesurfer surfaces for a subject
 
     Args:
-        path        path to pickle file
+        --pickle_path/path      path to the pickle file/s
+        --port                  port to open the dash app
 
 
     '''
     # Load the fitting settings, add in the new info
-    # [1] Setup parameters:
-    pickle_file_path = argv[0]
-    if len(argv)>1:
-        port = argv[1]
-    else:
-        port = '8000'
-    # Loading the variable from the pickle file
-    with open(pickle_file_path, 'rb') as f:
-        loaded_fs = pickle.load(f)
+    port = '8000'
+    dump = False
+    file_name = 'mesh_dash.pickle'
+    do_open = True
+    mesh_names = None
+    for i,arg in enumerate(argv):        
+        if arg in ('--path', '--pickle_path', '--pkl_path'): 
+            pickle_file_path = argv[i+1]
+            if ',' in pickle_file_path:
+                pickle_file_path = pickle_file_path.split(',')                                       
+            if not isinstance(pickle_file_path, list):
+                pickle_file_path = [pickle_file_path]
+        elif arg in ('--port'):                 
+            port = argv[i+1]
+        elif arg in ('--dump'):
+            dump = True
+        elif arg in ('--file_name'):
+            file_name = argv[i+1]            
+        elif arg in ('--no_open'):
+            do_open = False
+        elif arg in ('--mesh_names'):
+            mesh_names = argv[i+1].split(',')
+        elif arg in ('-h', '--help'):
+            print(main.__doc__)
+            sys.exit()    
+    
+    # Load mesh/meshes
+    mesh_dash_list = []
+    for i, this_pickle in enumerate(pickle_file_path):
+        with open(this_pickle, 'rb') as f:
+            mesh_dash_list.append(pickle.load(f))
+        # Assume in the correct path
+        mesh_dash_list[i].output_dir = './'
+    if mesh_names is None:
+        mesh_names = [i.split('/')[-1] for i in pickle_file_path]
+        
+    comb_fs = dag_mesh_combine(
+        mesh_dash_list=mesh_dash_list,
+        mesh_names=mesh_names,
+        )
     # Assume in the correct path
-    loaded_fs.output_dir = './'
-    app = loaded_fs.web_launch_with_dash()
-    # Open the app in a browser
-    # Do not show it in the notebook
-    print(f'http://localhost:{port}/')
-    app.run_server(host='127.0.0.1', port=port, debug=False, use_reloader=False) 
+    comb_fs.output_dir = './'
+    if dump:
+        dag_mesh_pickle(comb_fs, file_name=file_name)
+    if do_open:
+        app = comb_fs.web_launch_with_dash()
+        # Open the app in a browser    
+        print(f'http://localhost:{port}/')
+        app.run_server(host='127.0.0.1', port=port, debug=False, use_reloader=False) 
 
 
 

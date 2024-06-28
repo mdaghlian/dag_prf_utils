@@ -57,7 +57,7 @@ def main(argv):
     for i,arg in enumerate(argv):        
         if '--surf_type' in arg:
             surf_type = argv[i+1]
-        elif '--param_path' in arg:
+        elif arg in ('--param_path', '--params_path', '--path'):
             param_path = argv[i+1]
         elif '--sub' in arg:
             sub = dag_hyphen_parse('sub', argv[i+1])
@@ -89,10 +89,10 @@ def main(argv):
             this_kwarg_value = dag_arg_checker(argv, i+1)
             extra_kwargs[this_kwarg] = this_kwarg_value
             print(f'Unknown arg: {arg}')
+    extra_kwargs['title'] = extra_kwargs.get('title', f'{sub} {model} \n {param_path}')
     dag_auto_surf_function(
         surf_type=surf_type,
         param_path=param_path,
-
         sub=sub,
         model=model,
         fs_dir=fs_dir,
@@ -104,7 +104,6 @@ def main(argv):
         hemi_markers=hemi_markers,
         specific_param_path=specific_param_path,
         **extra_kwargs
-
     )
 
 

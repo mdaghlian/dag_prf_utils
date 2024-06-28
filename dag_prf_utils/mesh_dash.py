@@ -3,6 +3,7 @@ import matplotlib.pyplot as plt
 import matplotlib as mpl
 from datetime import datetime
 import os
+import copy
 from scipy.spatial import ConvexHull
 import subprocess
 opj = os.path.join
@@ -46,9 +47,56 @@ def dag_mesh_pickle(mesh_dash, **kwargs):
         pickle.dump(mesh_dash, f,) 
         #**kwargs)
 
+def dag_mesh_combine(mesh_dash_list, mesh_names=None, **kwargs):
+    '''
+    Combine multiple mesh dash objects into one
+    '''
+    if not isinstance(mesh_dash_list, list):
+        mesh_dash_list = [mesh_dash_list]
+    if len(mesh_dash_list)==1:
+        return mesh_dash_list[0]
+    
+    if mesh_names is None:
+        mesh_names = [f'mesh_{i}' for i in range(len(mesh_dash_list))]
+    
+    main_mesh = mesh_dash_list[0]
+    main_mesh.title = 'COMBINED: ' + ', '.join(mesh_names)
+    new_web_vxcol = {}
+    new_web_vxcol_list = []
+
+    # [1] combine the vx cols
+    for mesh_dash, mesh_name in zip(mesh_dash_list, mesh_names):
+        for vx_col_name in mesh_dash.web_vxcol_list:
+            new_web_vxcol[f'{vx_col_name}_{mesh_name}'] = mesh_dash.web_vxcol[vx_col_name]
+            new_web_vxcol_list.append(f'{vx_col_name}_{mesh_name}')
+
+    # [2] combine the plot functions
+    new_mpl_fig_maker_dict = {}
+    for mesh_dash, mesh_name in zip(mesh_dash_list, mesh_names):
+        if hasattr(mesh_dash, 'mpl_fig_makers'):
+            print(f'Adding fig makers for {mesh_name}')
+            for mpl_fig_maker in mesh_dash.mpl_fig_makers.keys():                
+                new_mpl_fig_maker_dict[f'{mpl_fig_maker}_{mesh_name}'] = mesh_dash.mpl_fig_makers[mpl_fig_maker]
+    main_mesh.web_vxcol = new_web_vxcol
+    main_mesh.web_vxcol_list = new_web_vxcol_list
+    main_mesh.mpl_fig_makers = new_mpl_fig_maker_dict
+    return main_mesh
+
+
 class MeshDash(GenMeshMaker):
     def __init__(self, sub, fs_dir=os.environ['SUBJECTS_DIR'], output_dir=[], **kwargs):
-        '''Meshes are the plotly stuff'''
+        '''
+        Make a super cool interactive viewer for surface        
+                
+        TODO / aspirational
+        > make menus drop down / open (to prioritize some over other)
+        > flexible thresholding a text box syntax? 
+        > also for rois? 
+        > ROI drawing
+        > file loading / saving (from within the interface)
+        > auto screenshots / figures 
+        > Multi histograms 
+        '''
         super().__init__(sub, fs_dir, output_dir, **kwargs)
 
     #region PLOTLY FUNCTIONS
@@ -223,6 +271,7 @@ class MeshDash(GenMeshMaker):
         > self.web_vx_col_list  list of overlay names 
         '''
         # how many hemis? 
+        self.title = kwargs.get('title', 'BRAIN')
         self.web_hemi_list = kwargs.get('hemi_list', ['lh', 'rh'])
         if not isinstance(self.web_hemi_list, list):
             self.web_hemi_list = [self.web_hemi_list]
@@ -481,12 +530,6 @@ class MeshDash(GenMeshMaker):
         '''
         Return a Dash app! 
 
-        TODO:
-        > colorbar
-        > update zoom after panning?
-        > ROIS
-        > Add clicker position
-        > hemi on & hemi off...
         '''
         assets_type = kwargs.get('assets_type', 'boring')
         assets_type = 'mesh_dash_assets_boring' if assets_type=='boring' else 'mesh_dash_assets'
@@ -520,8 +563,8 @@ class MeshDash(GenMeshMaker):
             ], className='column2')
 
         app.layout = html.Div([
-            # html.H1('awesome brain viewer'),
-            # COLUMN 1
+            html.H1(self.title),
+            # COLUMN 1            
             html.Div([
                 # Radius
                 html.Label('radius', className='label'),
@@ -1122,7 +1165,8 @@ class MeshDash(GenMeshMaker):
     #endregion DASH FUNCTIONS
 
 
-    #startregion HTML functions
+    #region HTML functions
+    # For export to html
     def html_get_ready(self, **kwargs):
         '''For making a single html file
         Not messing with dash

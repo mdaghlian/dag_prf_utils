@@ -11,9 +11,8 @@ opj = os.path.join
 
 import numpy as np
 
-from dag_prf_utils.utils import dag_find_file_in_folder
 from dag_prf_utils.fs_tools import dag_make_overlay_str
-
+from dag_prf_utils.utils import dag_arg_checker
 
 
 def main(argv):
@@ -23,7 +22,7 @@ def main(argv):
 
     Args (optional):
         --overlay_name     name of the overlay
-        --out_dir          Where to save the overlay (default is current directory)
+        --output_dir          Where to save the overlay (default is current directory)
         
         --sub               subject number. If given will use the freesurfer directory for that subject
         ... See dag_make_overlay_str for more options ...
@@ -36,24 +35,22 @@ def main(argv):
     '''
     # Load the fitting settings, add in the new info
     # [1] Setup parameters:
-    sub = None
     overlay_name = None
-    out_dir = os.getcwd()
-    print(f'Overlay will be saved in {out_dir}')
+    output_dir = os.getcwd()
+    print(f'Overlay will be saved in {output_dir}')
     kwargs = {}
     for i,arg in enumerate(argv):
         if '--sub' in arg:
             print(f'Using freesurfer directory for {arg}')
-            out_dir = opj(os.environ['SUBJECTS_DIR'], f'sub-{argv[i+1]}', 'surf', 'custom')
+            output_dir = opj(os.environ['SUBJECTS_DIR'], f'sub-{argv[i+1]}', 'surf', 'custom')
             
-
         elif '--overlay_name' in arg:
             overlay_name = argv[i+1]
 
-        elif '--out_dir' in arg:
-            out_dir = argv[i+1]
-            if not os.path.isdir(out_dir):
-                os.makedirs(out_dir)
+        elif '--output_dir' in arg:
+            output_dir = argv[i+1]
+            if not os.path.isdir(output_dir):
+                os.makedirs(output_dir)
         elif '-h' == arg:
             print(main.__doc__)
             sys.exit()
@@ -63,11 +60,7 @@ def main(argv):
             # If argv[i] is an argument, then argv[i+1] is its value
             this_kwarg_value = argv[i+1]
             # Check if the value is a list
-            if ',' in this_kwarg_value:
-                this_kwarg_value = this_kwarg_value.split(',')
-                this_kwarg_value = [arg_checker(arg) for arg in this_kwarg_value]
-            else:
-                this_kwarg_value = arg_checker(this_kwarg_value)
+            this_kwarg_value = dag_arg_checker(this_kwarg_value)
             # Add to kwargs
             this_kwarg = arg.replace('--','')
             kwargs[this_kwarg] = this_kwarg_value
@@ -79,30 +72,11 @@ def main(argv):
         
     _, overlay_str = dag_make_overlay_str(**kwargs)
     print(overlay_str)
-    overlay_path = opj(out_dir, overlay_name)
+    overlay_path = opj(output_dir, overlay_name)
     print(f'Saving overlay to {overlay_path}')
     with open(overlay_path, 'w') as fp:
         fp.write(overlay_str)
-
-
-def arg_checker(arg2check):
-    '''arg2check is a string, check if it's a number, return the number if so, otherwise return the string
-    Should be able to deal with negative numbers too
-    '''
-    if arg2check[0] == '-':
-        arg_valence = -1
-        arg2check = arg2check[1:]
-    else:
-        arg_valence = 1
-
-    if arg2check.isdigit():
-        arg_out = arg_valence * int(arg2check)
-    elif arg2check.replace('.','',1).isdigit():
-        arg_out = arg_valence * float(arg2check)                
-    else:
-        arg_out = arg2check   
-
-    return arg_out
+    print('Done')
 
 if __name__ == "__main__":
     main(sys.argv[1:])    

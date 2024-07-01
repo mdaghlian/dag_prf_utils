@@ -30,7 +30,7 @@ def dag_auto_surf_function(surf_type, **kwargs):
         specific_param_path     dict with paths to specific parameters
         sub                     subject number
         fs_dir                  freesurfer director
-        outputdir               where to put it
+        output_dir               where to put it
         file_name               name of the file
         model                   prfpy model to use
         real_ts                 path to real timeseries
@@ -49,7 +49,7 @@ def dag_auto_surf_function(surf_type, **kwargs):
         print('Could not find SUBJECTS_DIR')
         print(fs_dir)
         sys.exit()
-    outputdir = kwargs.pop('outputdir', os.getcwd())
+    output_dir = kwargs.pop('output_dir', os.getcwd())
     file_name = kwargs.pop('file_name', 'auto_surf')
     hemi_markers = kwargs.pop('hemi_markers', ['lh', 'rh'])
     # Sort out how we id hemisphere
@@ -160,7 +160,7 @@ def dag_auto_surf_function(surf_type, **kwargs):
         fs = MeshDash(
             sub=sub, 
             fs_dir=fs_dir,
-            output_dir=outputdir,
+            output_dir=output_dir,
             )    
 
         fs.web_get_ready(**extra_kwargs)

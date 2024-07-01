@@ -24,6 +24,7 @@ def main(argv):
         --sub               subject number
         --find 
         --exclude 
+        --fs_dir           freesurfer directory
         # 
         -h          help
     
@@ -36,11 +37,11 @@ def main(argv):
     sub = None
     search_incl = []
     search_excl = []
+    fs_dir=os.environ['SUBJECTS_DIR']
     for i,arg in enumerate(argv):
         if '--sub' in arg:
             sub = dag_hyphen_parse('sub', argv[i+1])
         elif '--find' in arg:
-            do_search = True
             search_incl = argv[i+1]
             if ',' in search_incl:
                 search_incl = search_incl.split(',')
@@ -52,7 +53,8 @@ def main(argv):
                 search_excl = search_excl.split(',')
             if not isinstance(search_excl, list):
                 search_excl = [search_excl]
-
+        elif '--fs_dir' in arg:
+            fs_dir = argv[i+1]
         elif '-h' in arg:
             print(main.__doc__)
             sys.exit()
@@ -60,8 +62,7 @@ def main(argv):
     # [3] Check the arguments
     if sub is None:
         raise ValueError('Subject number not specified')
-    
-    fs_dir=os.environ['SUBJECTS_DIR']
+        
     print(f'Looking in {fs_dir}')
     custom_surf_dir = opj(fs_dir, sub, 'surf', 'custom')
     print(f'Looing in {custom_surf_dir}')

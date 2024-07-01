@@ -23,7 +23,8 @@ def main(argv):
     """
     ---------------------------------------------------------------------------------------------------
     Create a custom colormap
-
+    GUI is dodgy -> to fix later... 
+    
     Args (optional):
         --vmin          min color value
         --vmax          max color value

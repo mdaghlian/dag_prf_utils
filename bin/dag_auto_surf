@@ -33,7 +33,7 @@ def main(argv):
         --*_path        path to with a certain parameter for the model (e.g., size_1)
         --sub           subject number
         --fs_dir        freesurfer director
-        --outputdir     where to put it
+        --output_dir     where to put it
         --dump          dump the mesh dash object
         --file_name     name of the file to dump
         --model         prfpy model to use
@@ -47,7 +47,7 @@ def main(argv):
     dump = False
     file_name = 'mesh_dash.pickle'
     model = None
-    outputdir = opj(os.getcwd())
+    output_dir = opj(os.getcwd())
     real_ts = None
     dm_file = None
     hemi_markers = ['lh', 'rh']
@@ -65,8 +65,8 @@ def main(argv):
             model = argv[i+1]            
         elif '--fs_dir' in arg:
             fs_dir = argv[i+1]  
-        elif '--outputdir' in arg:
-            outputdir = argv[i+1]              
+        elif '--output_dir' in arg:
+            output_dir = argv[i+1]              
         elif '--dump' in arg:
             dump = True
         elif '--file_name' in arg:
@@ -96,7 +96,7 @@ def main(argv):
         sub=sub,
         model=model,
         fs_dir=fs_dir,
-        outputdir=outputdir,
+        output_dir=output_dir,
         dump=dump,
         file_name=file_name,
         real_ts=real_ts,

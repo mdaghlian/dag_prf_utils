@@ -594,7 +594,7 @@ class MeshDash(GenMeshMaker):
             html.Div([
                 dcc.Dropdown(
                     id='vertex-color-dropdown',
-                    options=[{'label': col_name, 'value': col_name} for col_name in self.web_vxcol_list],
+                    options=[{'label': col_name, 'value': col_name} for col_name in sorted(self.web_vxcol_list)],
                     value=self.web_vxcol_list[0],
                 ),  # Dropdown menu - change the surface colour
             ], className='column2'),

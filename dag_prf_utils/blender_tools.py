@@ -8,12 +8,13 @@ opj = os.path.join
 
 from dag_prf_utils.mesh_maker import *
 from dag_prf_utils.mesh_format import *
-# from dag_prf_utils.fs_tools import *
-try:
-    blender_init = os.environ['BLENDER']
-except:
-    blender_init = 'blender '
 
+# ************************** SPECIFY BLENDER PATH HERE **************************
+# Check for command:
+blender_cmd = subprocess.getstatusoutput(f"command -v blender")[1]
+if blender_cmd == '':
+    print('could not find blender command, specify it in the blender_tools.py file')
+    blender_cmd = 'blender ' # specify path to blender here
 
 class BlendMaker(GenMeshMaker):
     '''Used to make a blender file for a single subject

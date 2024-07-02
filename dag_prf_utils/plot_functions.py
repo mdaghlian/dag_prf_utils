@@ -827,7 +827,9 @@ def dag_arrow_coord_getter(old_x, old_y, new_x, new_y, **kwargs):
 def dag_scatter(X,Y,ax=None, **kwargs):
     if ax is None:
         ax = plt.gca()
+
     do_kde = kwargs.get('do_kde', False)    
+    do_joint_sns = kwargs.get('do_joint_sns', False)
     do_id_line = kwargs.pop('do_id_line', False)
     do_ow = kwargs.get('ow', False)
     do_scatter = kwargs.get('do_scatter', True)
@@ -840,6 +842,7 @@ def dag_scatter(X,Y,ax=None, **kwargs):
     dot_label=kwargs.get('dot_label')
     do_corr = kwargs.get('do_corr', False)
     do_colbar = kwargs.get('do_colbar', False)
+
     if do_scatter:        
         scat_col = ax.scatter(
             X,Y, c=dot_col, alpha=dot_alpha, label=dot_label,
@@ -864,6 +867,11 @@ def dag_scatter(X,Y,ax=None, **kwargs):
     kwargs['title'] = kwargs.get('title', '') + corr_str
     if do_kde:
         sns.kdeplot(X,Y, color=dot_col)
+    elif do_joint_sns:
+        # blorp
+        # print(ax[0])
+        a = sns.jointplot(x=X, y=Y, kind="hex", ax=ax ) # **kwargs)
+        print(a)
     if do_id_line:
         xlim = kwargs.get('x_lim', ax.get_xlim())
         ylim = kwargs.get('y_lim', ax.get_ylim())

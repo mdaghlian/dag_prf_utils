@@ -385,8 +385,9 @@ def dag_load_roi(sub, roi, fs_dir=os.environ['SUBJECTS_DIR'], split_LR=False, do
                                 
                 elif isinstance(roi_file[hemi], list):
                     # Print which files we will be combining
-                    print('Combining')
-                    print([i.split('/')[-1] for i in roi_file[hemi]])
+                    # print('Combining')
+                    # print([i.split('/')[-1] for i in roi_file[hemi]])
+                    pass
                 else:
                     # 1 matched file - convert to list...
                     # -> so we can loop through later

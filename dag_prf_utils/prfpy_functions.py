@@ -627,7 +627,7 @@ class PrfMulti(object):
                 idx_mask[th[th_key]] = True
                 vx_mask &= idx_mask
                 continue            
-            print(th)
+            # print(th)
             id, comp, p = th_key_str.split('-')
             th_val = th[th_key]
             if id=='all':
@@ -676,6 +676,34 @@ class PrfMulti(object):
             tmp_dict[f'{i_px_id}-{i_px_p}'] = self.prf_obj[i_px_id].pd_params[i_px_p][vx_mask].to_numpy()
         return tmp_dict
     
+    def return_diff_params(self, id1, id2, p_list, **kwargs):
+        ''' 
+        Return the difference of 2 prf objects 
+        (rather than creating a whole "prf_diff" object)
+
+        id1         str, id of the first prf_obj
+        id2         str, id of the second prf_obj
+        px_list     list of parameters to take the difference of
+        '''         
+        if not isinstance(p_list, list):
+            p_list = [p_list]
+        # create tmp dict with relevant stuff...        
+        tmp_dict = {}
+        for p in p_list:
+            # special case for 'shift_mag' and 'shift_dir'
+            if p in ['shift_mag', 'shift_dir']:
+                dx = self.pd_params[f'{id1}-x'] - self.pd_params[f'{id2}-x']
+                dy = self.pd_params[f'{id1}-y'] - self.pd_params[f'{id2}-y']
+                shift_dict = {}
+                shift_dict['shift_mag'], shift_dict['shift_dir'] = dag_coord_convert(
+                    dx, dy, 'cart2pol'
+                )
+                tmp_dict[p] = shift_dict[p].copy()
+            else:
+                tmp_dict[p] = self.pd_params[f'{id1}-{p}'] - self.pd_params[f'{id2}-{p}']
+        return tmp_dict
+
+
     def add_prf(self, new_prf, new_id, ow=True):
         '''add_prf_obj
         Add a new prf_obj to the list
@@ -692,6 +720,7 @@ class PrfMulti(object):
         self.prf_obj[new_id] = new_prf
         for p in  new_prf.pd_params.keys():
             self.pd_params[f'{new_id}-{p}'] = new_prf.pd_params[p].to_numpy()
+
 
 
     def add_prf_diff(self, id1, id2, new_id=None):
@@ -716,7 +745,6 @@ class PrfMulti(object):
             self.id_list += [new_id]
     # TODO - add_prf_mean?    
     
-    # ***************** OBJECT PLOT FUNCTIONS ***************** # 
     # ***************** OBJECT PLOT FUNCTIONS ***************** # 
     def hist(self, px, th=None, ax=None, **kwargs):
         '''hist: Plot a histogram of a parameter, masked by th'''
@@ -789,10 +817,10 @@ class PrfMulti(object):
             ax = plt.gca()
         if th is None:
             th = {
-                f'{pold}-min-rsq':.1,
-                f'{pold}-max-ecc': 5,
-                f'{pnew}-min-rsq':.1,
-                f'{pnew}-max-ecc': 5,
+                f'{pold}-min-rsq':kwargs.get('min_rsq', 0.1),
+                f'{pold}-max-ecc':kwargs.get('max_ecc', 5),
+                f'{pnew}-min-rsq':kwargs.get('min_rsq', 0.1),
+                f'{pnew}-max-ecc':kwargs.get('max_ecc', 5),
                 }
         th_plus = kwargs.get('th_plus', {})
         th = dict(**th, **th_plus)        
@@ -863,7 +891,7 @@ class PrfDiff(object):
         # if not 'diff_' in id:
         #     print('needs a diff_!')  
 
-        self.id = id
+        # self.id = id
         self.model_labels1 = list(prf_obj1.pd_params.keys())
         self.model_labels2 = list(prf_obj2.pd_params.keys())
         self.n_vox = prf_obj1.n_vox 
@@ -915,7 +943,7 @@ class PrfDiff(object):
 
 class PrfMean(object):
     def __init__(self, prf_obj1, prf_obj2, id):
-        self.id = id
+        # self.id = id
         if not 'mean_' in id:
             print('needs a mean_!')
         self.model_labels1 = list(prf_obj1.pd_params.keys())

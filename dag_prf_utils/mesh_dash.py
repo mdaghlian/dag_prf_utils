@@ -953,14 +953,11 @@ class MeshDash(GenMeshMaker):
             [
                 Output('mpl-figure-output', 'children'),
                 Output('vertex-index-output', 'children'),
+                Output('vx-index', 'value'),
             ],
-            [
-                Input('mesh-plot', 'clickData'),
-                Input('vx-index', 'value'),
-                
-            ]
+            [Input('mesh-plot', 'clickData')],
         )
-        def display_mpl_figure(clickData, vx_value):
+        def display_mpl_figure(clickData):
             if not self.vx_toggle_on:
                 print('Toggled OFF')
                 raise dash.exceptions.PreventUpdate 
@@ -971,8 +968,6 @@ class MeshDash(GenMeshMaker):
             else:
                 self.last_clicktime = now
             print('CLICK CALLBACK')
-            # print*
-
             if clickData is not None:
                 right_now = time.time()
                 point_index = clickData['points'][0]['pointNumber']
@@ -983,14 +978,58 @@ class MeshDash(GenMeshMaker):
                     full_point_index = self.n_vx['lh']+point_index
                 else:
                     full_point_index = point_index
-                # Get value of vertex in current overlay                
                 vx_value = self.web_vxcol[self.current_col_args['vx_col']]['data'][full_point_index]
+                click_str = f'Clicked hemi: {hemi_name}, vx id: {point_index}, full_id {full_point_index}, value = {vx_value:.3f}'
+                mpl_figs = self.web_return_mpl_figs(full_point_index), click_str , full_point_index                
+                self.last_clicktime = time.time()
+                finished_now = time.time()
+                print(f'time = {finished_now - right_now}')
+                return mpl_figs
+
+        # VX INDEX CALLBACK
+        @app.callback(
+            [
+                Output('mpl-figure-output', 'children', allow_duplicate=True),
+                Output('vertex-index-output', 'children', allow_duplicate=True),
+            ],
+            [Input('vx-index', 'value')],
+            prevent_initial_call='initial_duplicate'
+        )
+        def display_mpl_figure_VXINDEX(vx_index):
+            if not self.vx_toggle_on:
+                print('Toggled OFF')
+                raise dash.exceptions.PreventUpdate 
+            now = time.time()
+            if (now - self.last_clicktime)<1.5:
+                print('Clicked too soon...')
+                raise dash.exceptions.PreventUpdate 
+            else:
+                self.last_clicktime = now
+            print('VX INDEX CALLBACK')
+            if vx_index is not None:
+                right_now = time.time()
+                if vx_index<=self.n_vx['lh']:
+                    mesh_index = 0
+                    point_index = vx_index
+                else:
+                    mesh_index = 1
+                    point_index = vx_index - self.n_vx['lh']
+
+                hemi_name = self.web_hemi_list[mesh_index]
+                print(self.dash_fig.data[mesh_index]['vertexcolor'][point_index,:])                                
+                if hemi_name == 'rh':
+                    full_point_index = self.n_vx['lh']+point_index
+                else:
+                    full_point_index = point_index
+                vx_value = self.web_vxcol[self.current_col_args['vx_col']]['data'][full_point_index]
+                # TODO : get the coords and print them...
                 click_str = f'Clicked hemi: {hemi_name}, vx id: {point_index}, full_id {full_point_index}, value = {vx_value:.3f}'
                 mpl_figs = self.web_return_mpl_figs(full_point_index), click_str                
                 self.last_clicktime = time.time()
                 finished_now = time.time()
                 print(f'time = {finished_now - right_now}')
                 return mpl_figs
+        
         
 
         # ROI call back

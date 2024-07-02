@@ -17,7 +17,6 @@ try:
     import plotly.graph_objects as go
 except:
     print('No plotly')
-
 try: 
     from dash import Dash, dcc, html, Input, Output, State
     import dash
@@ -611,8 +610,12 @@ class MeshDash(GenMeshMaker):
                 options=[{'label': 'Plot vx?', 'value': 'on'}],
                 value=[]
             ),
+
             html.Div(id='vxtoggle-hidden'),
             html.Div(id='vertex-index-output'),  # Print which vertex you have clicked on
+            # Plot specific vertex (enter text box value) label vx-index
+            html.Label('vx index', className='label'),
+            dcc.Input(id='vx-index', value=0,  **num_input_args),            
             html.Div(
                 id='mpl-figure-output',                
                 # style={'maxWidth': '800px', 'width': '100%', 'overflowX': 'auto', 'overflowY': 'auto'},
@@ -951,9 +954,13 @@ class MeshDash(GenMeshMaker):
                 Output('mpl-figure-output', 'children'),
                 Output('vertex-index-output', 'children'),
             ],
-            [Input('mesh-plot', 'clickData')]
+            [
+                Input('mesh-plot', 'clickData'),
+                Input('vx-index', 'value'),
+                
+            ]
         )
-        def display_mpl_figure(clickData):
+        def display_mpl_figure(clickData, vx_value):
             if not self.vx_toggle_on:
                 print('Toggled OFF')
                 raise dash.exceptions.PreventUpdate 
@@ -964,6 +971,8 @@ class MeshDash(GenMeshMaker):
             else:
                 self.last_clicktime = now
             print('CLICK CALLBACK')
+            # print*
+
             if clickData is not None:
                 right_now = time.time()
                 point_index = clickData['points'][0]['pointNumber']

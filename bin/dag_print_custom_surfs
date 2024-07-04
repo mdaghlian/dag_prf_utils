@@ -71,14 +71,19 @@ def main(argv):
     if sub is None:
         raise ValueError('Subject number not specified')
     
+    if full_folder:
+        look_in = opj(fs_dir, sub, 'surf')
+    elif sub_folder is not None:
+        look_in = opj(fs_dir, sub, 'surf', sub_folder)
+    else:
+        look_in = opj(fs_dir, sub, 'surf', 'custom')
     print(f'Looking in {fs_dir}')
-    custom_surf_dir = opj(fs_dir, sub, 'surf', 'custom')
-    print(f'Looing in {custom_surf_dir}')
+    print(f'Looing in {look_in}')
     
     # Find the surfaces
     surf_list = dag_find_file_in_folder(
         filt = search_incl,
-        path=custom_surf_dir,
+        path=look_in,
         exclude = search_excl + ['rh.', 'overlay', '.png'], # exclude right hemisphere in search to avoid duplicates
         recursive=True,
         return_msg=None

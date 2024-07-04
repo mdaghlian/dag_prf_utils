@@ -851,11 +851,12 @@ class PrfMulti(object):
         '''
         col_obj, col_p = col_obj_p.split('-')
         if th is None:
-            rsq_th = kwargs.get('rsq_th', 0.1)
+            min_rsq = kwargs.get('min_rsq', 0.1)
+            max_ecc = kwargs.get('max_ecc', 5)
             th = {
-                f'{vf_obj}-min-rsq':rsq_th,
-                f'{vf_obj}-max-ecc': 5,
-                f'{col_obj}-min-rsq':rsq_th,
+                f'{vf_obj}-min-rsq':min_rsq,
+                f'{vf_obj}-max-ecc': max_ecc,
+                f'{col_obj}-min-rsq':min_rsq,
                 }        
         th_plus = kwargs.get('th_plus', {})
         th = dict(**th, **th_plus)        

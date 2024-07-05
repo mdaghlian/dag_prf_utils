@@ -92,6 +92,7 @@ def main(argv):
     )
 
     if lh_gii_files is None or rh_gii_files is None:
+        
         print(f'No .gii files found ')
         print(f'Using filter {[".gii", "hemi-L", *search_incl]}')
         print(f'Looking in folder {gii_file}')

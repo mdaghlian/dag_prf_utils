@@ -391,7 +391,7 @@ class Prf1T1M(object):
         for i_px in px_list:
             tmp_dict[i_px] = self.pd_params[i_px][vx_mask].to_numpy()
         return tmp_dict    
-    
+        
     def hist(self, param, th={'min-rsq':.1}, ax=None, **kwargs):
         '''hist: Plot a histogram of a parameter, masked by th'''
         if ax==None:

@@ -81,11 +81,36 @@ class TSPlotter(Prf1T1M):
             self.pred_idx = -1 # When generating predictions don't include the last value (i.e., rsq)
         else:
             self.pred_idx = None
+
+    def return_pars_for_preds(self, **kwargs):
+        '''return_pars_for_predictions
+        Return the parameters in format which is accepted for predictions
+        self.prf_params_np has everything we want
+        But we may want to include only a subset of the parameters
+        Also we may or may not want to include the hrf
+        '''
+        th = kwargs.get('th', {})
+        # Include hrf in output parameters        
+        include_hrf = kwargs.get('include_hrf', True)        
+        if include_hrf:
+            # Everythin as standard
+            this_pred_idx = copy(self.pred_idx)
+        elif (not include_hrf) and (not self.incl_hrf):
+            this_pred_idx = copy(self.pred_idx) # Already not included
+        elif (not include_hrf) and (self.pred_idx is None):
+            this_pred_idx = -2 # Remove the hrf parameters (there is no rsq)
+        elif (not include_hrf) and (self.pred_idx is not None):
+            this_pred_idx = self.pred_idx - 2 # Remove the hrf parameters, on top of the rsq
+
+        vx_mask = self.return_vx_mask(th) # what to mask
+        pars_for_preds = list(self.prf_params_np[vx_mask,:this_pred_idx].T)
+        return pars_for_preds
     
+
     def return_preds(self, idx=None):
         if idx is None:
             idx = np.ones(self.n_vox, dtype=bool)
-        preds = self.prfpy_model.return_prediction(*list(self.prf_params_np[idx,:self.pred_idx]))
+        preds = self.prfpy_model.return_prediction(*list(self.prf_params_np[idx,:self.pred_idx].T))
         return preds
         
 

@@ -226,6 +226,9 @@ def dag_auto_surf_function(surf_type, **kwargs):
                 )
         else:            
             # We don't know what everything is... 
+            if len(data_info['pars'].shape)==1:
+                data_info['pars'] = data_info['pars'][:,np.newaxis]
+
             for p in np.arange(data_info['pars'].shape[1]):
                 data        = data_info['pars'][:,p]
                 data4mask   = data_info['pars'][:,-1]            

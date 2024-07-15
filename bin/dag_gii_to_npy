@@ -43,6 +43,7 @@ def main(argv):
     mean_name = 'mean-prf'
     cut_vol = 0
     baseline_pt = None
+    hemi_search = ['hemi-l', 'hemi-r']
     for i,arg in enumerate(argv):
         if '--gii_file' in arg:
             gii_file = argv[i+1]
@@ -67,6 +68,8 @@ def main(argv):
         elif '--baseline_pt' in arg:
             baseline_pt = argv[i+1].split(',')
             baseline_pt = [int(i) for i in baseline_pt]
+        elif '--hemi_search' in arg:
+            hemi_search = argv[i+1].split(',')                    
         elif '--cut_vol' in arg:
             cut_vol = int(argv[i+1])
 
@@ -78,21 +81,20 @@ def main(argv):
 
     # -> get the list of files for this subject & task    
     lh_gii_files = dag_find_file_in_folder(
-        ['.gii', 'hemi-l', *search_incl],
+        ['.gii', hemi_search[0], *search_incl],
         gii_file,
         exclude = search_excl,
         return_msg=None,
     )    
         
     rh_gii_files = dag_find_file_in_folder(
-        ['.gii', 'hemi-r', *search_incl],
+        ['.gii', hemi_search[1], *search_incl],
         gii_file,
         exclude = search_excl,
         return_msg=None,
     )
 
     if lh_gii_files is None or rh_gii_files is None:
-        
         print(f'No .gii files found ')
         print(f'Using filter {[".gii", "hemi-L", *search_incl]}')
         print(f'Looking in folder {gii_file}')

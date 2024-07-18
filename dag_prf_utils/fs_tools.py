@@ -540,7 +540,7 @@ def dag_make_overlay_str(**kwargs):
     # value - rgb triple...
     fv_param_steps = np.linspace(vmin, vmax, cmap_nsteps)
     fv_color_steps = np.linspace(0,1, cmap_nsteps)
-    fv_cmap = dag_get_cmap(cmap, **kwargs)
+    fv_cmap = dag_cmap_from_str(cmap, **kwargs)
     # fv_cmap = mpl.cm.__dict__[cmap]
     
     ## make colorbar - uncomment to save a png of the color bar...

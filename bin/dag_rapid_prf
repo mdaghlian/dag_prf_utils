@@ -150,7 +150,7 @@ def main(argv):
         grid_nr = prf_settings['grid_nr'] # Size of the grid (i.e., number of possible PRF models). Higher number means that the grid fit will be more exact, but take longer...
         eccs    = max_eccentricity * np.linspace(0.25, 1, grid_nr)**2 # Squared because of cortical magnification, more efficiently tiles the visual field...
         sizes   = max_eccentricity * np.linspace(0.1, 1, grid_nr)**2  # Possible size values (i.e., sigma in gaussian model) 
-        polars  = np.linspace(0, 2*np.pi, grid_nr)              # Possible polar angle coordinates
+        polars  = np.linspace(0, 2*np.pi, grid_nr*4)              # Possible polar angle coordinates
 
         # We can also fit the hrf in the same way (specifically the derivative)
         # -> make a grid between 0-10 (see settings file)

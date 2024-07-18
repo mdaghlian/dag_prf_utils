@@ -40,7 +40,7 @@ class GenMeshMaker(FSMaker):
         self.output_dir = output_dir
         if isinstance(output_dir, str):
             if not os.path.exists(self.output_dir):
-                os.mkdir(self.output_dir)                  
+                os.makedirs(self.output_dir)                  
         
         # [1] Load mesh info
         # PULL FROM FREESURFER

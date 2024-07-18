@@ -57,12 +57,13 @@ def dag_auto_surf_function(surf_type, **kwargs):
     dm_file = kwargs.pop('dm_file', None)
     model = kwargs.pop('model', None)
     real_ts = kwargs.pop('real_ts', None)
-    extra_kwargs = copy(kwargs)
     dump = kwargs.pop('dump', False)
     open_surf = kwargs.pop('open', False)
     port = kwargs.pop('port', 8000)
     pars_to_plot = kwargs.pop('pars_to_plot', None)
-    rsq_th = kwargs.pop('rsq_th', 0.1)
+    min_rsq = kwargs.pop('min_rsq', 0.1)
+    max_ecc = kwargs.pop('max_ecc', 5)
+    extra_kwargs = copy(kwargs)
     
     # Check for missing stuff in param_path name
     if param_path is not None:
@@ -182,7 +183,10 @@ def dag_auto_surf_function(surf_type, **kwargs):
                     real_ts = data_info['real_ts'],            
                     incl_hrf=False, 
                 )
-            for p in prf_obj.pd_params.keys():
+            if pars_to_plot is None:
+                pars_to_plot = list(prf_obj.pd_params.keys())
+
+            for p in pars_to_plot:
                 data        = prf_obj.pd_params[p].to_numpy()
                 data4mask   = prf_obj.pd_params['rsq'].to_numpy()
                 if p=='pol':
@@ -274,7 +278,9 @@ def dag_auto_surf_function(surf_type, **kwargs):
             
             for p in pars_to_plot:
                 data        = prf_obj.pd_params[p].to_numpy()
-                data_mask   = prf_obj.pd_params['rsq'].to_numpy()>rsq_th
+                data_mask   = prf_obj.pd_params['rsq'].to_numpy()>min_rsq
+                if 'ecc' in prf_obj.pd_params.keys():
+                    data_mask &= prf_obj.pd_params['ecc'].to_numpy()<max_ecc
                 if p=='pol':
                     cmap = 'marco_pol'
                     vmin,vmax = -np.pi, np.pi

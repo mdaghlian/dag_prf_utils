@@ -28,7 +28,7 @@ def dag_cmap_from_str(cmap_name, **kwargs):
 
     '''
     try:
-        cmap = dag_get_cmap(cmap_name)
+        cmap = dag_get_cmap(cmap_name, **kwargs)
         print(f'{cmap_name} exists')
         return cmap
     except:

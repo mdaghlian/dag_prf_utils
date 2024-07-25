@@ -121,7 +121,9 @@ def dag_auto_surf_function(surf_type, **kwargs):
             for k in data_info['pars_dict'].keys():
                 idx = prfpy_params_dict()[model][k]
                 data_info['pars'][:,idx] = data_info['pars_dict'][k].squeeze()
-
+    # Check if we have a 2D array (for loop below)
+    if len(data_info['pars'].shape)==1:
+        data_info['pars'] = data_info['pars'][:,np.newaxis]
     # Can we find the real timeseries somewhere else?
     if (real_ts is not None) and (data_info['real_ts'] is None):
         data_info['real_ts'] = np.load(real_ts)

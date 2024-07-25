@@ -498,8 +498,7 @@ def dag_visual_field_scatter(dot_x, dot_y, **kwargs):
 def dag_plot_bin_line(ax, X,Y, bin_using, **kwargs):    
     '''dag_plot_bin_line
     Description:
-        Plot a line, binned by a variable. 
-        e.g., plot the mean rsquared, binned by eccentricity
+        Plot X vs Y binned by "bin_using" 
 
     Input:
         ax              matplotlib axes
@@ -533,73 +532,66 @@ def dag_plot_bin_line(ax, X,Y, bin_using, **kwargs):
     bins = kwargs.get('bins', None)
     do_not_bin_X = kwargs.get('do_not_bin_X', False)
     do_basics = kwargs.get('do_basics', False)
+    min_per_bin = kwargs.get('min_per_bin', False) # min number of points before setting to NAN
     if not isinstance(bins, (np.ndarray, list)):
         bins = n_bins    
-    xerr = kwargs.get("xerr", False)
+    # xerr = kwargs.get("xerr", False)
     do_bars = kwargs.get("do_bars", True)
     do_shade = kwargs.get("do_shade", False)
     summary_type = kwargs.get("summary_type", 'mean')
     err_type = kwargs.get("err_type", 'std')
-    # Do the binning
-    X_mean = binned_statistic(bin_using, X, bins=bins, statistic=summary_type)[0]
+    if 'pc' in err_type:
+        summary_type = 'median'
+    
+    # Binned X values
+    # -> mean or median? 
+    X_mid = binned_statistic(bin_using, X, bins=bins, statistic=summary_type)[0]
+    # -> Or just use the midpoint    
     if do_not_bin_X:
-        X_mean = (bins[:-1] + bins[1:]) / 2
-        
-    X_std = binned_statistic(bin_using, X, bins=bins, statistic='std')[0]
-    # count = binned_statistic(bin_using, X, bins=bins, statistic='count')[0]
-    Y_mean = binned_statistic(bin_using, Y, bins=bins, statistic=summary_type)[0]  
-    Y_std = binned_statistic(bin_using, Y, bins=bins, statistic='std')[0]  #/ np.sqrt(bin_data['bin_X']['count'])              
+        X_mid = (bins[:-1] + bins[1:]) / 2
+
+    # Now calculate the spreads    
+    if 'pc' in err_type:
+        # Percentile
+        Y_mid = binned_statistic(bin_using, Y, bins=bins, statistic=summary_type)[0]                      
+        pc_lower = float(err_type.split('-')[-1])
+        pc_upper = 100 - pc_lower
+        pcLOWER_lambda = lambda data: np.percentile(data, pc_lower)
+        pcUPPER_lambda = lambda data: np.percentile(data, pc_upper)
+        Y_lower = binned_statistic(bin_using, Y, bins=bins, statistic=pcLOWER_lambda)[0]              
+        Y_upper = binned_statistic(bin_using, Y, bins=bins, statistic=pcUPPER_lambda)[0]              
+    
+    elif err_type=='std':
+        # Standard deviation
+        Y_mid = binned_statistic(bin_using, Y, bins=bins, statistic=summary_type)[0]
+        Y_std = binned_statistic(bin_using, Y, bins=bins, statistic='std')[0]  #/ np.sqrt(bin_data['bin_X']['count'])
+        Y_lower = Y_mid - Y_std
+        Y_upper = Y_mid + Y_std
+
+    # Apply minimum per bin
+    XY_count = binned_statistic(bin_using, X, bins=bins, statistic='count')[0]
+    if min_per_bin is not False:        
+        for i_bin,bin_count in enumerate(XY_count):
+            if bin_count<min_per_bin:
+                Y_mid[i_bin] = np.nan
+                Y_lower[i_bin] = np.nan
+                Y_upper[i_bin] = np.nan
+
     if do_bars:
-        if xerr:
-            ax.errorbar(
-                X_mean,
-                Y_mean,
-                yerr=Y_std,
-                xerr=X_std,
-                color=line_col,
-                label=line_label, 
-                lw=lw,
-                **line_kwargs
-                )
-        else:
-            ax.errorbar(
-                X_mean,
-                Y_mean,
-                yerr=Y_std,
-                # xerr=X_std,
-                color=line_col,
-                label=line_label,
-                lw=lw,
-                **line_kwargs
-                )        
+        ax.errorbar(
+            X_mid,
+            Y_mid,
+            yerr=[Y_lower, Y_upper],
+            # xerr=X_std,
+            color=line_col,
+            label=line_label, 
+            lw=lw,
+            **line_kwargs
+            )
 
-    if do_shade:
-        
-        if 'pc' in err_type:            
-            Y_mid = binned_statistic(bin_using, Y, bins=bins, statistic=np.median)[0]                      
-            pc_lower = float(err_type.split('-')[-1])
-            pc_upper = 100 - pc_lower
-
-            pcLOWER_lambda = lambda data: np.percentile(data, pc_lower)
-            pcUPPER_lambda = lambda data: np.percentile(data, pc_upper)
-            Y_lower = binned_statistic(bin_using, Y, bins=bins, statistic=pcLOWER_lambda)[0]              
-            Y_upper = binned_statistic(bin_using, Y, bins=bins, statistic=pcUPPER_lambda)[0]              
-            
-            #
-            X_mid_pt = binned_statistic(bin_using, X, bins=bins, statistic=np.median)[0]                      
-
-        if err_type=='std':
-            Y_mid = Y_mean
-            Y_lower = Y_mean - Y_std
-            Y_upper = Y_mean + Y_std
-            X_mid_pt = binned_statistic(bin_using, X, bins=bins, statistic=np.median)[0]                      
-
-        if do_not_bin_X:
-            X_mid_pt = (bins[:-1] + bins[1:]) / 2
-            
-
+    elif do_shade:        
         ax.plot(
-            X_mid_pt,
+            X_mid,
             Y_mid,
             color=line_col,
             label=line_label,
@@ -608,7 +600,7 @@ def dag_plot_bin_line(ax, X,Y, bin_using, **kwargs):
             **line_kwargs,
             )
         ax.fill_between(
-            X_mid_pt,
+            X_mid,
             Y_lower,
             Y_upper,
             alpha=0.5,
@@ -620,8 +612,8 @@ def dag_plot_bin_line(ax, X,Y, bin_using, **kwargs):
 
     else:
         ax.plot(
-            X_mean,
-            Y_mean,
+            X_mid,
+            Y_mid,
             color=line_col,
             label=line_label,
             lw=lw,
@@ -630,6 +622,7 @@ def dag_plot_bin_line(ax, X,Y, bin_using, **kwargs):
     ax.legend()
     if do_basics:    
         dag_add_ax_basics(ax, **kwargs)
+
 
 def dag_arrow_plot(ax, old_x, old_y, new_x, new_y, **kwargs):
     '''dag_arrow_plot
@@ -1416,6 +1409,7 @@ def dag_shaded_line(line_data, xdata, **kwargs):
         line_ste = np.nanstd(line_data, axis=1) / np.sqrt(line_data.shape[1])
         lower_line = m_line - line_ste
         upper_line = m_line + line_ste
+
     ax.plot(
         xdata, 
         m_line, 

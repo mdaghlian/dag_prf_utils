@@ -38,6 +38,8 @@ def dag_auto_surf_function(surf_type, **kwargs):
         hemi_markers            How are hemispheres marked in file?
         dump                    dump the mesh object
         open                    open the surface
+	    port 			what port to host dash server on
+	    host 			what ip to host dash on 
 
     ''' 
     # Parse the arguments
@@ -60,6 +62,7 @@ def dag_auto_surf_function(surf_type, **kwargs):
     dump = kwargs.pop('dump', False)
     open_surf = kwargs.pop('open', False)
     port = kwargs.pop('port', 8000)
+    host = kwargs.pop('host', '127.0.0.1')
     pars_to_plot = kwargs.pop('pars_to_plot', None)
     min_rsq = kwargs.pop('min_rsq', 0.1)
     max_ecc = kwargs.pop('max_ecc', 5)
@@ -250,7 +253,7 @@ def dag_auto_surf_function(surf_type, **kwargs):
             # Open the app in a browser
             # Do not show it in the notebook
             print(f'http://localhost:{port}/')
-            app.run_server(host='127.0.0.1', port=port, debug=False, use_reloader=False)             
+            app.run_server(host=host, port=port, debug=False, use_reloader=False)             
     else:
         # FS OBJECT
         fs = FSMaker(

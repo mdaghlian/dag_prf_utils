@@ -933,6 +933,32 @@ def dag_split_mat_with_idx(mat, batch_num, batch_id, axis=0, split_method='stand
         chunks_idx = [np.array(index) for index in chunks_idx]
     return chunks[batch_id], chunks_idx[batch_id]
 
+def dag_return_batch_idx(batch_num, batch_id, num_idx, split_method='standard'):
+    '''split matrix into chunks
+    mat         : matrix to split
+    batch_num   : number of chunks
+    batch_id    : which chunk to return
+    axis        : axis to split along
+    split_method: 'default', uses np.array_split
+                    'distributed' takes every nth element
+    '''
+    if split_method=='standard':
+        full_chunk_idx = np.arange(num_idx)
+        chunks_idx = np.array_split(full_chunk_idx, batch_num)
+    elif split_method=='distributed':
+        # Create an empty list of lists to store chunks
+        chunks_idx = [[] for _ in range(batch_num)]        
+        # Distribute elements to the respective chunks
+        for i in range(num_idx):
+            chunk_index = i % batch_num
+            # use np.index_exp to create an index along axis             
+            chunks_idx[chunk_index].append(i)
+        
+        # Convert lists to numpy arrays
+        chunks_idx = [np.array(index) for index in chunks_idx]
+    return chunks_idx[batch_id]    
+
+
 def dag_slice_by_axis(numpy_matrix, idx, axis):
     # Create a list of slice(None) for each axis
     slicer = [slice(None)] * numpy_matrix.ndim

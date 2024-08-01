@@ -39,7 +39,8 @@ def dag_auto_surf_function(surf_type, **kwargs):
         dump                    dump the mesh object
         open                    open the surface
 	    port 			what port to host dash server on
-	    host 			what ip to host dash on 
+	    host 			what ip to host dash on
+        ow_prfpy_model  overwrite the prfpy_model (if stored in pickle) 
 
     ''' 
     # Parse the arguments
@@ -66,6 +67,7 @@ def dag_auto_surf_function(surf_type, **kwargs):
     pars_to_plot = kwargs.pop('pars_to_plot', None)
     min_rsq = kwargs.pop('min_rsq', 0.1)
     max_ecc = kwargs.pop('max_ecc', 5)
+    ow_prfpy_model = kwargs.pop('ow_prfpy_model', False)
     extra_kwargs = copy(kwargs)
     
     # Check for missing stuff in param_path name
@@ -102,7 +104,11 @@ def dag_auto_surf_function(surf_type, **kwargs):
                 pickle_dict = pickle.load(f)
             for k in data_info.keys():
                 if k in pickle_dict.keys():
+                    print(f'loading {k}')
                     data_info[k] = pickle_dict[k]            
+            if ow_prfpy_model:
+                data_info['prfpy_model'] = None
+                print('Overwriting prfpy model')
         elif '.npy' in param_path:
             data_info['pars'] = np.load(param_path)
 

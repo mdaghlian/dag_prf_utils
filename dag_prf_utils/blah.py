@@ -1,3 +1,58 @@
+
+
+
+import matplotlib.pyplot as plt
+from io import BytesIO
+import IPython.display as display
+
+# Assuming fig1, fig2, fig3, fig4 are your figures
+def fig_to_img(fig):
+    buf = BytesIO()
+    fig.savefig(buf, format='png')
+    buf.seek(0)
+    plt.close(fig)
+    return buf
+
+
+buf1 = fig_to_img(prf_obj[sub].prf_obj[f'{task1}f_G'].prf_ts_plot(idx))
+buf2 = fig_to_img(prf_obj[sub].prf_obj[f'{task1}f_N'].prf_ts_plot(idx))
+buf3 = fig_to_img(prf_obj[sub].prf_obj[f'{task2}f_G'].prf_ts_plot(idx))
+buf4 = fig_to_img(prf_obj[sub].prf_obj[f'{task2}f_N'].prf_ts_plot(idx))
+buf_m = []
+for m in ['G', 'N']:
+    fig, ax = plt.subplots(1, 1, figsize=(5, 5))
+    # Do an arrow plot
+    arr_mask = np.zeros_like(all_mask)
+    arr_mask[idx] = True
+    prf_obj[sub].arrow(
+        f'{task1}f_{m}', f'{task2}f_{m}', th={'roi': arr_mask}, ax=ax, 
+        arrow_col=mod_cols['gauss'] if m=='G' else mod_cols['norm'],
+        old_col='g', new_col='r',
+        do_scatter=True, 
+    )
+    buf_m.append(fig_to_img(fig))
+
+fig, axes = plt.subplots(3, 2, figsize=(15, 10))
+img_label = [f'{task1}f_G', f'{task2}f_G', f'{task1}f_N', f'{task2}f_N']
+images = [buf1, buf2, buf3, buf4]
+axes = axes.flatten()
+for i in range(4):
+    axes[i].imshow(plt.imread(images[i]))
+    axes[i].set_title(img_label[i])
+    axes[i].axis('off')
+
+axes[-2].imshow(plt.imread(buf_m[0]))
+axes[-2].axis('off')
+axes[-1].imshow(plt.imread(buf_m[1]))
+axes[-1].axis('off')
+
+
+
+
+
+# ******************************************************************************************
+# ******************************************************************************************
+# ******************************************************************************************
 '''
 for highest movie quality (i.e., animated html)
 '''
@@ -20,6 +75,7 @@ with plt.rc_context({'animation.frame_format': 'svg'}):
     # save as html
     with open('animation.html', 'w') as f:
         f.write(ani.to_jshtml())
+
 
 
 # import svgwrite

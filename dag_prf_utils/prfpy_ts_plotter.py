@@ -589,7 +589,7 @@ class TSPlotter(Prf1T1M):
             # [1] Get the "Q" aka "C50" aka "semisaturation point"
             # -> i.e., where response=50%
             # -> we get this using the CSF curve
-            this_Q = 100/ncsf_info['part_csf_curve'][iSF]
+            this_Q = ncsf_info['part_csf_curve'][iSF]
             this_crf = ncsf_calculate_crf_curve(
                 crf_exp=ncsf_info['crf_exp'],
                 Q=this_Q, 

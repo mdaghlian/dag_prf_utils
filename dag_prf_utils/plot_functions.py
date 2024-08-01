@@ -71,6 +71,8 @@ def dag_add_ecc_pol_lines(ax, **kwargs):
     ecc_bounds = kwargs.get("ecc_bounds", default_ecc_bounds)
     pol_bounds = kwargs.get("pol_bounds", default_pol_bounds)        
     line_col = kwargs.get("vf_line_col", 'k' )
+    line_alpha = kwargs.get("vf_line_alpha", 0.3)
+    line_width = kwargs.get("vf_line_width", 1)
     incl_ticks = kwargs.get("incl_ticks", False)
     aperture_rad = kwargs.get("aperture_rad", None)
     aperture_col = kwargs.get('aperture_col', 'k')
@@ -109,7 +111,13 @@ def dag_add_ecc_pol_lines(ax, **kwargs):
         if ('360' in outer_txt) or ('-3.14' in outer_txt):
             continue
         else:
-            ax.plot((0, outer_x), (0, outer_y), color=line_col, alpha=0.3)
+            ax.plot(
+                (0, outer_x), 
+                (0, outer_y), 
+                color=line_col, 
+                alpha=line_alpha,
+                lw=line_width,
+                )
             if incl_ticks:
                 ax.text(outer_x_txt, outer_y_txt, outer_txt, ha='center', va='center')
 
@@ -119,11 +127,19 @@ def dag_add_ecc_pol_lines(ax, **kwargs):
         #         ax.text(outer_x_txt, outer_y_txt, outer_txt, ha='center', va='center')
 
     for i_ecc, i_ecc_val in enumerate(ecc_bounds): # Loop through eccentricity lines
-        grid_line = patches.Circle((0, 0), i_ecc_val, color=line_col, alpha=0.3, fill=0)    
+        grid_line = patches.Circle(
+            (0, 0), i_ecc_val, 
+            color=line_col, 
+            alpha=line_alpha,
+            lw=line_width,
+            fill=0
+            )    
         ax.add_patch(grid_line)                    
     
     if aperture_rad!=None: # Add the aperture
-        aperture_line = patches.Circle((0, 0), aperture_rad, color=aperture_col, linewidth=8, alpha=0.5, fill=0)    
+        bloop
+        aperture_line = patches.Circle(
+            (0, 0), aperture_rad, color=aperture_col, linewidth=8, alpha=0.5, fill=0)    
         ax.add_patch(aperture_line)
     # Set equal ratio
     ratio = 1.0

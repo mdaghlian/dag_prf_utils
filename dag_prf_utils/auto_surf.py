@@ -382,7 +382,13 @@ def dag_auto_from_prf_obj(prf_obj, sub, **kwargs):
 
         for p in pars_to_plot:
             data        = prf_obj.pd_params[p].to_numpy()
-            data4mask   = prf_obj.pd_params['rsq'].to_numpy()
+            if '-' in p:
+                # This is a multi object. Only get the rsq for the specific one...
+                prf_id = p.split('-')[0]
+                data4mask   = prf_obj.prf_obj[prf_id].pd_params['rsq'].to_numpy()
+            else:
+                data4mask   = prf_obj.pd_params['rsq'].to_numpy()
+
             if 'pol' in p:
                 cmap = 'marco_pol'
                 vmin,vmax = -np.pi, np.pi
@@ -447,9 +453,17 @@ def dag_auto_from_prf_obj(prf_obj, sub, **kwargs):
         
         for p in pars_to_plot:
             data        = prf_obj.pd_params[p].to_numpy()
-            data_mask   = prf_obj.pd_params['rsq'].to_numpy()>min_rsq
-            if 'ecc' in prf_obj.pd_params.keys():
-                data_mask &= prf_obj.pd_params['ecc'].to_numpy()<max_ecc
+            if '-' in p:
+                # This is a multi object. Only get the rsq for the specific one...
+                prf_id = p.split('-')[0]
+                data_mask   = prf_obj.prf_obj[prf_id].pd_params['rsq'].to_numpy() > min_rsq
+                if 'ecc' in prf_obj.prf_obj[prf_id].pd_params.keys():
+                    data_mask &= prf_obj.prf_obj[prf_id].pd_params['ecc'].to_numpy() < max_ecc
+            else:
+                data_mask   = prf_obj.pd_params['rsq'].to_numpy()>min_rsq
+                if 'ecc' in prf_obj.pd_params.keys():
+                    data_mask &= prf_obj.pd_params['ecc'].to_numpy()<max_ecc
+ 
             if 'pol' in p:
                 cmap = 'marco_pol'
                 vmin,vmax = -np.pi, np.pi

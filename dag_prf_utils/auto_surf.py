@@ -325,6 +325,163 @@ def dag_auto_surf_function(surf_type, **kwargs):
         if open_surf:
              fs.open_fs_surface(fs.surf_list, **extra_kwargs)
 
+
+def dag_auto_surf_function(prf_obj, sub, **kwargs):
+    '''
+    ---------------------------
+    Auto open a subject surface
+
+    Args:
+        sub                     subject number
+        prf_obj                 prf object 
+        surf_type               plot using 'dash' or 'fs'
+        fs_dir                  freesurfer director
+        output_dir               where to put it
+        file_name               name of the file
+        model                   prfpy model to use
+        dump                    dump the mesh object
+        open                    open the surface
+	    port 			what port to host dash server on
+	    host 			what ip to host dash on
+
+    ''' 
+    # Parse the arguments
+    fs_dir = kwargs.pop('fs_dir', os.environ['SUBJECTS_DIR'])    
+    if not os.path.exists(fs_dir):
+        print('Could not find SUBJECTS_DIR')
+        print(fs_dir)
+        sys.exit()
+    
+    output_dir = kwargs.pop('output_dir', os.getcwd())
+    file_name = kwargs.pop('file_name', 'auto_surf')
+    surf_type = kwargs.pop('surf_type', 'dash')
+    model = kwargs.pop('model', None)
+    dump = kwargs.pop('dump', False)
+    open_surf = kwargs.pop('open', True)
+    port = kwargs.pop('port', 8000)
+    host = kwargs.pop('host', '127.0.0.1')
+    pars_to_plot = kwargs.pop('pars_to_plot', None)
+    min_rsq = kwargs.pop('min_rsq', 0.1)
+    max_ecc = kwargs.pop('max_ecc', 5)
+    extra_kwargs = copy(kwargs)
+
+    # DASH OBJECT
+    if surf_type == 'dash':
+        
+        # Make the mesh dash object
+        fs = MeshDash(
+            sub=sub, 
+            fs_dir=fs_dir,
+            output_dir=output_dir,
+            )    
+
+        fs.web_get_ready(**extra_kwargs)
+        
+        if pars_to_plot is None:
+            pars_to_plot = list(prf_obj.pd_params.keys())
+
+        for p in pars_to_plot:
+            data        = prf_obj.pd_params[p].to_numpy()
+            data4mask   = prf_obj.pd_params['rsq'].to_numpy()
+            if 'pol' in p:
+                cmap = 'marco_pol'
+                vmin,vmax = -np.pi, np.pi
+                kwargs = dict(cmap=cmap, vmin=vmin, vmax=vmax)
+            elif 'ecc' in p:
+                cmap = 'ecc2'
+                vmin,vmax = 0, int(np.nanmax(data))
+                kwargs = dict(cmap=cmap, vmin=vmin, vmax=vmax)
+            elif 'rsq' in p:
+                cmap='plasma'
+                vmin,vmax = 0,1
+                kwargs = dict(cmap=cmap, vmin=vmin, vmax=vmax)                
+            elif ('x' in p) or ('y' in p):
+                cmap = 'RdBu'
+                vmin,vmax = -int(np.nanmax(data)), int(np.nanmax(data))
+                kwargs = dict(cmap=cmap, vmin=vmin, vmax=vmax)
+
+            else:
+                kwargs = {}
+            
+            fs.web_add_vx_col(
+                data=data, 
+                # data_alpha=data_alpha, 
+                data4mask = data4mask,
+                vx_col_name=p,  
+                **kwargs,  
+            )
+            # break
+        if hasattr(prf_obj, 'id_list'):
+            # It is a multi figure...
+            for prf_id in prf_obj.id_list:
+                fs.web_add_mpl_fig_maker(
+                    mpl_func=prf_obj.prf_obj[prf_id].prf_ts_plot, 
+                    mpl_key=f'{prf_id}_plot',
+                    mpl_kwargs={'return_fig':True},
+                )
+        else:
+            fs.web_add_mpl_fig_maker(
+                mpl_func=prf_obj.prf_ts_plot, 
+                mpl_key='plot',
+                mpl_kwargs={'return_fig':True},
+            )
+
+        if dump:
+            dag_mesh_pickle(fs, file_name=file_name)
+        if open_surf:
+            app = fs.web_launch_with_dash()
+            # Open the app in a browser
+            # Do not show it in the notebook
+            print(f'http://localhost:{port}/')
+            app.run_server(host=host, port=port, debug=False, use_reloader=False)             
+    
+    else:
+        # FS OBJECT
+        fs = FSMaker(
+            sub=sub, 
+            fs_dir=fs_dir,
+            )
+         
+        if pars_to_plot is None:
+            pars_to_plot = list(prf_obj.pd_params.keys())
+        
+        for p in pars_to_plot:
+            data        = prf_obj.pd_params[p].to_numpy()
+            data_mask   = prf_obj.pd_params['rsq'].to_numpy()>min_rsq
+            if 'ecc' in prf_obj.pd_params.keys():
+                data_mask &= prf_obj.pd_params['ecc'].to_numpy()<max_ecc
+            if 'pol' in p:
+                cmap = 'marco_pol'
+                vmin,vmax = -np.pi, np.pi
+                kwargs = dict(cmap=cmap, vmin=vmin, vmax=vmax)
+            elif 'ecc' in p:
+                cmap = 'ecc2'
+                vmin,vmax = 0, int(np.nanmax(data))
+                kwargs = dict(cmap=cmap, vmin=vmin, vmax=vmax)
+            elif 'rsq' in p:
+                cmap='plasma'
+                vmin,vmax = 0,1
+                kwargs = dict(cmap=cmap, vmin=vmin, vmax=vmax)                
+            elif ('x' in p) or ('y' in p):
+                cmap = 'RdBu'
+                vmin,vmax = -int(np.nanmax(data)), int(np.nanmax(data))
+                kwargs = dict(cmap=cmap, vmin=vmin, vmax=vmax)
+            else:
+                kwargs = {}
+            
+            fs.add_surface(
+                data=data, 
+                data_mask = data_mask,
+                surf_name=f'{file_name}_{p}',  
+                **kwargs,  
+            )
+
+        if open_surf:
+             fs.open_fs_surface(fs.surf_list, **extra_kwargs)
+
+    
+
+
 def load_mgz_or_gii(mgz_or_gii_path, hemi_markers=['lh', 'rh']):
     '''
     Load a .mgz or .gii file and return the data (as numpy array)

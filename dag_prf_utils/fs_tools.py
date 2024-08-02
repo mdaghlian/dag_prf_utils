@@ -111,7 +111,7 @@ class FSMaker(object):
         fs_cmd = self.write_fs_cmd(surf_name=surf_name, **kwargs)
         # self.save_fs_cmd(surf_name, **kwargs)        
         # os.chdir(self.sub_surf_dir) # move to freeview dir        
-        # os.system(fs_cmd)        
+        # os.system(fs_cmd)
         subprocess.run(fs_cmd, shell=True, cwd=self.sub_surf_dir)
 
     def save_fs_cmd(self, surf_name=[], **kwargs):
@@ -248,7 +248,7 @@ class FSMaker(object):
                     fs_cmd += f':curvature_method=binary'
         fs_cmd +=  f' --camera Azimuth {cam_azimuth} Zoom {cam_zoom} Elevation {cam_elevation} Roll {cam_roll} '
         fs_cmd += f'{col_bar_flag} {scr_shot_flag}'
-        fs_cmd += ' --verbose  --viewport 3d --viewsize 99999 99999'        
+        fs_cmd += ' --verbose  --viewport 3d ' #--viewsize 99999 99999'        
         fs_cmd += f' --nocursor '
         fs_cmd += extra_args
         if keep_running:

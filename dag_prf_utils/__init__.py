@@ -17,7 +17,7 @@ for cmd in fs_cmd_list:
     if cmd_out=='':
         print(f'Could not find path for {cmd}, is freesurfer accessible from here?')
 
-os.environ['FS_LICENSE'] = '/data1/projects/dumoulinlab/Lab_members/Marcus/programs/linescanning/misc/license.txt'
+# os.environ['FS_LICENSE'] = '/data1/projects/dumoulinlab/Lab_members/Marcus/programs/linescanning/misc/license.txt'
 if 'FS_LICENSE' in os.environ.keys():
     if not os.path.exists(os.environ['FS_LICENSE']):
         print('Could not find FS_LICENSE, set using os.environ above')

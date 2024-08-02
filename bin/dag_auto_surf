@@ -45,7 +45,7 @@ def main(argv):
     sub = None
     fs_dir = os.environ['SUBJECTS_DIR']
     dump = False
-    file_name = 'mesh_dash.pickle'
+    file_name = 'mesh'
     model = None
     output_dir = opj(os.getcwd())
     real_ts = None

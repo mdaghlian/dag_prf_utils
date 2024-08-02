@@ -65,6 +65,8 @@ def dag_auto_surf_function(surf_type, **kwargs):
     port = kwargs.pop('port', 8000)
     host = kwargs.pop('host', '127.0.0.1')
     pars_to_plot = kwargs.pop('pars_to_plot', None)
+    if isinstance(pars_to_plot, str):
+        pars_to_plot = [pars_to_plot]
     min_rsq = kwargs.pop('min_rsq', 0.1)
     max_ecc = kwargs.pop('max_ecc', 5)
     ow_prfpy_model = kwargs.pop('ow_prfpy_model', False)

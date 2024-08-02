@@ -40,6 +40,8 @@ def main(argv):
     search_incl = []
     search_excl = []
     fs_dir = os.environ['SUBJECTS_DIR']    
+    full_folder = False
+    sub_folder = None
     for i,arg in enumerate(argv):
         if '--sub' in arg:
             sub = f'sub-{argv[i+1]}'

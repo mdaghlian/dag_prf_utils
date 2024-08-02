@@ -326,7 +326,7 @@ def dag_auto_surf_function(surf_type, **kwargs):
              fs.open_fs_surface(fs.surf_list, **extra_kwargs)
 
 
-def dag_auto_surf_function(prf_obj, sub, **kwargs):
+def dag_auto_from_prf_obj(prf_obj, sub, **kwargs):
     '''
     ---------------------------
     Auto open a subject surface
@@ -355,14 +355,14 @@ def dag_auto_surf_function(prf_obj, sub, **kwargs):
     output_dir = kwargs.pop('output_dir', os.getcwd())
     file_name = kwargs.pop('file_name', 'auto_surf')
     surf_type = kwargs.pop('surf_type', 'dash')
-    model = kwargs.pop('model', None)
     dump = kwargs.pop('dump', False)
-    open_surf = kwargs.pop('open', True)
+    open_surf = kwargs.pop('open', False)
     port = kwargs.pop('port', 8000)
     host = kwargs.pop('host', '127.0.0.1')
     pars_to_plot = kwargs.pop('pars_to_plot', None)
     min_rsq = kwargs.pop('min_rsq', 0.1)
     max_ecc = kwargs.pop('max_ecc', 5)
+    return_fs = kwargs.pop('return_fs', False)
     extra_kwargs = copy(kwargs)
 
     # DASH OBJECT
@@ -479,6 +479,9 @@ def dag_auto_surf_function(prf_obj, sub, **kwargs):
         if open_surf:
              fs.open_fs_surface(fs.surf_list, **extra_kwargs)
 
+    if return_fs:
+        return fs
+    
     
 
 

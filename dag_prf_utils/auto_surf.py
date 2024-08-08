@@ -434,7 +434,7 @@ def dag_auto_from_prf_obj(prf_obj, sub, **kwargs):
                 mpl_kwargs={'return_fig':True},
             )
 
-        if dump:
+        if dump:            
             dag_mesh_pickle(fs, file_name=file_name)
         if open_surf:
             app = fs.web_launch_with_dash()

@@ -36,7 +36,9 @@ path_to_utils = os.path.abspath(os.path.dirname(__file__))
 import pickle
 def dag_mesh_pickle(mesh_dash, **kwargs):
     # Path to the pickle file
-    file_name = kwargs.get('file_name', 'mesh_dash.pickle')
+    file_name = kwargs.get('file_name', 'mesh_dash.pkl')
+    if not file_name.endswith('.pkl'):
+        file_name = file_name + '.pkl'
     pickle_file_path = opj(mesh_dash.output_dir, file_name)
     print(f'pickling mesh_dash object to : {pickle_file_path}')
     if os.path.exists(pickle_file_path):
@@ -287,6 +289,7 @@ class MeshDash(GenMeshMaker):
         self.roi_list = kwargs.get('roi_list', [])
         self.roi_list = dag_roi_list_expand(sub=self.sub, roi_list=self.roi_list, fs_dir=self.fs_dir)
         self.web_add_roi(self.roi_list)
+        self.web_df = pd.DataFrame()
 
     
     def web_add_vx_col(self, vx_col_name, data, **kwargs):
@@ -316,13 +319,14 @@ class MeshDash(GenMeshMaker):
         c_cmap = kwargs.get('cmap', 'viridis')
         
         self.web_vxcol[vx_col_name] = {}            
-        self.web_vxcol[vx_col_name]['data']         = data
-        self.web_vxcol[vx_col_name]['data4mask']    = data4mask
+        self.web_vxcol[vx_col_name]['data']         = data          # What we will plot on the surface
+        self.web_vxcol[vx_col_name]['data4mask']    = data4mask     # What we will use to mask the data
         # Properties we will allow to change by clicker
-        self.web_vxcol[vx_col_name]['c_rsq_thresh'] = c_rsq_thresh
-        self.web_vxcol[vx_col_name]['c_vmin'] = c_vmin
-        self.web_vxcol[vx_col_name]['c_vmax'] = c_vmax
-        self.web_vxcol[vx_col_name]['c_cmap'] = c_cmap
+        self.web_vxcol[vx_col_name]['c_rsq_thresh'] = c_rsq_thresh  # Threshold for data4mask
+        self.web_vxcol[vx_col_name]['c_vmin'] = c_vmin              # Min value for cmap
+        self.web_vxcol[vx_col_name]['c_vmax'] = c_vmax             # Max value for cmap
+        self.web_vxcol[vx_col_name]['c_cmap'] = c_cmap            # Colormap
+        self.web_vxcol[vx_col_name]['c_thresh_text'] = ''        # smart threshold (threshold on more things)
         # RGB direct
         self.web_vxcol[vx_col_name]['rgb_direct'] = rgb_direct # To be assigned
         self.web_vxcol_list.append(vx_col_name)
@@ -415,10 +419,11 @@ class MeshDash(GenMeshMaker):
             rsq_thresh=None,
             cmap=None, 
             vmin=None, 
-            vmax=None,):
+            vmax=None,
+            thresh_text=None,
+            ):
         '''For a given vx_col_name. Update the c_ attributes
         Returns RGB per vertex, and a  
-        Return 
         '''    
         assert vx_col_name in self.web_vxcol_list
         
@@ -426,19 +431,23 @@ class MeshDash(GenMeshMaker):
             'c_rsq_thresh' : rsq_thresh,
             'c_cmap' : cmap,
             'c_vmin' : vmin,
-            'c_vmax' : vmax,            
+            'c_vmax' : vmax,
+            'c_thresh_text' : thresh_text,          
         }
         for c in c_update.keys():
             if c_update[c] is not None:
                 self.web_vxcol[vx_col_name][c] = c_update[c]
-            
+        
+        # Get the data mask...
+        this_mask = self.web_return_mask(vx_col_name)        
+
         # RETURN RGB & CMAP INFO
         make_rgb_time = time.time()
         if self.web_vxcol[vx_col_name]['rgb_direct']:            
             disp_rgb_not_split = self._combine2maps(
                 data_col1=self.web_vxcol[vx_col_name]['data'], 
                 data_col2=self.get_us_cols('curv'),
-                data_alpha=(self.web_vxcol[vx_col_name]['data4mask']>self.web_vxcol[vx_col_name]['c_rsq_thresh'])*1.0,
+                data_alpha=this_mask*1.0,
             )
             disp_rgb = {
                 'lh' : disp_rgb_not_split[:self.n_vx['lh'],:],
@@ -449,7 +458,7 @@ class MeshDash(GenMeshMaker):
             disp_rgb, cmap_dict = self.return_display_rgb(
                 return_cmap_dict=True, unit_rgb=True, split_hemi=True, 
                 data=self.web_vxcol[vx_col_name]['data'],
-                data_mask=self.web_vxcol[vx_col_name]['data4mask']>self.web_vxcol[vx_col_name]['c_rsq_thresh'],
+                data_mask=this_mask,
                 cmap = self.web_vxcol[vx_col_name]['c_cmap'],
                 vmin = self.web_vxcol[vx_col_name]['c_vmin'],
                 vmax = self.web_vxcol[vx_col_name]['c_vmax'],
@@ -546,6 +555,10 @@ class MeshDash(GenMeshMaker):
         init_vmax = self.web_vxcol[init_vx_col]['c_vmax']
         init_rsq_thresh = self.web_vxcol[init_vx_col]['c_rsq_thresh']
         init_cmap = self.web_vxcol[init_vx_col]['c_cmap']        
+        # Add everything to the dataframe for smart thresholding
+        self.web_df = pd.DataFrame()
+        for vx_col_name in self.web_vxcol_list:
+            self.web_df[vx_col_name] = self.web_vxcol[vx_col_name]['data'].copy()
 
         num_input_args = dict(type='number', n_submit=0, debounce=True)
         if self.roi_list==[]:
@@ -586,6 +599,16 @@ class MeshDash(GenMeshMaker):
                 dcc.Input(id='cmap',  type='string', value=init_cmap, n_submit=0, debounce=True),
                 html.Label('rsq_thresh', className='label'),
                 dcc.Input(id='rsq_thresh', value=init_rsq_thresh,  **num_input_args),
+            ], className='column'),
+            # COLUMN 4
+            html.Div([
+                dcc.Textarea(
+                    id='thresh-text',
+                    placeholder='Enter a threshold...',
+                    value='',
+                    style={'width': '100%', 'height': 100},
+                ),
+                html.Button('Submit', id='submit-button', n_clicks=0),
             ], className='column'),
 
             html.Hr(),            
@@ -703,15 +726,17 @@ class MeshDash(GenMeshMaker):
             'vmax' : True,
             'cmap' : True,
             'rsq_thresh' : True,
+            'thresh_text' : True,
         }   
-        _,self.current_col_bar = self.get_web_vx_col_info(self.web_vxcol_list[0], rsq_thresh=0)
         self.current_col_args = {
             'vx_col' : self.web_vxcol_list[0],
             'c_vmin' : self.web_vxcol[self.web_vxcol_list[0]]['c_vmin'],
             'c_vmax' : self.web_vxcol[self.web_vxcol_list[0]]['c_vmax'],
             'c_cmap' : self.web_vxcol[self.web_vxcol_list[0]]['c_cmap'],
             'c_rsq_thresh' : self.web_vxcol[self.web_vxcol_list[0]]['c_rsq_thresh'],            
+            'c_thresh_text' : self.web_vxcol[self.web_vxcol_list[0]]['c_thresh_text'],
         }
+        _,self.current_col_bar = self.get_web_vx_col_info(self.web_vxcol_list[0], rsq_thresh=0)
         
         # COLOR CHAIN
         @app.callback(
@@ -755,7 +780,11 @@ class MeshDash(GenMeshMaker):
                     self.current_col_bar = cmap_path        
                     self.current_col_args['vx_col'] = selected_color
                     for key in self.web_vxcol[selected_color].keys():
-                        self.current_col_args[key] = self.web_vxcol[selected_color][key]
+                        # Always keep the threshold text
+                        if key == 'c_thresh_text':
+                            continue
+                        self.current_col_args[key] = self.web_vxcol[selected_color][key]                        
+                                            
                     for key in self.do_col_updates.keys():
                         self.do_col_updates[key] = False
                     return html.Div(), self.current_col_args['c_vmin'],self.current_col_args['c_vmax'],self.current_col_args['c_cmap'],self.current_col_args['c_rsq_thresh']
@@ -869,6 +898,31 @@ class MeshDash(GenMeshMaker):
                     return html.Div()
             raise dash.exceptions.PreventUpdate
         
+        # COLOR [6] threshold text
+        @app.callback(
+            Output('color-chain', 'children', allow_duplicate=True),
+            [Input('submit-button', 'n_clicks')],
+            [dash.dependencies.State('thresh-text', 'value')],
+            prevent_initial_call='initial_duplicate'
+        )
+        def update_col_thresh(n_clicks, thresh_text):
+            print('THRESH TEXT CALLBACK')
+            print(thresh_text)
+            print(n_clicks)
+
+            if thresh_text != self.current_col_args['c_thresh_text']:
+                self.current_col_args['c_thresh_text'] = thresh_text
+                selected_color = self.current_col_args['vx_col']
+                self.web_vxcol[selected_color]['c_thresh_text'] = thresh_text
+                disp_rgb, _ = self.get_web_vx_col_info(
+                    vx_col_name=selected_color,          
+                )                    
+                self.update_figure_with_color(disp_rgb)  
+                
+                return html.Div()
+            raise dash.exceptions.PreventUpdate
+
+
         # COLOR [6] clear lower
         self.clear_lower = False
         @app.callback(
@@ -1062,7 +1116,7 @@ class MeshDash(GenMeshMaker):
         if self.hist_on:
             vx_col_name = self.current_col_args['vx_col']
             data=self.web_vxcol[vx_col_name]['data']
-            data_mask=self.web_vxcol[vx_col_name]['data4mask']>self.web_vxcol[vx_col_name]['c_rsq_thresh'],                
+            data_mask = self.web_return_mask(vx_col_name)
             data = data[data_mask]            
             this_hist, ax = plt.subplots(1, figsize=(5,2))            
             bins = np.linspace(
@@ -1139,9 +1193,25 @@ class MeshDash(GenMeshMaker):
                 )
         print(f'Inflate time = {time.time() - inflate_time}')
 
-        
+    def web_return_mask(self, vx_col_name):
+        '''
+        Return the mask for the current vx_col
+        '''
+        if self.current_col_args['c_thresh_text'] != '':
+            print('*** USING SMART THRESHOLD ***') 
+            # use the pandas query to get the mask            
+            vx_mask = self.web_df.eval(
+                self.current_col_args['c_thresh_text']
+                ).to_numpy()
+            print(vx_mask)
 
+        else:        
+            print('*** USING BASIC RSQ THRESHOLD ***') 
+            # Otherwise use the rsq_threshold        
+            vx_mask = self.web_vxcol[vx_col_name]['data4mask']>self.web_vxcol[vx_col_name]['c_rsq_thresh'] 
 
+        return vx_mask
+    
     def web_return_mpl_figs(self, idx):
         '''
         Run through the mpl figure plotters...

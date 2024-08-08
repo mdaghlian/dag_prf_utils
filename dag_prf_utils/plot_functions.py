@@ -412,7 +412,7 @@ def dag_visual_field_scatter(dot_x, dot_y, **kwargs):
         dot_vmin        float           min value for color map
         dot_vmax        float           max value for color map
         dot_cmap        str             color map
-    
+        do_hex_bin      bool            Whether to do hex binning
     Return:
         ax              matplotlib axes
         cb              colorbar
@@ -420,8 +420,10 @@ def dag_visual_field_scatter(dot_x, dot_y, **kwargs):
     '''
     ax = kwargs.get('ax', plt.gca())
     do_binning = kwargs.get("do_binning", False)
+    do_hex_bin = kwargs.get("do_hex_bin", False)
     bin_weight = kwargs.get("bin_weight", None)
     fix_bin_xy = kwargs.get("fix_bin_xy", False)
+    
     # -> add option for dot size scaling... ( & alpha scaling) ??
     ecc_bounds = kwargs.get("ecc_bounds", np.linspace(0, 5, 7) )
     pol_bounds = kwargs.get("pol_bounds", np.linspace(-np.pi, np.pi, 13))            
@@ -492,18 +494,31 @@ def dag_visual_field_scatter(dot_x, dot_y, **kwargs):
     #     dot_sizes = ecc_norm * (max_dot_size-min_dot_size) + min_dot_size
     # else:
     #     dot_sizes = np.ones_like(x_bin)*max_dot_size
-
-    scat_col = ax.scatter(
-        bin_x, 
-        bin_y, 
-        c       = bin_dot_props['dot_col'], 
-        s       = bin_dot_props['dot_size'], 
-        alpha   = bin_dot_props['dot_alpha'], 
-        cmap    = dot_props['dot_cmap'], 
-        vmin    = dot_props['dot_vmin'], 
-        vmax    = dot_props['dot_vmax']
-        )
-    cb = None
+    if not do_hex_bin:
+        scat_col = ax.scatter(
+            bin_x, 
+            bin_y, 
+            c       = bin_dot_props['dot_col'], 
+            s       = bin_dot_props['dot_size'], 
+            alpha   = bin_dot_props['dot_alpha'], 
+            cmap    = dot_props['dot_cmap'], 
+            vmin    = dot_props['dot_vmin'], 
+            vmax    = dot_props['dot_vmax']
+            )
+        cb = None
+    else:
+        scat_col = ax.hexbin(
+            bin_x, 
+            bin_y, 
+            C=bin_dot_props['dot_col'],
+            gridsize=kwargs.get('gridsize', 50), 
+            cmap=dot_props['dot_cmap'], 
+            alpha=dot_props['dot_alpha'], 
+            edgecolors='face',
+            vmin=dot_props['dot_vmin'],
+            vmax=dot_props['dot_vmax'],
+            )
+        cb = None
     if not isinstance(bin_dot_props['dot_col'], str):
         fig = plt.gcf()
         cb = fig.colorbar(scat_col, ax=ax)        

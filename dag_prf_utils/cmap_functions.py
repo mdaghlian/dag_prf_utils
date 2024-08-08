@@ -72,6 +72,7 @@ def dag_cmap_from_str(cmap_name, **kwargs):
     elif '*' in cmap_name: # Stack colors 
         cmap = dag_make_custom_cmap(col_list=cmap_name.split('*'), **save_cmap_kwargs)
         temp_cmap_name = 'temp'
+
     else:
         temp_cmap_name = cmap_name    
 
@@ -235,7 +236,8 @@ def dag_get_cmap(cmap_name, **kwargs):
     '''
     if cmap_name is None:
         cmap_name = 'viridis'
-    if isinstance(cmap_name, mpl.colors.LinearSegmentedColormap):
+    
+    if isinstance(cmap_name, mpl.colors.Colormap):
         return cmap_name
     do_reverse = kwargs.get('reverse', False)     
     do_log = kwargs.get('log', False)

@@ -25,18 +25,54 @@ def dag_cmap_plotter(cmap, vmin=None, vmax=None, title='', **kwargs):
     ax = kwargs.get('ax', None)
     return_ax = kwargs.get('return_ax', False)
     return_fig = kwargs.get('return_fig', False)
-    if ax is None:
-        figsize = kwargs.get('figsize', (10,2))
-        fig, ax = plt.subplots(figsize=figsize)        
+    plot_type = kwargs.get('plot_type', 'linear')
+    default_fig_size = {'linear':(10,2), 'pol':(5,5), 'ecc' : (5,5)}    
+
     try:
         cmap = dag_get_cmap(cmap)
     except:
         cmap = dag_cmap_from_str(cmap)
 
-    mpl.colorbar.ColorbarBase(
-        ax, orientation='horizontal', cmap=cmap, 
-        norm=mpl.colors.Normalize(vmin, vmax)
-        )
+    if ax is None:
+        figsize = kwargs.get('figsize', default_fig_size[plot_type])
+        fig, ax = plt.subplots(
+            figsize=figsize,
+            subplot_kw=dict(
+                projection=None if plot_type=='linear' else 'polar'
+                )
+            )        
+
+    if plot_type=='linear':
+
+        mpl.colorbar.ColorbarBase(
+            ax, orientation='horizontal', cmap=cmap, 
+            norm=mpl.colors.Normalize(vmin, vmax)
+            )
+    elif plot_type=='pol':
+        # POLAR ANGLE
+        pol = np.linspace(-np.pi, np.pi, 100)
+        ecc = np.linspace(0, 1, 100)
+        pol, ecc = np.meshgrid(pol, ecc)
+        cax = ax.pcolormesh(
+            pol, ecc, pol, cmap=cmap, shading='auto', 
+            norm=mpl.colors.Normalize(-np.pi, np.pi),            
+            )
+        ax.set_title(title)
+        ax.set_yticks([])
+        dag_update_ax_fontsize(ax, 20)
+    elif plot_type=='ecc':
+        pol = np.linspace(-np.pi, np.pi, 100)
+        ecc_vmax = 5 if vmax is None else vmax
+        ecc = np.linspace(0, ecc_vmax, 100)
+        pol, ecc = np.meshgrid(pol, ecc)
+        cax = ax.pcolormesh(
+            pol, ecc, ecc, cmap=cmap, shading='auto', 
+            norm=mpl.colors.Normalize(0, ecc_vmax),            
+            )
+        ax.set_title(title)
+        ax.set_xticks([])
+        dag_update_ax_fontsize(ax, 20)        
+
     ax.set_title(title)
     dag_update_ax_fontsize(ax, 20)
     if return_ax:
@@ -137,7 +173,6 @@ def dag_add_ecc_pol_lines(ax, **kwargs):
         ax.add_patch(grid_line)                    
     
     if aperture_rad!=None: # Add the aperture
-        bloop
         aperture_line = patches.Circle(
             (0, 0), aperture_rad, color=aperture_col, linewidth=8, alpha=0.5, fill=0)    
         ax.add_patch(aperture_line)
@@ -176,8 +211,11 @@ def dag_add_ax_basics(ax, **kwargs):
     ax.set_ylim(y_lim)    
     # ax.legend()
     if despine:
-        ax.spines['right'].set_visible(False)
-        ax.spines['top'].set_visible(False)        
+        if 'right' in ax.spines.keys():
+            ax.spines['right'].set_visible(False)
+        if 'top' in ax.spines.keys():
+            ax.spines['top'].set_visible(False)
+
 
 
 def dag_update_fig_fontsize(fig, new_font_size):
@@ -561,9 +599,10 @@ def dag_plot_bin_line(ax, X,Y, bin_using, **kwargs):
     line_kwargs = kwargs.get('line_kwargs', {})
     n_bins = kwargs.get('n_bins', 10)
     bins = kwargs.get('bins', None)
-    do_not_bin_X = kwargs.get('do_not_bin_X', False)
+    bin_X = kwargs.get('bin_X', True)
     do_basics = kwargs.get('do_basics', False)
     min_per_bin = kwargs.get('min_per_bin', False) # min number of points before setting to NAN
+    append_for_polar = kwargs.get('append_for_polar', False)
     if not isinstance(bins, (np.ndarray, list)):
         bins = n_bins    
     # xerr = kwargs.get("xerr", False)
@@ -578,7 +617,7 @@ def dag_plot_bin_line(ax, X,Y, bin_using, **kwargs):
     # -> mean or median? 
     X_mid = binned_statistic(bin_using, X, bins=bins, statistic=summary_type)[0]
     # -> Or just use the midpoint    
-    if do_not_bin_X:
+    if not bin_X:
         X_mid = (bins[:-1] + bins[1:]) / 2
 
     # Now calculate the spreads    
@@ -587,8 +626,8 @@ def dag_plot_bin_line(ax, X,Y, bin_using, **kwargs):
         Y_mid = binned_statistic(bin_using, Y, bins=bins, statistic=summary_type)[0]                      
         pc_lower = float(err_type.split('-')[-1])
         pc_upper = 100 - pc_lower
-        pcLOWER_lambda = lambda data: np.percentile(data, pc_lower)
-        pcUPPER_lambda = lambda data: np.percentile(data, pc_upper)
+        pcLOWER_lambda = kwargs.get('pcLOWER_lambda', lambda data: np.percentile(data, pc_lower))
+        pcUPPER_lambda = kwargs.get('pcUPPER_lambda', lambda data: np.percentile(data, pc_upper))
         Y_lower = binned_statistic(bin_using, Y, bins=bins, statistic=pcLOWER_lambda)[0]              
         Y_upper = binned_statistic(bin_using, Y, bins=bins, statistic=pcUPPER_lambda)[0]              
     
@@ -607,6 +646,12 @@ def dag_plot_bin_line(ax, X,Y, bin_using, **kwargs):
                 Y_mid[i_bin] = np.nan
                 Y_lower[i_bin] = np.nan
                 Y_upper[i_bin] = np.nan
+    if append_for_polar:
+        # Need to make a full circle
+        X_mid = np.append(X_mid, X_mid[0])
+        Y_mid = np.append(Y_mid, Y_mid[0])
+        Y_lower = np.append(Y_lower, Y_lower[0])
+        Y_upper = np.append(Y_upper, Y_upper[0])
 
     if do_bars:
         ax.errorbar(
@@ -1391,8 +1436,7 @@ def dag_box_around_ax_list(fig, ax_list, **kwargs):
 
 
 def dag_shaded_line(line_data, xdata, **kwargs):
-    """
-    Plot the mean CSF curves with optional error shading or error bars.
+    """    
 
     Parameters:
     - line_data
@@ -1505,6 +1549,47 @@ def dag_add_subfig_labels(ax, label, **kwargs):
         **kwargs
     )
 
+def dag_sub_categories_xvalues_SIMPLE(nL1, nL2, nL3=1, **kwargs):
+    '''
+    Parameters:
+        nL1 (int): Total number of level 1.
+        nL2 (int): Total number of level 2.
+        nL3 (int): Total number of level 3.
+        
+        **kwargs: Additional keyword arguments:
+            L1_distance (float, optional): Distance between subgroups. 
+            L2_distance (float, optional): Distance within each subgroup
+            L3_distance (float, optional): Distance within each sub-subgroup
+        
+    Returns:
+        list: List of x coordinates for subcategories.
+    '''
+    
+    x_values = []  # List to store x-coordinates
+    
+    # Default values for optional parameters
+    L1_distance = kwargs.get('L1_distance', 1)
+    L2_prop = kwargs.get('L2_prop', 1.5)
+    L3_prop = kwargs.get('L3_prop', 1.5)
+    L2_distance = kwargs.get(
+        'L2_distance',
+        L1_distance / (nL2*L2_prop)
+    )
+    L3_distance = kwargs.get(
+        'L3_distance',
+        L2_distance / (nL3*L3_prop)
+    )
+    
+    # Iterate over each category
+    for i1 in range(nL1):
+        for i2 in range(nL2):
+            for i3 in range(nL3):
+                x = L1_distance * i1 + L2_distance * i2 + L3_distance * i3
+                x_values.append(x)
+    
+    return x_values    
+    
+
 
 def dag_sub_categories_xvalues(i_sub, n_category, n_sub, **kwargs):
     '''
@@ -1529,7 +1614,7 @@ def dag_sub_categories_xvalues(i_sub, n_category, n_sub, **kwargs):
     
     # Extracting kwargs
     i_sub_sub = kwargs.get('i_sub_sub', None)
-    n_sub_sub = kwargs.get('n_sub_sub', None)
+    n_sub_sub = kwargs.get('n_sub_sub', 1) # None
     
     # Default values for optional parameters
     group_distance = kwargs.get('group_distance', 1)
@@ -1622,3 +1707,187 @@ def dag_draw_significance_bar(ax, text, i_sub1, i_sub2, y_value=None, **kwargs):
 
     # Add text near the significance bar
     ax.text(xmid, y_value, text, color=text_color, size=text_size, ha='center', va='bottom')
+
+
+
+
+def dag_group_and_individual_2dict(ax, mdict, **kwargs):
+    '''
+    Plot bars for overall mean/median
+    Points for individuals s + error 
+    mdict: dict
+        dictionary with the following structure:
+        mdict[subject][x] = y        
+    '''
+    bar_width = kwargs.get('bar_width', 0.5)
+    jitter_width = kwargs.get('jitter_width', 0.5)
+    err_kwargs = kwargs.get('err_kwargs', 
+        dict(linestyle='None', marker='o', markersize=5)
+        )
+    bar_kwargs = kwargs.get('bar_kwargs', 
+        dict(alpha=0.5)
+        )
+    m_method = kwargs.get('m_method', np.nanmean)
+    y_upper = kwargs.get('y_upper', None)
+    y_lower = kwargs.get('y_lower', None)
+    s_keys = kwargs.get('s_keys', list(mdict.keys()))
+    s_cols = kwargs.get('s_cols', None)
+    do_jitter = kwargs.get('do_jitter', True)
+    keys_split = kwargs.pop('keys_split', None) # Split into groupings
+    # Of keys in the dictionary, which to plot
+    keys_to_plot = kwargs.get('keys_to_plot', None)
+    # What keys are there? if not specified, we can find them from the dictionary
+    x_keys = kwargs.get('x_keys', keys_to_plot)
+    if x_keys is None:
+        x_keys = []
+        for s in s_keys:
+            for x in mdict[s].keys():
+                if x not in x_keys:
+                    x_keys.append(x)    
+    # position of the x key
+    x_pos = kwargs.get('x_pos', {x:i for i,x in enumerate(x_keys)})
+    x_cols = kwargs.get('x_cols', {x:'b' for x in x_keys})
+
+    if keys_split is not None:
+        for k in keys_split:
+            dag_group_and_individual_2dict(
+                ax=ax,
+                mdict=mdict,
+                keys_to_plot=k,
+                **kwargs
+            )
+        dag_group_and_i_xticks(
+            ax=ax, 
+            mdict=mdict, 
+            s_keys=s_keys,
+            bar_width=bar_width,
+            x_pos=x_pos,
+            )
+        return ax
+    
+    do_scols = True
+    if s_cols is None:
+        do_scols = False
+        s_cols = {s:'grey' for s in s_keys}
+    else:
+        if isinstance(s_cols, str):
+            do_scols = False
+            s_cols = {s:s_cols for s in s_keys}
+        
+    # Specify the x position of each x key, as an array
+    x_standard = np.array([x_pos[x] for x in x_keys])
+    # Specify the color of each x key
+    bar_kwargs['color'] = [x_cols[x] for x in x_keys]
+
+    if do_jitter:
+        s_jitter = np.linspace(-bar_width*jitter_width,bar_width*jitter_width, len(s_keys))
+    else:
+        s_jitter = np.zeros(len(s_keys))
+    # Now find the overall_m
+    overall_m = []
+    for x in x_keys:
+        m = []
+        for s in s_keys:
+            m.append(mdict[s][x])
+        overall_m.append(m_method(m))
+    for iS,s in enumerate(s_keys):
+        this_y = np.array([mdict[s][x] for x in x_keys])
+        this_yUPPER = np.array([y_upper[s][x] for x in x_keys]) if y_upper is not None else None
+        this_yLOWER = np.array([y_lower[s][x] for x in x_keys]) if y_lower is not None else None
+        this_yERR = [this_y - this_yLOWER, this_yUPPER - this_y] if y_upper is not None else None
+        
+        ax.errorbar(
+            x=x_standard + s_jitter[iS],
+            y=this_y,
+            yerr=this_yERR,
+            color=s_cols[s],
+            label=s if do_scols else None,
+            **err_kwargs,
+        )
+    ax.bar(
+        x=x_standard,
+        height=overall_m,
+        width=bar_width,
+        **bar_kwargs,        
+    )
+    dag_group_and_i_xticks(
+        ax=ax, 
+        mdict=mdict, 
+        s_keys=s_keys,
+        bar_width=bar_width,
+        keys_to_plot=keys_to_plot,
+        x_keys=x_keys,
+        x_pos=x_pos,)
+
+    return ax
+
+
+def dag_group_and_i_xticks(ax, mdict, **kwargs):
+    '''
+    Set the xticks for group and individual plots
+    '''
+    s_keys = kwargs.get('s_keys', list(mdict.keys()))
+    bar_width = kwargs.get('bar_width', 0.5)
+    keys_to_plot = kwargs.get('keys_to_plot', None)
+    x_keys = kwargs.get('x_keys', keys_to_plot)
+    if x_keys is None:
+        x_keys = []
+        for s in s_keys:
+            for x in mdict[s].keys():
+                if x not in x_keys:
+                    x_keys.append(x)
+    
+    # x_cols = kwargs.get('x_cols', {x:'b' for x in x_keys})
+    # Specify the x position of each x key
+    x_pos = kwargs.get('x_pos', {x:i for i,x in enumerate(x_keys)})
+    x_standard = np.array([x_pos[x] for x in x_keys])
+    ax.set_xticks(x_standard)
+    ax.set_xticklabels(x_keys, rotation=45)
+    xlim0 = np.min(x_standard) - bar_width*2
+    xlim1 = np.max(x_standard) + bar_width*2
+    ax.set_xlim([xlim0, xlim1])
+
+
+def dag_merid_helper(main_ax,wedge_angle, colors, **kwargs):
+    """
+    Categorize points based on their position relative to specified meridians.
+
+    Parameters:
+    - wedge_angle: Number of degrees around each meridian center (+/-)
+    - angly_type: is wedge_angle specified in degrees or radians
+
+    """
+    angle_type = kwargs.get("angle_type", "deg")
+    width_ratio = kwargs.get("width_ratio", 0.5)
+    position_ratio = kwargs.get("position_ratio", [1,1])
+    # Add the axis    
+    ax = dag_add_square_axis(main_ax, width_ratio, position_ratio)
+    ax.set_ylim(-1,1)
+    ax.set_xlim(-1,1)
+    # **** ADD THE LINES ****
+    ax.set_xticks([])    
+    ax.set_yticks([])
+    ax.spines['right'].set_visible(False)
+    ax.spines['left'].set_visible(False)
+    ax.spines['top'].set_visible(False)
+    ax.spines['bottom'].set_visible(False)   
+    # ax.axhline(0, color='k')     
+    # ax.axvline(0, color='k')     
+
+    # Define meridian centers
+    merid_centers = {'right': 0, 'upper': np.pi/2, 'left': np.pi, 'lower': -np.pi/2}
+    if angle_type=='deg':
+        # Convert degrees around meridian to rad
+        wedge_angle *= np.pi/180
+    i = 0
+    for m,m_centre in merid_centers.items():
+        if m in ['horizontal' , 'vertical']:
+            continue
+        wedge = mpl.patches.Wedge(
+            (0,0), 1, 
+            np.degrees(m_centre-wedge_angle), 
+            np.degrees(m_centre+wedge_angle), 
+            facecolor=colors[m], edgecolor='black')
+        i += 1
+        ax.add_patch(wedge)
+    ax.set_box_aspect(1)

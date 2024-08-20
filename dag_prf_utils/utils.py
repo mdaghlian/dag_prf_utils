@@ -462,6 +462,16 @@ def dag_roi_list_expand(sub, roi_list, fs_dir=os.environ['SUBJECTS_DIR'] ):
             roi_list_expanded.append(this_roi_file)
     # remove duplicates
     roi_list_expanded = list(set(roi_list_expanded))
+
+    # Now check if we have any which match each other 
+    # (i.e., if we have a "V1" and a "V1d", we should disambiguate V1 by making it V1.)
+    roi_list_expanded.sort()
+    for i,roi in enumerate(roi_list_expanded):
+        for j,roi2 in enumerate(roi_list_expanded):
+            if i==j:
+                continue
+            if roi2.startswith(roi):
+                roi_list_expanded[i] = roi + '.'
     return roi_list_expanded
 
 

@@ -608,7 +608,7 @@ def dag_pol_difference(pol, ref_pol):
     abs_diff = np.min(abs_diff, 2*np.pi-abs_diff)
     return abs_diff
 
-def dag_merid_idx(x, y, wedge_angle=15, angle_type='deg'):
+def dag_merid_idx(x, y, wedge_angle=15, angle_type='deg', **kwargs):
     """
     Categorize points based on their position relative to specified meridians.
 
@@ -621,6 +621,7 @@ def dag_merid_idx(x, y, wedge_angle=15, angle_type='deg'):
     Returns:
     - Dictionary with meridians as keys and boolean NumPy arrays indicating points within each meridian's range
     """
+    label_list = kwargs.get('label_list', ['right', 'upper', 'left', 'lower'])
     # Define meridian centers
     merid_centers = {'right': 0, 'upper': np.pi/2, 'left': np.pi, 'lower': -np.pi/2}
     if angle_type=='deg':
@@ -648,9 +649,8 @@ def dag_merid_idx(x, y, wedge_angle=15, angle_type='deg'):
     merid_idx['vertical'] = merid_idx['upper'] | merid_idx['lower']        
     merid_label = np.full(x.shape[0], 'na', dtype='object')
     
-    for m, m_idx in merid_idx.items():
-        if m in ['horizontal', 'vertical']:
-            continue
+    for label in label_list:
+        merid_label[merid_idx[label]] = label
     merid_idx['label'] = merid_label
 
     return merid_idx

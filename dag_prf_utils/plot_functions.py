@@ -1747,6 +1747,9 @@ def dag_group_and_individual_2dict(ax, mdict, **kwargs):
     # position of the x key
     x_pos = kwargs.get('x_pos', {x:i for i,x in enumerate(x_keys)})
     x_cols = kwargs.get('x_cols', {x:'b' for x in x_keys})
+    if isinstance(x_cols, str):
+        this_cols = x_cols
+        x_cols = {x:this_cols for x in x_keys}
 
     if keys_split is not None:
         for k in keys_split:

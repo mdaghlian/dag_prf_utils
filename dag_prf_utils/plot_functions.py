@@ -600,11 +600,10 @@ def dag_plot_bin_line(ax, X,Y, bin_using, **kwargs):
     n_bins = kwargs.get('n_bins', 10)
     bins = kwargs.get('bins', None)
     bin_X = kwargs.get('bin_X', True)
-    do_basics = kwargs.get('do_basics', False)
-    min_per_bin = kwargs.get('min_per_bin', False) # min number of points before setting to NAN
-    append_for_polar = kwargs.get('append_for_polar', False)
     if not isinstance(bins, (np.ndarray, list)):
         bins = n_bins    
+    do_basics = kwargs.get('do_basics', False)
+    min_per_bin = kwargs.get('min_per_bin', False) # min number of points before setting to NAN
     # xerr = kwargs.get("xerr", False)
     do_bars = kwargs.get("do_bars", True)
     do_shade = kwargs.get("do_shade", False)
@@ -612,12 +611,14 @@ def dag_plot_bin_line(ax, X,Y, bin_using, **kwargs):
     err_type = kwargs.get("err_type", 'std')
     if 'pc' in err_type:
         summary_type = 'median'
-    
+    # bloop
     # Binned X values
     # -> mean or median? 
     X_mid = binned_statistic(bin_using, X, bins=bins, statistic=summary_type)[0]
     # -> Or just use the midpoint    
-    if not bin_X:
+    if not bin_X:        
+        if isinstance(bins, int):
+            bins = np.linspace(np.nanmin(X), np.nanmax(X), bins)
         X_mid = (bins[:-1] + bins[1:]) / 2
 
     # Now calculate the spreads    
@@ -626,17 +627,24 @@ def dag_plot_bin_line(ax, X,Y, bin_using, **kwargs):
         Y_mid = binned_statistic(bin_using, Y, bins=bins, statistic=summary_type)[0]                      
         pc_lower = float(err_type.split('-')[-1])
         pc_upper = 100 - pc_lower
-        pcLOWER_lambda = kwargs.get('pcLOWER_lambda', lambda data: np.percentile(data, pc_lower))
-        pcUPPER_lambda = kwargs.get('pcUPPER_lambda', lambda data: np.percentile(data, pc_upper))
-        Y_lower = binned_statistic(bin_using, Y, bins=bins, statistic=pcLOWER_lambda)[0]              
-        Y_upper = binned_statistic(bin_using, Y, bins=bins, statistic=pcUPPER_lambda)[0]              
+        if pc_lower > pc_upper:
+            # Oops - flip them
+            pc_lower, pc_upper = pc_upper, pc_lower
+        pcLOWER_lambda = kwargs.get('pcLOWER_lambda', lambda data: np.percentile(data, pc_lower, axis=0))
+        pcUPPER_lambda = kwargs.get('pcUPPER_lambda', lambda data: np.percentile(data, pc_upper, axis=0))
+        Y_lower_shade = binned_statistic(bin_using, Y, bins=bins, statistic=pcLOWER_lambda)[0]              
+        Y_upper_shade = binned_statistic(bin_using, Y, bins=bins, statistic=pcUPPER_lambda)[0]              
+        Y_lower_bar = Y_mid - Y_lower_shade
+        Y_upper_bar = Y_upper_shade - Y_mid
     
     elif err_type=='std':
         # Standard deviation
         Y_mid = binned_statistic(bin_using, Y, bins=bins, statistic=summary_type)[0]
         Y_std = binned_statistic(bin_using, Y, bins=bins, statistic='std')[0]  #/ np.sqrt(bin_data['bin_X']['count'])
-        Y_lower = Y_mid - Y_std
-        Y_upper = Y_mid + Y_std
+        Y_lower_bar = Y_std        
+        Y_upper_bar = Y_std
+        Y_lower_shade = Y_mid - Y_std
+        Y_upper_shade = Y_mid + Y_std
 
     # Apply minimum per bin
     XY_count = binned_statistic(bin_using, X, bins=bins, statistic='count')[0]
@@ -644,28 +652,25 @@ def dag_plot_bin_line(ax, X,Y, bin_using, **kwargs):
         for i_bin,bin_count in enumerate(XY_count):
             if bin_count<min_per_bin:
                 Y_mid[i_bin] = np.nan
-                Y_lower[i_bin] = np.nan
-                Y_upper[i_bin] = np.nan
-    if append_for_polar:
-        # Need to make a full circle
-        X_mid = np.append(X_mid, X_mid[0])
-        Y_mid = np.append(Y_mid, Y_mid[0])
-        Y_lower = np.append(Y_lower, Y_lower[0])
-        Y_upper = np.append(Y_upper, Y_upper[0])
+                Y_lower_bar[i_bin] = np.nan
+                Y_upper_bar[i_bin] = np.nan
+                Y_lower_shade[i_bin] = np.nan
+                Y_upper_shade[i_bin] = np.nan
 
     if do_bars:
+        # print()
         ax.errorbar(
             X_mid,
             Y_mid,
-            yerr=[Y_lower, Y_upper],
+            yerr=[Y_lower_bar, Y_upper_bar],
             # xerr=X_std,
             color=line_col,
             label=line_label, 
             lw=lw,
             **line_kwargs
             )
-
-    elif do_shade:        
+        
+    if do_shade:        
         ax.plot(
             X_mid,
             Y_mid,
@@ -675,16 +680,18 @@ def dag_plot_bin_line(ax, X,Y, bin_using, **kwargs):
             lw=lw,
             **line_kwargs,
             )
+        # bloop
         ax.fill_between(
             X_mid,
-            Y_lower,
-            Y_upper,
+            Y_lower_shade,
+            Y_upper_shade,
             alpha=0.5,
             color=line_col,            
             label='_',
             lw=0,
             edgecolor=line_col,        
             )       
+
 
     else:
         ax.plot(
@@ -896,13 +903,10 @@ def dag_arrow_coord_getter(old_x, old_y, new_x, new_y, **kwargs):
 def dag_scatter(X,Y,ax=None, **kwargs):
     if ax is None:
         ax = plt.gca()
-
-    do_kde = kwargs.get('do_kde', False)    
-    do_joint_sns = kwargs.get('do_joint_sns', False)
-    do_id_line = kwargs.pop('do_id_line', False)
-    do_ow = kwargs.get('ow', False)
     do_scatter = kwargs.get('do_scatter', True)
     do_line = kwargs.get('do_line', False)
+    do_id_line = kwargs.pop('do_id_line', False)
+    do_ow = kwargs.get('ow', False)    
     dot_col = kwargs.get('dot_col', None)
     dot_alpha = kwargs.get('dot_alpha', None)    
     dot_cmap = kwargs.get('dot_cmap', None)
@@ -911,6 +915,11 @@ def dag_scatter(X,Y,ax=None, **kwargs):
     dot_label=kwargs.get('dot_label')
     do_corr = kwargs.get('do_corr', False)
     do_colbar = kwargs.get('do_colbar', False)
+
+    # hexbin, kde, joint_sns
+    alt_plot = kwargs.get('alt_plot', False)
+    alt_kwargs = kwargs.get('alt_kwargs', {})
+
 
     if do_scatter:        
         scat_col = ax.scatter(
@@ -924,7 +933,6 @@ def dag_scatter(X,Y,ax=None, **kwargs):
             cb.draw_all()
     if do_line:
         dag_plot_bin_line(ax=ax, X=X,Y=Y, bin_using=X, **kwargs)
-    
     if do_corr:
         corr_xy = dag_get_corr(X,Y)
         corr_str = f'corr={corr_xy:.3f}'
@@ -934,13 +942,22 @@ def dag_scatter(X,Y,ax=None, **kwargs):
         corr_str = ax.get_title() + corr_str
 
     kwargs['title'] = kwargs.get('title', '') + corr_str
-    if do_kde:
-        sns.kdeplot(X,Y, color=dot_col)
-    elif do_joint_sns:
-        # blorp
-        # print(ax[0])
-        a = sns.jointplot(x=X, y=Y, kind="hex", ax=ax ) # **kwargs)
-        print(a)
+    
+    if alt_plot == 'kde':
+        sns.kdeplot(
+            X,Y, color=dot_col,
+            **alt_kwargs
+            )
+    elif alt_plot == 'joint_sns':
+        sns.jointplot(
+            x=X, y=Y, ax=ax,
+            **alt_kwargs) 
+    elif alt_plot == 'hexbin':
+        ax.hexbin(
+            X,Y,             
+            **alt_kwargs            
+            )        
+    
     if do_id_line:
         xlim = kwargs.get('x_lim', ax.get_xlim())
         ylim = kwargs.get('y_lim', ax.get_ylim())

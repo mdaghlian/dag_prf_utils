@@ -421,6 +421,7 @@ class MeshDash(GenMeshMaker):
             vmin=None, 
             vmax=None,
             thresh_text=None,
+            return_cmap=True, 
             ):
         '''For a given vx_col_name. Update the c_ attributes
         Returns RGB per vertex, and a  
@@ -452,8 +453,11 @@ class MeshDash(GenMeshMaker):
             disp_rgb = {
                 'lh' : disp_rgb_not_split[:self.n_vx['lh'],:],
                 'rh' : disp_rgb_not_split[self.n_vx['lh']:,:],
-            }            
+            }
+            if not return_cmap:        
+                return disp_rgb
             cmap_fig = plt.figure()
+                
         else:
             disp_rgb, cmap_dict = self.return_display_rgb(
                 return_cmap_dict=True, unit_rgb=True, split_hemi=True, 
@@ -465,6 +469,8 @@ class MeshDash(GenMeshMaker):
                 clear_lower=self.clear_lower,
                 clear_upper=self.clear_upper,
                 )
+            if not return_cmap:
+                return disp_rgb
             # Save CMAP to svg
             cmap_fig = dag_cmap_plotter(
                 cmap=cmap_dict['cmap'], 

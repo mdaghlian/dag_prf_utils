@@ -29,7 +29,7 @@ from dag_prf_utils.utils import *
 '''
 MUCH STOLEN FROM JHEIJ LINESCANNING!!!
 '''
-def dag_add_cmap_to_pyctx(cmap_name, pyctx_cmap_name=None):
+def dag_add_cmap_to_pyctx(cmap_name, pyctx_cmap_name=None, **kwargs):    
     pyc_cmap_path = cortex.config.get('webgl', 'colormaps')
     if pyctx_cmap_name is None:
         pyctx_cmap_name = 'pyc_'+cmap_name
@@ -43,6 +43,7 @@ def dag_add_cmap_to_pyctx(cmap_name, pyctx_cmap_name=None):
             cname_1D = pyctx_cmap_name + '_1D_r.png'
             cname_2D = pyctx_cmap_name + '_2D_r.png'
             cval_arr = np.linspace(1,0,256)
+        
         # [1] 1D version
         oneD_rgba = dag_get_col_vals(cval_arr, cmap_name)
         oneD_rgba = oneD_rgba[np.newaxis,:,:]
@@ -69,6 +70,23 @@ def dag_add_cmap_to_pyctx(cmap_name, pyctx_cmap_name=None):
         # twoD_rgba[:,:,-1] = .1
         image = Image.fromarray(twoD_rgba)
         image.save(opj(pyc_cmap_path, cname_2D))
+        
+        return_names = kwargs.get('return_names', False)
+        if '1d' in return_names:
+            return cname_1D
+        elif '2d' in return_names:
+            return cname_2D
+        elif isinstance(return_names, str):
+            # Error
+            raise ValueError('return_names should be 1d, 2d or False')
+
+def get_pyctx_cmap_list():
+    pyc_cmap_path = cortex.config.get('webgl', 'colormaps')
+    cmap_list = os.listdir(pyc_cmap_path)
+    cmap_list = [x for x in cmap_list if x.endswith('.png')]
+    cmap_list = [x.replace('.png','') for x in cmap_list]        
+    return cmap_list
+        
 
 
 def set_ctx_path(p=None, opt="update"):
@@ -375,10 +393,11 @@ class PyctxSaver():
             else:
                 clicker_func = None
                 
-            self.js_handle = cortex.webgl.show(self.data_dict, pickerfun=clicker_func)
+            # self.js_handle = cortex.webgl.show(self.data_dict, pickerfun=clicker_func)
             # self.js_handle = cortex.webgl.show(self.data_dict)
+            cortex.webgl.show(self.data_dict)
             self.params_to_save = list(self.data_dict.keys())
-            self.set_view()
+            # self.set_view()
 
     def clicker_function(
         self,
@@ -415,6 +434,10 @@ class PyctxSaver():
         output_dir = kwargs.pop('output_dir', self.fig_dir)
         if filename is None:
             filename = f"{self.base_name}_desc-static"        
+        if os.path.exists(opj(output_dir, filename)):
+            print(f"directory already exists. deleting")
+            # remove directory
+            shutil.rmtree(opj(output_dir, filename))
         print(f'Saving static to {opj(output_dir, filename)}')
         print(args)
         print(kwargs)
@@ -566,7 +589,7 @@ class PyctxSaver():
         param_to_save,
         fig_dir=None,
         base_name=None):
-
+        bloop
         self.js_handle.setData([param_to_save])
         time.sleep(1)
         
@@ -610,6 +633,7 @@ class PyctxMaker(GenMeshMaker):
             raise ValueError("Please specify the subject ID as per pycortex' filestore naming")
         self.subject =self.sub
         self.ctx_path = kwargs.get('ctx_path', None)
+        ow_ctx_files = kwargs.get('ow_ctx_files', False)
         if self.ctx_path is not None:
             set_ctx_path(self.ctx_path)
             self.ctx_path = opj(self.ctx_path, self.subject)
@@ -620,20 +644,21 @@ class PyctxMaker(GenMeshMaker):
         self.cmap_dict = {}
         self.fixed_unique = kwargs.get('fixed_unique', False) # Have we fixed the unique issue in pycortex? 
         self.dud = kwargs.get('dud', False)
-        if not os.path.exists(self.ctx_path):
+        # bloop
+        if not os.path.exists(self.ctx_path) or ow_ctx_files:
             # import subject from freesurfer (will have the same names)
             cortex.freesurfer.import_subj(
-                fs_subject=self.sub,
-                cx_subject=self.sub,
+                freesurfer_subject=self.sub,
+                pycortex_subject=self.sub,
                 freesurfer_subject_dir=self.fs_dir,
                 whitematter_surf='smoothwm')
         
         # reload database after import
         cortex.db.reload_subjects()
-
         #this provides a nice workaround for pycortex opacity issues, at the cost of interactivity    
         # Get curvature
         self.curv = cortex.db.get_surfinfo(self.sub)
+        # bloop
         if self.dud:
             # Add dud at the beggining
             self.add_vertex_obj(
@@ -669,7 +694,9 @@ class PyctxMaker(GenMeshMaker):
                 return_cmap_dict=True, 
                 unit_rgb=False, 
                 **kwargs)  
-                
+            # change to np.uint8
+            display_rgb = display_rgb.astype(np.uint8)
+            # bloop
             this_vertex_dict = cortex.VertexRGB(
                 red=display_rgb[:,0], 
                 green=display_rgb[:,1], 
@@ -684,7 +711,14 @@ class PyctxMaker(GenMeshMaker):
             data_mask = kwargs.get('data_mask', np.ones(self.total_n_vx, dtype=bool))
             data_alpha = kwargs.get('data_alpha', np.ones(self.total_n_vx))
             data_alpha[~data_mask] = 0 # Make values to be masked have alpha=0
-            cmap = kwargs.get('cmap', None) # 'autumnblack_alpha_2D')    
+            cmap = kwargs.get('cmap', None) # 'autumnblack_alpha_2D') 
+            if cmap is not None:   
+                cmap = dag_add_cmap_to_pyctx(cmap, return_names=ctx_method)
+                cmap = cmap.replace('.png','')
+                cmap_list = get_pyctx_cmap_list()
+                if cmap not in cmap_list:
+                    cmap = cmap_list[0]
+
             vmin1 = kwargs.get('vmin', np.nanmin(data[data_mask]))
             vmax1 = kwargs.get('vmax', np.nanmax(data[data_mask]))
             masked_value = kwargs.get('masked_value', vmin1-1) # What to set values outside mask to
@@ -707,6 +741,10 @@ class PyctxMaker(GenMeshMaker):
 
             if ctx_method.lower()=='vertex2d':
                 # Vertex 2D 
+                # pick 1 random index 
+                # random_index = np.random.randint(0, len(data))
+                # data_alpha[random_index] = np.random.rand()
+                
                 this_vertex_dict = cortex.Vertex2D(
                         dim1=data, 
                         dim2=data_alpha,
@@ -721,8 +759,8 @@ class PyctxMaker(GenMeshMaker):
                 # TO FIX THE "unique" pycortex ISSUE...
                 print(this_vertex_dict)
 
-                this_vertex_dict.dim1.unique_id = np.random.rand(500)
-                this_vertex_dict.dim2.unique_id = np.random.rand(500)
+                # this_vertex_dict.dim1.unique_id = np.random.rand(500)
+                # this_vertex_dict.dim2.unique_id = np.random.rand(500)
                 this_cmap_dict = 'pyc'
             
             elif ctx_method.lower()=='vertex1d':

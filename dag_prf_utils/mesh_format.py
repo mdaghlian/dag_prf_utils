@@ -51,13 +51,16 @@ def dag_find_border_vx_in_order(roi_bool, mesh_info, return_coords=False):
     border_vx = dag_order_edges(outer_edge_list)
     if not return_coords:
         return border_vx
-    border_vx = sum(border_vx, []) # flatten list
-    border_vx_coords = [
-        mesh_info['x'][border_vx], 
-        mesh_info['y'][border_vx], 
-        mesh_info['z'][border_vx],                    
-    ]
-    return border_vx_coords
+    # border_vx = sum(border_vx, []) # flatten list
+    border_vx_coords = []
+    for i_vx in border_vx:
+        border_vx_coords.append([
+            mesh_info['x'][i_vx],
+            mesh_info['y'][i_vx],
+            mesh_info['z'][i_vx],
+        ])
+
+    return border_vx,border_vx_coords
 
 
 def dag_get_roi_border_edge(roi_bool, mesh_info):
@@ -227,39 +230,72 @@ def dag_mesh_slice(mesh_info, **kwargs):
 
 # ************************************************************************
 # MESSING AROUND - WITH FLATTENING
+# def dag_sph2flat(coords):
+#     '''https://stackoverflow.com/questions/4116658/faster-numpy-cartesian-to-spherical-coordinate-conversion'''
+#     # First move to 0,0,0...
+#     sph_centre = np.mean(coords, axis=0)
+#     coords -= sph_centre
+
+#     # # UV mapping
+#     # # https://en.wikipedia.org/wiki/UV_mapping#Finding_UV_on_a_sphere    
+#     # abs_coords = coords
+#     # u = 0.5 + (np.arctan2(abs_coords[:,2], abs_coords[:,0]) / np.pi*2) # z,x
+#     # print(np.isnan(u).mean())
+#     # v = 0.5 + (np.arcsin(abs_coords[:,1]) / np.pi)  # y
+#     # print(np.arcsin(abs_coords[:,1]))
+#     # print(np.isnan(v).mean())
+#     # print(np.isnan(u).sum())
+
+#     # print(np.where(np.isnan(v)))
+
+
+#     x,y,z = coords[:,0], coords[:,1], coords[:,2]
+#     XsqPlusYsq = x**2 + y**2
+#     r = np.sqrt(XsqPlusYsq + z**2)               # r
+#     elev = np.arctan2(z,np.sqrt(XsqPlusYsq))     # theta
+#     az = np.arctan2(y,x)                           # phi
+#     # plt.figure()
+#     # plt.scatter(r, az,c=x)
+#     # bb
+#     # plt.figure()
+#     # plt.scatter(u, v,c=x)
+#     # plt.figure()
+#     # # plt.scatter(, elev,c=x)    
+#     # bloop
+#     # return az,elev
+#     return x,y,z
+
+
 def dag_sph2flat(coords):
-    '''https://stackoverflow.com/questions/4116658/faster-numpy-cartesian-to-spherical-coordinate-conversion'''
+    '''Trying to "fake" flatten the sphere
+    TODO: 
+    * option to define the centre... 
+    * better way to do the projection?
+    https://en.wikipedia.org/wiki/Map_projection
+    
+    
+    # Adjust longitudes based on the new center longitude
+    lon -= center_lon
+    
+    # Ensure lon is within the range [-pi, pi]
+    lon = (lon + np.pi) % (2 * np.pi) - np.pi
+        
+
+    '''
     # First move to 0,0,0...
-    sph_centre = np.mean(coords, axis=0)
-    coords -= sph_centre
-
-    # # UV mapping
-    # # https://en.wikipedia.org/wiki/UV_mapping#Finding_UV_on_a_sphere    
-    # abs_coords = coords
-    # u = 0.5 + (np.arctan2(abs_coords[:,2], abs_coords[:,0]) / np.pi*2) # z,x
-    # print(np.isnan(u).mean())
-    # v = 0.5 + (np.arcsin(abs_coords[:,1]) / np.pi)  # y
-    # print(np.arcsin(abs_coords[:,1]))
-    # print(np.isnan(v).mean())
-    # print(np.isnan(u).sum())
-
-    # print(np.where(np.isnan(v)))
-
-
+    coords -= coords.mean(axis=0)
+    # Sanity check -> is distance to 0 should be the same for all points    
+    d20 = np.sqrt(np.sum(coords**2, axis=1))
+    atol = 10
+    if not np.allclose(d20, d20[0], atol=atol):
+        print(f'Warning: Not all points are equidistant from 0,0,0 atol={atol}')
+    # Now flatten to 2D using longitude and latitude
     x,y,z = coords[:,0], coords[:,1], coords[:,2]
-    XsqPlusYsq = x**2 + y**2
-    r = np.sqrt(XsqPlusYsq + z**2)               # r
-    elev = np.arctan2(z,np.sqrt(XsqPlusYsq))     # theta
-    az = np.arctan2(y,x)                           # phi
-    # plt.figure()
-    # plt.scatter(r, az,c=x)
-    # bb
-    # plt.figure()
-    # plt.scatter(u, v,c=x)
-    # plt.figure()
-    # # plt.scatter(, elev,c=x)    
-    # bloop
-    return az,elev
+    lat= np.arctan2(z, np.sqrt(x**2 + y**2))
+    lon = np.arctan2(y, x)
+    return lon, lat
+
+
 
 import copy
 def dag_fake_flatten(sphere_mesh_info):
@@ -275,23 +311,64 @@ def dag_fake_flatten(sphere_mesh_info):
     fake_flat['x'] = p1 * mag
     fake_flat['y'] = p2 * mag
     fake_flat['z'] = np.zeros_like(p1)    
+
+    # Find the mean length of an edge 
+    face_lengths = []
+    for i_f in range(sphere_mesh_info['i'].shape[0]):
+        ei2j = np.sqrt(
+            (fake_flat['x'][sphere_mesh_info['i'][i_f]] - fake_flat['x'][sphere_mesh_info['j'][i_f]])**2 +
+            (fake_flat['y'][sphere_mesh_info['i'][i_f]] - fake_flat['y'][sphere_mesh_info['j'][i_f]])**2
+        )
+        ei2k = np.sqrt(
+            (fake_flat['x'][sphere_mesh_info['i'][i_f]] - fake_flat['x'][sphere_mesh_info['k'][i_f]])**2 +
+            (fake_flat['y'][sphere_mesh_info['i'][i_f]] - fake_flat['y'][sphere_mesh_info['k'][i_f]])**2
+        )
+        ej2k = np.sqrt(
+            (fake_flat['x'][sphere_mesh_info['j'][i_f]] - fake_flat['x'][sphere_mesh_info['k'][i_f]])**2 +
+            (fake_flat['y'][sphere_mesh_info['j'][i_f]] - fake_flat['y'][sphere_mesh_info['k'][i_f]])**2
+        )
+        face_lengths.append(ei2j+ei2k+ej2k)
+    face_lengths = np.array(face_lengths)
+    m_face_lengths = face_lengths.mean()
+    std_face_lengths = face_lengths.std()
+    # Find the faces with edges > 4*std
+    f_w_long_edges = face_lengths > m_face_lengths + 4*std_face_lengths
+    print(f'Faces with long edges: {f_w_long_edges.sum()}')    
+    fake_flat['faces']  = sphere_mesh_info['faces'][~f_w_long_edges,:]
+    fake_flat['i']      = sphere_mesh_info['i'][~f_w_long_edges]
+    fake_flat['j']      = sphere_mesh_info['j'][~f_w_long_edges]
+    fake_flat['k']      = sphere_mesh_info['k'][~f_w_long_edges]
+
     pts = np.vstack([fake_flat['x'],fake_flat['y'], fake_flat['z']]).T
-    outer_vx = ConvexHull(pts[:,:2]).vertices
-    plt.figure()
-    plt.plot(
-        pts[:,0], pts[:,1], c=sphere_mesh_info['x']
-    )
-    bloop
-    in_face_x = {} 
-    for face_x in ['i', 'j', 'k']:
-        in_face_x[face_x] = np.isin(sphere_mesh_info[face_x], outer_vx) * 1.0    
+    polys = fake_flat['faces']
     
-    # remove faces with 2+ vx in the cut
-    f_w_23cutvx = (in_face_x['i'] + in_face_x['j'] + in_face_x['k']) >= 2
-    fake_flat['faces']  = sphere_mesh_info['faces'][~f_w_23cutvx,:]
-    fake_flat['i']      = sphere_mesh_info['i'][~f_w_23cutvx]
-    fake_flat['j']      = sphere_mesh_info['j'][~f_w_23cutvx]
-    fake_flat['k']      = sphere_mesh_info['k'][~f_w_23cutvx]
+    # plt.hist(edge_lengths, bins=20)
+    # plt.axvline(m_edge_length, c='r')
+    # plt.axvline(m_edge_length + edge_factor*std_edge_length, c='r')
+    # bloop
+
+    # pts = np.vstack([fake_flat['x'],fake_flat['y'], fake_flat['z']]).T
+    # PREVIOUS CUTTING STRATEGIES...
+    # outer_vx = ConvexHull(pts[:,:2]).vertices
+    # plt.figure()
+    # plt.scatter(
+    #     pts[:,0], pts[:,1], c=sphere_mesh_info['x']
+    # )
+    # plt.scatter(
+    #     pts[outer_vx,0], pts[outer_vx,1], c='r'
+    # )
+    # # bloop
+    # in_face_x = {} 
+    # for face_x in ['i', 'j', 'k']:
+    #     in_face_x[face_x] = np.isin(sphere_mesh_info[face_x], outer_vx) * 1.0    
+    
+    # # remove faces with 2+ vx in the cut
+    # f_w_23cutvx = (in_face_x['i'] + in_face_x['j'] + in_face_x['k']) >= 2
+    # print(f'Faces with 2+ vx in the cut: {f_w_23cutvx.sum()}')
+    # fake_flat['faces']  = sphere_mesh_info['faces'][~f_w_23cutvx,:]
+    # fake_flat['i']      = sphere_mesh_info['i'][~f_w_23cutvx]
+    # fake_flat['j']      = sphere_mesh_info['j'][~f_w_23cutvx]
+    # fake_flat['k']      = sphere_mesh_info['k'][~f_w_23cutvx]
 
 
     # # Now find those outer vertices which appear in 2 faces
@@ -315,12 +392,11 @@ def dag_fake_flatten(sphere_mesh_info):
     #     fake_flat['j'] = np.delete(fake_flat['j'], faces2remove)
     #     fake_flat['k'] = np.delete(fake_flat['k'], faces2remove)
 
-
+    # *********************************************
     # Now find those outer vertices which appear in 2 faces
-    flat_faces = fake_flat['faces'].ravel()
-    vx_counts = np.sum(flat_faces[:, None]==outer_vx, axis=0)
-
-    polys = fake_flat['faces']    
+    # flat_faces = fake_flat['faces'].ravel()
+    # vx_counts = np.sum(flat_faces[:, None]==outer_vx, axis=0)
+    # polys = fake_flat['faces']    
     return pts, polys
 
 

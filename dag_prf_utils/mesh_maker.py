@@ -349,7 +349,7 @@ class GenMeshMaker(FSMaker):
     def _return_roi_bool_border(self, roi_name, hemi, **kwargs):
         roi_bool = self._return_roi_bool(roi_name, hemi, **kwargs)
         roi_bool_border = dag_find_border_vx(roi_bool, self.mesh_info['inflated'][hemi], return_type='bool')
-        return roi_bool_border
+        return roi_bool_border    
 
     def _return_roi_bool_border_both_hemis(self, roi_name, return_type='dict', **kwargs):
         roi_bool_D = {}
@@ -364,6 +364,51 @@ class GenMeshMaker(FSMaker):
         elif return_type=='concat':
             roi_bool = np.concatenate(roi_bool_L)
         return roi_bool
+    
+    # -> borders in order
+    def _return_roi_borders_in_order(self, roi_list, **kwargs):
+        '''Return the border vertices in order for each ROI in roi_list
+
+        '''
+        if not isinstance(roi_list, list):
+            roi_list = [roi_list]
+        mesh_name = kwargs.get('mesh_name', 'inflated')
+        combine_matches = kwargs.get('combine_matches', False)
+        hemi_list = kwargs.get('hemi_list', ['lh', 'rh'])
+        roi_obj = []
+        roi_count = -1
+        for i_roi,roi in enumerate(roi_list):
+            roi_bool = dag_load_roi(self.sub, roi, fs_dir=self.fs_dir, split_LR=True, combine_matches=combine_matches, recursive_search=True)
+            if 'lh' not in roi_bool.keys():
+                # We found extra matches!!!
+                print(f'Found extra matches for {roi}')
+                extra_roi_list = list(roi_bool.keys())
+            else:
+                extra_roi_list = [roi]
+                roi_bool = {roi : roi_bool}
+            for i_roi_extra, roi_extra in enumerate(extra_roi_list):
+                roi_count += 1
+                for ih,hemi in enumerate(hemi_list):
+                    if roi_bool[roi_extra][hemi].sum()==0:
+                        continue
+                    border_vx_list, border_coords_list = dag_find_border_vx_in_order(
+                        roi_bool=roi_bool[roi_extra][hemi], 
+                        mesh_info=self.mesh_info[mesh_name][hemi], 
+                        return_coords=True,
+                        )
+
+                    for ibvx,border_vx in enumerate(border_vx_list):
+                        first_instance = (ih==0) & (ibvx==0) # Only show legend for first instance
+                        this_roi_dict = {
+                            'hemi' : hemi,
+                            'roi' : roi_extra,
+                            'border_vx' : border_vx,
+                            'border_coords' : border_coords_list[ibvx],
+                            'first_instance' : first_instance,
+                        }
+                        roi_obj.append(this_roi_dict)          
+        return roi_obj
+    
     #endregion ROI FUNCTIONS
 
     # *****************************************************************

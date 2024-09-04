@@ -632,7 +632,7 @@ class PyctxMaker(GenMeshMaker):
         if not isinstance(self.sub, str):
             raise ValueError("Please specify the subject ID as per pycortex' filestore naming")
         self.subject =self.sub
-        self.ctx_path = kwargs.get('ctx_path', None)
+        self.ctx_path = kwargs.get('ctx_path', None)        
         ow_ctx_files = kwargs.get('ow_ctx_files', False)
         if self.ctx_path is not None:
             set_ctx_path(self.ctx_path)
@@ -640,6 +640,12 @@ class PyctxMaker(GenMeshMaker):
         else:
             self.ctx_path = opj(get_ctx_path(), self.sub)
         print(self.ctx_path)
+        self.svg_overlay = opj(self.ctx_path, 'overlays.svg')
+        # Try adding flat
+        try:
+            self.add_fake_flat_to_mesh_info()
+        except:
+            pass
         self.vertex_dict = {} 
         self.cmap_dict = {}
         self.fixed_unique = kwargs.get('fixed_unique', False) # Have we fixed the unique issue in pycortex? 
@@ -704,6 +710,7 @@ class PyctxMaker(GenMeshMaker):
                 subject=self.subject,
                 # unit_rgb=False, 
                 )     
+            this_vertex_dict.unique_id = np.random.rand(500)
             this_cmap_dict = cmap_dict
 
         else:
@@ -759,8 +766,8 @@ class PyctxMaker(GenMeshMaker):
                 # TO FIX THE "unique" pycortex ISSUE...
                 print(this_vertex_dict)
 
-                # this_vertex_dict.dim1.unique_id = np.random.rand(500)
-                # this_vertex_dict.dim2.unique_id = np.random.rand(500)
+                this_vertex_dict.dim1.unique_id = np.random.rand(500)
+                this_vertex_dict.dim2.unique_id = np.random.rand(500)
                 this_cmap_dict = 'pyc'
             
             elif ctx_method.lower()=='vertex1d':
@@ -781,8 +788,9 @@ class PyctxMaker(GenMeshMaker):
         else:
             self.vertex_dict[surf_name] = this_vertex_dict
             self.cmap_dict[surf_name] = this_cmap_dict
-        return 
-                        
+        return None
+        
+
     def open(self, **kwargs):
         self.pyc = PyctxSaver(
             data_dict=self.vertex_dict,
@@ -801,6 +809,11 @@ class PyctxMaker(GenMeshMaker):
             fig_dir = output_dir,
             # viewer=False,
             **kwargs)
+    def quick_show(self,**kwargs):
+        vx_obj,_ = self.add_vertex_obj(data=None, surf_name='dud', return_vx_obj=True)
+        print(vx_obj)
+        # bloop
+        cortex.quickshow(vx_obj, recache=True)
 
     
     def get_curv(self):
@@ -808,8 +821,13 @@ class PyctxMaker(GenMeshMaker):
     
     def clear_cache(self):
         cortex.db.clear_cache(self.sub)
+    def reset_overlays(self):
+        # copy an og version that we won't mess with
+        old_file = opj(self.ctx_path, 'overlays.svg')
+        new_file = opj(self.ctx_path, 'og_overlays.svg')
+        os.system(f'cp {new_file} {old_file}')        
 
-    def make_fake_flat_map(self, flatmap_name='fake.patch.3d'):
+    def make_fake_flat_map(self):
         '''
         Pycotex uses flatmaps for a bunch of things
         But if you can't be bothered to do it properly, and just want
@@ -826,45 +844,118 @@ class PyctxMaker(GenMeshMaker):
         if os.path.exists(old_overlay):
             print('backing up existing overlay')
             os.system(f'cp {old_overlay} {bu_overlay}')
-        
-        # [2] Write fake flat files into freesurfer...
-        # self.fake_flat
-        for hemi in ['lh', 'rh']:
-            
-            # r,elev,az = dag_cart2sph(
-            #     x = self.mesh_info['sphere'][hemi]['x'],
-            #     y = self.mesh_info['sphere'][hemi]['y'],
-            #     z = self.mesh_info['sphere'][hemi]['z'],
-            # )
-            
-            # if hemi=='lh':
-            #     r *= -1 # Flip if lh
-            # filename = opj(self.sub_surf_dir, f'{hemi}.{flatmap_name}')
-            # dag_write_patch(
-            #     filename=filename, 
-            #     vertex_index=np.arange(1,len(r)+1, dtype='int32'), 
-            #     x_coords=r.astype('float32'), 
-            #     y_coords=elev.astype('float32'), 
-            #     z_coords=np.zeros(len(r), dtype='float32')
-            #     )            
+        for hemi in ['lh','rh']:
             pts,polys = dag_fake_flatten(self.mesh_info['sphere'][hemi])
             # FROM PYCORTEX IMPORT FLAT
-            flat = pts[:, [1, 0, 2]]
+            flat = pts[:, [1, 0, 2]] # Flip X and Y axis
             # Flip Y axis upside down
             flat[:, 1] = -flat[:, 1]
+            # do some cleaning...
             polys = cortex.freesurfer._remove_disconnected_polys(polys)
             flat = cortex.freesurfer._move_disconnect_points_to_zero(flat, polys)
             flat_surf_path = opj(self.ctx_path, 'surfaces', f'flat_{hemi}.gii')
             print("saving to %s"%flat_surf_path)
             cortex.formats.write_gii(flat_surf_path, pts=flat, polys=polys)
+        # clear the cache, per #81
+        cortex.database.db.clear_cache(self.sub)
+        # Remove overlays.svg file (FLATMAPS HAVE CHANGED)
+        overlays_file = cortex.database.db.get_paths(self.sub)['overlays']
+        if os.path.exists(overlays_file):
+            os.unlink(overlays_file)
+        # Make the overlays.svg file
+        self.quick_show()
+        # copy an og version that we won't mess with
+        old_file = opj(self.ctx_path, 'overlays.svg')
+        new_file = opj(self.ctx_path, 'og_overlays.svg')
+        os.system(f'cp {old_file} {new_file}')
+        self.add_fake_flat_to_mesh_info()
+    
+    def add_rois_to_svg(self, roi_list, filename=None):
+        if filename is None:
+            filename = self.svg_overlay
+        self.reset_overlays()
+        vx_list = self._return_roi_borders_in_order(roi_list, mesh_name='flat', combine_matches=True)
+        # Normalize coords as in roi pycortex
+        from lxml import etree
+        from cortex import db
+        from cortex.svgoverlay import get_overlay, _make_layer, _find_layer, parser
+        mpts, mpolys = db.get_surf(self.subject, "flat", merge=True, nudge=True)
+        svgmpts = mpts[:,:2].copy()
+        svgmpts -= svgmpts.min(0)
+        svgmpts *= 1024 / svgmpts.max(0)[1]
+        svgmpts[:,1] = 1024 - svgmpts[:,1]
+        svgmpts_hemi = {}
+        svgmpts_hemi['lh'] = svgmpts[:self.n_vx['lh'],:]
+        svgmpts_hemi['rh'] = svgmpts[self.n_vx['lh']:,:]
+        new_vx_list = []
+        #
+        # NORMALIZE COORDS
+        for vx in vx_list:                        
+            hemi = vx['hemi']
+            vx['border_coords'][0] = svgmpts_hemi[hemi][vx['border_vx'],0].copy()
+            vx['border_coords'][1] = svgmpts_hemi[hemi][vx['border_vx'],1].copy()
+            new_vx_list.append(vx)
+        vx_list = new_vx_list
+        # Now add to svg
+        svgroipack = get_overlay(self.subject, filename, mpts, mpolys)
+        # Add ROI boundaries
+        svg = etree.parse(svgroipack.svgfile, parser=parser)
+        
+        for i,vx in enumerate(vx_list):
+            roi_name = f"{vx['roi']}"
+            # print(roi_name)
+            # # # id_count = 0
+            # # if vx['first_instance']:
+            # #     id_count = 0
+            # # else:
+            # #     id_count += 1
+            # #     roi_name = '_'.join([roi_name, str(id_count)])
+            roilayer = _make_layer(
+                _find_layer(_find_layer(svg, "rois"),"shapes"),
+                roi_name, 
+                )
+            x_coords = vx['border_coords'][0].copy()
+            y_coords = vx['border_coords'][1].copy()
+            path_data = f"M {x_coords[0]:.4f},{y_coords[0]:.4f} "            
+            # Generate path data
+            for i in range(1, len(x_coords)):
+                path_data += f"L {x_coords[i]:.4f},{y_coords[i]:.4f} "
+            # Close it at the end
+            path_data += f"Z"            
+            # Insert into SVG
+            svgpath = etree.SubElement(roilayer, "path")
+            svgpath.attrib["style"] = "fill:none;stroke:#000000;stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opactiy:1"
+            svgpath.attrib["d"] = path_data
+            # svgpath.attrib["sodipodi:nodetypes"] = "c" * len(pts)
+            # break
+        with open(svgroipack.svgfile, "wb") as xml:
+            xml.write(etree.tostring(svg, pretty_print=True))
+        # svgroipack = get_overlay(self.subject, filename, mpts, mpolys)
+        # svg = etree.parse(svgroipack.svgfile, parser=parser)
 
-            # print(pts)
-            # print(pts.shape)
-            # print(polys)
-            # print(polys.shape)
-            # bloop
+    def add_fake_flat_to_mesh_info(self):
+        '''
+        Add the flatmap to the mesh_info
+        '''
+        import nibabel as nib
+        self.mesh_info['flat'] = {}
+        for hemi in ['lh','rh']:
+            flat_surf_path = opj(self.ctx_path, 'surfaces', f'flat_{hemi}.gii')
+            flat = nib.load(flat_surf_path)
+            flat_pts = flat.darrays[0].data
+            flat_polys = flat.darrays[1].data
+            self.mesh_info['flat'][hemi] = {}
+            self.mesh_info['flat'][hemi]['coords'] = flat_pts
+            self.mesh_info['flat'][hemi]['faces'] = flat_polys
+            self.mesh_info['flat'][hemi]['x'] = flat_pts[:,0]
+            self.mesh_info['flat'][hemi]['y'] = flat_pts[:,1]
+            self.mesh_info['flat'][hemi]['z'] = flat_pts[:,2]
+            self.mesh_info['flat'][hemi]['i'] = flat_polys[:,0]
+            self.mesh_info['flat'][hemi]['j'] = flat_polys[:,1]
+            self.mesh_info['flat'][hemi]['k'] = flat_polys[:,2]
+            # print(flat)
 
-
+            # self.mesh_info['flat'][hemi] = flat
             
             
 
@@ -880,8 +971,9 @@ def dag_write_patch(filename, vertex_index, x_coords, y_coords, z_coords):
         z_coords (array-like): Array containing z coordinates.
     """
     assert len(vertex_index) == len(x_coords) == len(y_coords) == len(z_coords)
-    
-    with open(filename, 'wb') as fp:
+    # make a new file and write the data
+    print('hello')
+    with open(filename, 'wb') as fp:    
         # Write header (assuming a default value of 0 for now)
         header = 0
         fp.write(struct.pack('>i', header))

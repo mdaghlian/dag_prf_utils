@@ -79,6 +79,21 @@ def dag_cmap_from_str(cmap_name, **kwargs):
     cmap = dag_get_cmap(temp_cmap_name, **get_cmap_kwargs)    
     
     return cmap
+import hashlib
+def dag_hash_col_from_str(col_str):
+    '''dag_hash_col_from_str
+    Get a unique hash from a color string
+    '''
+    # Generate an MD5 hash of the input string
+    hash_object = hashlib.md5(col_str.encode())
+    
+    # Get the hexadecimal representation of the hash
+    hex_hash = hash_object.hexdigest()
+    
+    # Use the first 6 characters of the hex hash for an RGB color
+    color = f"#{hex_hash[:6]}"
+    return color
+
 
 def dag_get_col_vals(col_vals, cmap, vmin=None, vmax=None, str_search=False):
     try:

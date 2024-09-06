@@ -632,15 +632,16 @@ class PyctxMaker(GenMeshMaker):
         if not isinstance(self.sub, str):
             raise ValueError("Please specify the subject ID as per pycortex' filestore naming")
         self.subject =self.sub
-        self.ctx_path = kwargs.get('ctx_path', None)        
+        self.ctx_path = kwargs.get('ctx_path', None)
         ow_ctx_files = kwargs.get('ow_ctx_files', False)
         if self.ctx_path is not None:
-            set_ctx_path(self.ctx_path)
-            self.ctx_path = opj(self.ctx_path, self.subject)
+            set_ctx_path(self.ctx_path)            
+            self.sub_ctx_path = opj(self.ctx_path, self.subject)
         else:
-            self.ctx_path = opj(get_ctx_path(), self.sub)
+            self.ctx_path = get_ctx_path()
+            self.sub_ctx_path = opj(self.ctx_path, self.subject)
         print(self.ctx_path)
-        self.svg_overlay = opj(self.ctx_path, 'overlays.svg')
+        self.svg_overlay = opj(self.sub_ctx_path, 'overlays.svg')
         # Try adding flat
         try:
             self.add_fake_flat_to_mesh_info()
@@ -651,7 +652,7 @@ class PyctxMaker(GenMeshMaker):
         self.fixed_unique = kwargs.get('fixed_unique', False) # Have we fixed the unique issue in pycortex? 
         self.dud = kwargs.get('dud', False)
         # bloop
-        if not os.path.exists(self.ctx_path) or ow_ctx_files:
+        if not os.path.exists(self.sub_ctx_path) or ow_ctx_files:
             # import subject from freesurfer (will have the same names)
             cortex.freesurfer.import_subj(
                 freesurfer_subject=self.sub,
@@ -810,10 +811,15 @@ class PyctxMaker(GenMeshMaker):
             # viewer=False,
             **kwargs)
     def quick_show(self,**kwargs):
-        vx_obj,_ = self.add_vertex_obj(data=None, surf_name='dud', return_vx_obj=True)
-        print(vx_obj)
-        # bloop
-        cortex.quickshow(vx_obj, recache=True)
+        data = kwargs.pop('data', None)
+        surf_name = kwargs.pop('surf_name', 'dud')
+        vx_obj,_ = self.add_vertex_obj(data=data, surf_name=surf_name, return_vx_obj=True, **kwargs)
+        show_flat = kwargs.pop('show_flat', True)
+        if show_flat:
+            cortex.quickshow(vx_obj, **kwargs)
+        else:
+            cortex.webgl.show(vx_obj, **kwargs)
+            
 
     
     def get_curv(self):
@@ -823,11 +829,22 @@ class PyctxMaker(GenMeshMaker):
         cortex.db.clear_cache(self.sub)
     def reset_overlays(self):
         # copy an og version that we won't mess with
-        old_file = opj(self.ctx_path, 'overlays.svg')
-        new_file = opj(self.ctx_path, 'og_overlays.svg')
+        old_file = opj(self.sub_ctx_path, 'overlays.svg')
+        new_file = opj(self.sub_ctx_path, 'og_overlays.svg')
         os.system(f'cp {new_file} {old_file}')        
+    def clear_overlays(self):
+        file_list = os.listdir(self.sub_ctx_path)
+        for file in file_list:
+            if '.svg' in file:
+                os.unlink(opj(self.sub_ctx_path, file))
+    
+    def clear_flat(self):
+        file_list = os.listdir(opj(self.sub_ctx_path, 'surfaces'))
+        for file in file_list:
+            if 'flat_' in file:
+                os.unlink(opj(self.sub_ctx_path, 'surfaces', file))
 
-    def make_fake_flat_map(self):
+    def make_fake_flat_map(self, **kwargs):
         '''
         Pycotex uses flatmaps for a bunch of things
         But if you can't be bothered to do it properly, and just want
@@ -836,45 +853,123 @@ class PyctxMaker(GenMeshMaker):
         It takes the spherical coordinates of each surface
         And uses them to generate the flatmap
         '''
+        centre_roi = kwargs.get('centre_roi', None)
+        cut_occ = kwargs.get('cut_occ', False)
+        cut_along_y = kwargs.get('cut_along_y', None)                
+        if cut_occ:
+            cut_along_y = -35 # cut out front of brain
+
+        do_flip = kwargs.get('do_flip', False)
+
         # Make a fake flatmap...
         # [1] Look for the overlays.svg if it exists back it up
-        old_overlay = opj(self.ctx_path, 'overlays.svg')
+        old_overlay = opj(self.sub_ctx_path, 'overlays.svg')
         current_datetime_str = datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
-        bu_overlay = opj(self.ctx_path, f'overlays_BU_{current_datetime_str}.svg')
+        bu_overlay = opj(self.sub_ctx_path, f'overlays_BU_{current_datetime_str}.svg')
         if os.path.exists(old_overlay):
             print('backing up existing overlay')
             os.system(f'cp {old_overlay} {bu_overlay}')
+        # bloop
+        hemi_pts = {}
+        hemi_polys = {}
+        pts_combined = []
+        polys_combined = []
+        # Where to put flatmatp in z plane..
+        new_z = np.mean(np.hstack(
+            [self.mesh_info['inflated']['lh']['z'],self.mesh_info['inflated']['rh']['z']]
+            ))
+        infl_x = np.hstack(
+            [self.mesh_info['inflated']['lh']['x'],self.mesh_info['inflated']['rh']['x']]
+            )
+        infl_y = np.hstack(
+            [self.mesh_info['inflated']['lh']['y'],self.mesh_info['inflated']['rh']['y']]
+            )
+
         for hemi in ['lh','rh']:
-            pts,polys = dag_fake_flatten(self.mesh_info['sphere'][hemi])
+            hemi_kwargs = kwargs.copy()
+            hemi_kwargs['z'] = new_z
+            if centre_roi is not None:
+                # Load the ROI bool for this hemisphere
+                centre_bool = self._return_roi_bool_both_hemis(centre_roi)[hemi]
+                hemi_kwargs['centre_bool'] = centre_bool
+                hemi_kwargs['cut_bool'] = dag_cut_box(
+                    mesh_info=self.mesh_info['inflated'][hemi],
+                    vx_bool=centre_bool,
+                )!=1
+            if cut_along_y is not None:
+                # Load the ROI bool for this hemisphere
+                cut_bool = self._return_roi_bool_both_hemis(
+                    roi_name='occ', y_max=cut_along_y)[hemi]                
+                hemi_kwargs['cut_bool'] = cut_bool
+
+            pts,polys = dag_fake_flatten(
+                self.mesh_info['sphere'][hemi], **hemi_kwargs)
+            # We want it to be roughly on the same scale as the inflated map
+            diff_x = pts[:,0].mean() - infl_x.mean()
+            diff_y = pts[:,1].mean() - infl_y.mean()
+            pts[:,0] -= diff_x
+            pts[:,1] -= diff_y
+            scale_x = (infl_x.max() - infl_x.min()) / (pts[:,0].max() - pts[:,0].min())
+            pts *= scale_x*3 # Meh seems nice enough
+
             # FROM PYCORTEX IMPORT FLAT
-            flat = pts[:, [1, 0, 2]] # Flip X and Y axis
-            # Flip Y axis upside down
-            flat[:, 1] = -flat[:, 1]
+            # ORIGINAL FLIP X AND Y, THEN FLIP Y UPSIDE DOWN
+            if do_flip:
+                flat = pts[:, [1, 0, 2]] # Flip X and Y axis
+                # Flip Y axis upside down
+                flat[:, 1] = -flat[:, 1]
+            else:
+                # bloop
+                flat = pts
+
             # do some cleaning...
             polys = cortex.freesurfer._remove_disconnected_polys(polys)
             flat = cortex.freesurfer._move_disconnect_points_to_zero(flat, polys)
-            flat_surf_path = opj(self.ctx_path, 'surfaces', f'flat_{hemi}.gii')
+            flat_surf_path = opj(self.sub_ctx_path, 'surfaces', f'flat_{hemi}.gii')
             print("saving to %s"%flat_surf_path)
             cortex.formats.write_gii(flat_surf_path, pts=flat, polys=polys)
+            hemi_pts[hemi] = flat.copy()
+            hemi_polys[hemi] = polys.copy()
+            pts_combined.append(flat)
+            if hemi == 'rh':
+                polys += len(hemi_pts['lh'])
+            polys_combined.append(polys)
+        pts_combined = np.vstack(pts_combined)
+        polys_combined = np.vstack(polys_combined)
         # clear the cache, per #81
-        cortex.database.db.clear_cache(self.sub)
-        # Remove overlays.svg file (FLATMAPS HAVE CHANGED)
-        overlays_file = cortex.database.db.get_paths(self.sub)['overlays']
-        if os.path.exists(overlays_file):
-            os.unlink(overlays_file)
-        # Make the overlays.svg file
-        self.quick_show()
-        # copy an og version that we won't mess with
-        old_file = opj(self.ctx_path, 'overlays.svg')
-        new_file = opj(self.ctx_path, 'og_overlays.svg')
-        os.system(f'cp {old_file} {new_file}')
+        self.clear_cache()
+        self.clear_overlays()
+
+        # Make the svg
+        # from cortex.polyutils import trace_poly, boundary_edges
+        # from cortex.svgoverlay import make_svg
+        # svg_str = make_svg(pts_combined, polys_combined)
+        # with open(self.svg_overlay, 'w') as f:
+        #     f.write(svg_str)                
+        # Check the database is
+        # import importlib
+        # importlib.reload(cortex)
+        # importlib.reload(cortex.db)
+        # weird fix for pycortex
+        # set_ctx_path('./')        
+        # cortex.db.reload_subjects()
+        # set_ctx_path(self.ctx_path)
+        # cortex.db.reload_subjects()
+        # cortex.db = cortex.database.Database() # RELOAD
+        do_quickshow = kwargs.get('do_quickshow', False)        
+        if do_quickshow:
+            self.quick_show()        
+            # copy an og version that we won't mess with
+            old_file = opj(self.sub_ctx_path, 'overlays.svg')
+            new_file = opj(self.sub_ctx_path, 'og_overlays.svg')
+            os.system(f'cp {old_file} {new_file}')
         self.add_fake_flat_to_mesh_info()
     
     def add_rois_to_svg(self, roi_list, filename=None):
         if filename is None:
             filename = self.svg_overlay
         self.reset_overlays()
-        vx_list = self._return_roi_borders_in_order(roi_list, mesh_name='flat', combine_matches=True)
+        vx_list = self._return_roi_borders_in_order(roi_list, combine_matches=True)
         # Normalize coords as in roi pycortex
         from lxml import etree
         from cortex import db
@@ -894,6 +989,7 @@ class PyctxMaker(GenMeshMaker):
             hemi = vx['hemi']
             vx['border_coords'][0] = svgmpts_hemi[hemi][vx['border_vx'],0].copy()
             vx['border_coords'][1] = svgmpts_hemi[hemi][vx['border_vx'],1].copy()
+            vx['border_coords'][2] *= 0 # flat!       
             new_vx_list.append(vx)
         vx_list = new_vx_list
         # Now add to svg
@@ -924,7 +1020,8 @@ class PyctxMaker(GenMeshMaker):
             path_data += f"Z"            
             # Insert into SVG
             svgpath = etree.SubElement(roilayer, "path")
-            svgpath.attrib["style"] = "fill:none;stroke:#000000;stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opactiy:1"
+            stroke_col = dag_hash_col_from_str(roi_name)
+            svgpath.attrib["style"] = f"fill:none;stroke:{stroke_col};stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opactiy:1"
             svgpath.attrib["d"] = path_data
             # svgpath.attrib["sodipodi:nodetypes"] = "c" * len(pts)
             # break
@@ -940,7 +1037,7 @@ class PyctxMaker(GenMeshMaker):
         import nibabel as nib
         self.mesh_info['flat'] = {}
         for hemi in ['lh','rh']:
-            flat_surf_path = opj(self.ctx_path, 'surfaces', f'flat_{hemi}.gii')
+            flat_surf_path = opj(self.sub_ctx_path, 'surfaces', f'flat_{hemi}.gii')
             flat = nib.load(flat_surf_path)
             flat_pts = flat.darrays[0].data
             flat_polys = flat.darrays[1].data

@@ -4,7 +4,61 @@
 import matplotlib.pyplot as plt
 from io import BytesIO
 import IPython.display as display
+# plt.hist(edge_lengths, bins=20)
+# plt.axvline(m_edge_length, c='r')
+# plt.axvline(m_edge_length + edge_factor*std_edge_length, c='r')
+# bloop
 
+# pts = np.vstack([fake_flat['x'],fake_flat['y'], fake_flat['z']]).T
+# PREVIOUS CUTTING STRATEGIES...
+# outer_vx = ConvexHull(pts[:,:2]).vertices
+# plt.figure()
+# plt.scatter(
+#     pts[:,0], pts[:,1], c=sphere_mesh_info['x']
+# )
+# plt.scatter(
+#     pts[outer_vx,0], pts[outer_vx,1], c='r'
+# )
+# # bloop
+# in_face_x = {} 
+# for face_x in ['i', 'j', 'k']:
+#     in_face_x[face_x] = np.isin(sphere_mesh_info[face_x], outer_vx) * 1.0    
+
+# # remove faces with 2+ vx in the cut
+# f_w_23cutvx = (in_face_x['i'] + in_face_x['j'] + in_face_x['k']) >= 2
+# print(f'Faces with 2+ vx in the cut: {f_w_23cutvx.sum()}')
+# fake_flat['faces']  = sphere_mesh_info['faces'][~f_w_23cutvx,:]
+# fake_flat['i']      = sphere_mesh_info['i'][~f_w_23cutvx]
+# fake_flat['j']      = sphere_mesh_info['j'][~f_w_23cutvx]
+# fake_flat['k']      = sphere_mesh_info['k'][~f_w_23cutvx]
+
+
+# # Now find those outer vertices which appear in 2 faces
+# flat_faces = fake_flat['faces'].ravel()
+# vx_counts = np.sum(flat_faces[:, None]==outer_vx, axis=0)
+# print(vx_counts)
+
+# vx_in2face = np.where(vx_counts==2)[0]
+# faces2remove = []
+# for i_outvx in vx_in2face:
+#     this_vx = outer_vx[i_outvx]
+#     # find it ...
+
+#     faces2remove.append(
+#         np.where(np.sum(fake_flat['faces'] == this_vx, axis=1) > 0)[0][0]
+#     )
+# # Remove the face
+# if faces2remove is not []:
+#     fake_flat['faces'] = np.delete(fake_flat['faces'], faces2remove, axis=0)
+#     fake_flat['i'] = np.delete(fake_flat['i'], faces2remove)
+#     fake_flat['j'] = np.delete(fake_flat['j'], faces2remove)
+#     fake_flat['k'] = np.delete(fake_flat['k'], faces2remove)
+
+# *********************************************
+# Now find those outer vertices which appear in 2 faces
+# flat_faces = fake_flat['faces'].ravel()
+# vx_counts = np.sum(flat_faces[:, None]==outer_vx, axis=0)
+# polys = fake_flat['faces']  
 # Assuming fig1, fig2, fig3, fig4 are your figures
 def fig_to_img(fig):
     buf = BytesIO()

@@ -266,7 +266,7 @@ def dag_mesh_slice(mesh_info, **kwargs):
 #     return x,y,z
 
 
-def dag_sph2flat(coords):
+def dag_sph2flat(coords, **kwargs):
     '''Trying to "fake" flatten the sphere
     TODO: 
     * option to define the centre... 
@@ -289,29 +289,75 @@ def dag_sph2flat(coords):
     atol = 10
     if not np.allclose(d20, d20[0], atol=atol):
         print(f'Warning: Not all points are equidistant from 0,0,0 atol={atol}')
+    # centre_sph = kwargs.get('centre_sph', None)
+    # centre_bool = kwargs.get('centre_bool', None)
+    # if centre_bool is not None:        
+    #     centre_sph = coords[centre_bool].mean(axis=0)        
+    #     print(f'Centre: {centre_sph}')
+
+    # if centre_sph is not None:
+    #     # Now rotate the sphere so that the vector centre_sph is at the centre         
+    #     # Find the elevation and azimuth of centre_sph        
+    #     r,pol,azi = dag_coord_convert3d(centre_sph[0], centre_sph[1], centre_sph[2], 'cart2pol')
+    #     old_r,old_pol,old_azi = dag_coord_convert3d(coords[:,0], coords[:,1], coords[:,2], 'cart2pol')
+    #     # Now lets rotate!
+    #     new_pol = (old_pol - pol) % (2*np.pi)
+    #     new_azi = (old_azi - azi) % (2*np.pi)              
+    #     new_x, new_y, new_z = dag_coord_convert3d(old_r,new_pol,new_azi, 'pol2cart')
+    #     coords = np.vstack([new_x, new_y, new_z]).T
+
     # Now flatten to 2D using longitude and latitude
     x,y,z = coords[:,0], coords[:,1], coords[:,2]
-    lat= np.arctan2(z, np.sqrt(x**2 + y**2))
+    lat= np.arctan2(z, np.sqrt(x**2 + y**2)) #* 2 # 
     lon = np.arctan2(y, x)
+    # print(f'Lat: {lat.min()} {lat.max()}')
+    # print(f'Lon: {lon.min()} {lon.max()}')
+
+
+    # Adjust longitudes based on the new center longitude
+    # centre_new = kwargs.get('centre_new', None)
+    centre_bool = kwargs.get('centre_bool', None)
+    if centre_bool is not None:
+        centre_lat = lat[centre_bool].mean()
+        centre_lon = lon[centre_bool].mean()    
+        print('centering!')
+        lat -= centre_lat
+        lat = (lat + np.pi) % (2 * np.pi) - np.pi
+        lon -= centre_lon
+        lon = (lon + np.pi) % (2 * np.pi) - np.pi
+    # bloop
     return lon, lat
 
 
 
 import copy
-def dag_fake_flatten(sphere_mesh_info):
+def dag_fake_flatten(sphere_mesh_info, **kwargs):
     '''Take the spherical coordinates
     > flatten them to 2D (just polar)
     > find the enclosing edges convex hull 
     > remove the faces with 3 vx in the hull    
     '''
+    z = kwargs.get('z', 0)
     fake_flat = {}
-    p1, p2 = dag_sph2flat(sphere_mesh_info['coords'])
+    p1, p2 = dag_sph2flat(sphere_mesh_info['coords'], **kwargs)
     # find relative scale...
     mag = sphere_mesh_info['coords'].max() / p1.max() 
     fake_flat['x'] = p1 * mag
     fake_flat['y'] = p2 * mag
-    fake_flat['z'] = np.zeros_like(p1)    
-
+    fake_flat['z'] = np.ones_like(fake_flat['x']) * z
+    
+    # Cut faces with any of the "cut_bool" vertices in them
+    cut_bool = kwargs.get('cut_bool', None)
+    if cut_bool is not None:
+        # Find any faces with vertices in the cut
+        cut_vx = np.where(cut_bool)[0]
+        cut_faces = np.isin(sphere_mesh_info['i'], cut_vx) + np.isin(sphere_mesh_info['j'], cut_vx) + np.isin(sphere_mesh_info['k'], cut_vx)
+        cut_faces = cut_faces>0
+        print(f'Cutting {cut_faces.sum()} faces out of {cut_faces.shape[0]}')
+    else:
+        cut_faces = np.zeros(sphere_mesh_info['i'].shape[0], dtype=bool)
+    
+    
     # Find the mean length of an edge 
     face_lengths = []
     for i_f in range(sphere_mesh_info['i'].shape[0]):
@@ -333,74 +379,55 @@ def dag_fake_flatten(sphere_mesh_info):
     std_face_lengths = face_lengths.std()
     # Find the faces with edges > 4*std
     f_w_long_edges = face_lengths > m_face_lengths + 4*std_face_lengths
+    
+    cut_faces |= f_w_long_edges
     print(f'Faces with long edges: {f_w_long_edges.sum()}')    
-    fake_flat['faces']  = sphere_mesh_info['faces'][~f_w_long_edges,:]
-    fake_flat['i']      = sphere_mesh_info['i'][~f_w_long_edges]
-    fake_flat['j']      = sphere_mesh_info['j'][~f_w_long_edges]
-    fake_flat['k']      = sphere_mesh_info['k'][~f_w_long_edges]
 
-    pts = np.vstack([fake_flat['x'],fake_flat['y'], fake_flat['z']]).T
+    fake_flat['faces']  = sphere_mesh_info['faces'][~cut_faces,:]
+    fake_flat['i']      = sphere_mesh_info['i'][~cut_faces]
+    fake_flat['j']      = sphere_mesh_info['j'][~cut_faces]
+    fake_flat['k']      = sphere_mesh_info['k'][~cut_faces]
+
+    pts = np.vstack([fake_flat['x'],fake_flat['y'], fake_flat['z']]).T    
+    pts[cut_bool] = 0 # Move pts to cut to 0
     polys = fake_flat['faces']
-    
-    # plt.hist(edge_lengths, bins=20)
-    # plt.axvline(m_edge_length, c='r')
-    # plt.axvline(m_edge_length + edge_factor*std_edge_length, c='r')
-    # bloop
-
-    # pts = np.vstack([fake_flat['x'],fake_flat['y'], fake_flat['z']]).T
-    # PREVIOUS CUTTING STRATEGIES...
-    # outer_vx = ConvexHull(pts[:,:2]).vertices
-    # plt.figure()
-    # plt.scatter(
-    #     pts[:,0], pts[:,1], c=sphere_mesh_info['x']
-    # )
-    # plt.scatter(
-    #     pts[outer_vx,0], pts[outer_vx,1], c='r'
-    # )
-    # # bloop
-    # in_face_x = {} 
-    # for face_x in ['i', 'j', 'k']:
-    #     in_face_x[face_x] = np.isin(sphere_mesh_info[face_x], outer_vx) * 1.0    
-    
-    # # remove faces with 2+ vx in the cut
-    # f_w_23cutvx = (in_face_x['i'] + in_face_x['j'] + in_face_x['k']) >= 2
-    # print(f'Faces with 2+ vx in the cut: {f_w_23cutvx.sum()}')
-    # fake_flat['faces']  = sphere_mesh_info['faces'][~f_w_23cutvx,:]
-    # fake_flat['i']      = sphere_mesh_info['i'][~f_w_23cutvx]
-    # fake_flat['j']      = sphere_mesh_info['j'][~f_w_23cutvx]
-    # fake_flat['k']      = sphere_mesh_info['k'][~f_w_23cutvx]
-
-
-    # # Now find those outer vertices which appear in 2 faces
-    # flat_faces = fake_flat['faces'].ravel()
-    # vx_counts = np.sum(flat_faces[:, None]==outer_vx, axis=0)
-    # print(vx_counts)
-
-    # vx_in2face = np.where(vx_counts==2)[0]
-    # faces2remove = []
-    # for i_outvx in vx_in2face:
-    #     this_vx = outer_vx[i_outvx]
-    #     # find it ...
-
-    #     faces2remove.append(
-    #         np.where(np.sum(fake_flat['faces'] == this_vx, axis=1) > 0)[0][0]
-    #     )
-    # # Remove the face
-    # if faces2remove is not []:
-    #     fake_flat['faces'] = np.delete(fake_flat['faces'], faces2remove, axis=0)
-    #     fake_flat['i'] = np.delete(fake_flat['i'], faces2remove)
-    #     fake_flat['j'] = np.delete(fake_flat['j'], faces2remove)
-    #     fake_flat['k'] = np.delete(fake_flat['k'], faces2remove)
-
-    # *********************************************
-    # Now find those outer vertices which appear in 2 faces
-    # flat_faces = fake_flat['faces'].ravel()
-    # vx_counts = np.sum(flat_faces[:, None]==outer_vx, axis=0)
-    # polys = fake_flat['faces']    
     return pts, polys
 
 
+def dag_cut_box(mesh_info, **kwargs):
+    '''Find vx to cut for a box
 
+    '''
+    border_buffer = kwargs.get('border_buffer', 10) # % of the max distance
+
+    borders = {}
+    borders['x_min'] = kwargs.get('x_min', None)
+    borders['x_max'] = kwargs.get('x_max', None)
+    borders['y_min'] = kwargs.get('y_min', None)
+    borders['y_max'] = kwargs.get('y_max', None)
+    borders['z_min'] = kwargs.get('z_min', None)
+    borders['z_max'] = kwargs.get('z_max', None)
+    vx_bool = kwargs.get('vx_bool', None)
+    if vx_bool is not None:
+        for b in ['x', 'y', 'z']:
+            borders[f'{b}_min'] = mesh_info[b][vx_bool].min()
+            borders[f'{b}_max'] = mesh_info[b][vx_bool].max()
+    # Now find the vx to include 
+    vx_to_include = np.ones_like(mesh_info['x'], dtype=bool)
+    # find the biggest distance
+    abs_border_buffer = 0
+    for b in ['x', 'y', 'z']:
+        abs_border_buffer = max(
+            abs_border_buffer, 
+            (mesh_info[b].max() - mesh_info[b].min()) * border_buffer / 100)
+
+    for b in ['x', 'y', 'z']:
+        if borders[f'{b}_min'] is not None:
+            vx_to_include &= mesh_info[b]>borders[f'{b}_min'] - abs_border_buffer
+        if borders[f'{b}_max'] is not None:
+            vx_to_include &= mesh_info[b]<borders[f'{b}_max'] + abs_border_buffer
+
+    return vx_to_include
 
 # ************************************************************************
 def dag_plotly_eye(el, az, zoom):

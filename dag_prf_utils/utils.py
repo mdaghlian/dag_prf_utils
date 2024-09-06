@@ -484,8 +484,8 @@ def dag_id_occ_ctx(sub, fs_dir, split_LR=False, max_y=-35):
     for i_hemi in ['lh', 'rh']:
         surf = opj(fs_dir, sub, 'surf', f'{i_hemi}.inflated')
         mesh_info = dag_read_fs_mesh(surf)
-        occ_idx.append(mesh_info['coords'][:,1]<=max_y)        
-        occ_idx_split[i_hemi] = mesh_info['coords'][:,1]<=max_y
+        occ_idx.append(mesh_info['coords'][:,1]>=max_y)        
+        occ_idx_split[i_hemi] = mesh_info['coords'][:,1]>=max_y
     
     occ_idx = np.concatenate(occ_idx)
 
@@ -602,6 +602,32 @@ def dag_coord_convert(a,b,old2new):
         new_b = pol
         
     return new_a, new_b
+
+
+def dag_coord_convert3d(a,b,c,old2new):
+    ''' 
+    Convert cartesian to polar and vice versa
+    >> a,b,c          x,y,z or eccentricity, polar, azimuth
+    >> old2new      direction of conversion ('pol2cart' or 'cart2pol') 
+    '''
+    if old2new=="pol2cart":
+        x = a * np.sin(b) * np.cos(c)
+        y = a * np.sin(b) * np.sin(c)
+        z = a * np.cos(b)
+
+        new_a = x
+        new_b = y
+        new_c = z
+    
+    elif old2new=="cart2pol":            
+        ecc = np.sqrt( a**2 + b**2 + c**2 ) # Eccentricity
+        pol = np.arccos( c/ecc ) # Polar angle
+        azi = np.arctan2( b, a ) # Azimuthal angle
+        new_a = ecc
+        new_b = pol
+        new_c = azi
+        
+    return new_a, new_b, new_c
 
 def dag_pol_difference(pol, ref_pol):
     abs_diff = np.abs(ref_pol - pol)

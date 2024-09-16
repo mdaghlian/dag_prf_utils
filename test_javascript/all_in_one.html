@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Three.js OBJ Loader with Camera Controls</title>
+    <style>
+        body { margin: 0; }
+        canvas { display: block; }
+    </style>
+</head>
+<body>
+    <script type="module">
+        import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.module.js';
+        import { OBJLoader } from 'https://cdn.jsdelivr.net/npm/three@0.128.0/examples/jsm/loaders/OBJLoader.js';
+        import { GUI } from 'https://cdn.jsdelivr.net/npm/dat.gui/build/dat.gui.module.js';
+
+        // Scene setup
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.body.appendChild(renderer.domElement);
+
+        // Lighting
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+        scene.add(ambientLight);
+        const directionalLight = new THREE.DirectionalLight(0xffffff, 1);
+        scene.add(directionalLight);
+
+        // Load OBJ file
+        const objLoader = new OBJLoader();
+        objLoader.load('path/to/your/model.obj', (object) => {
+            scene.add(object);
+        });
+
+        // Camera controls
+        const controls = {
+            radius: 5,
+            azimuth: 0,
+            elevation: Math.PI / 4,
+        };
+
+        const gui = new GUI();
+        gui.add(controls, 'radius', 1, 20).onChange(updateCamera);
+        gui.add(controls, 'azimuth', 0, Math.PI * 2).onChange(updateCamera);
+        gui.add(controls, 'elevation', 0, Math.PI / 2).onChange(updateCamera);
+
+        function updateCamera() {
+            const x = controls.radius * Math.sin(controls.elevation) * Math.cos(controls.azimuth);
+            const y = controls.radius * Math.cos(controls.elevation);
+            const z = controls.radius * Math.sin(controls.elevation) * Math.sin(controls.azimuth);
+            camera.position.set(x, y, z);
+            camera.lookAt(0, 0, 0);
+        }
+
+        // Initial camera position
+        updateCamera();
+
+        // Handle window resize
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        // Animation loop
+        function animate() {
+            requestAnimationFrame(animate);
+            renderer.render(scene, camera);
+        }
+        animate();
+    </script>
+</body>
+</html>

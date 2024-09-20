@@ -427,8 +427,8 @@ class Prf1T1M(object):
 
         dag_visual_field_scatter(
             ax=ax, 
-            dot_x=self.pd_params['x'][vx_mask],
-            dot_y=self.pd_params['y'][vx_mask],
+            dot_x=self.pd_params['x'][vx_mask].to_numpy(),
+            dot_y=self.pd_params['y'][vx_mask].to_numpy(),
             dot_col = dot_col,
             **kwargs
         )        
@@ -462,8 +462,8 @@ class Prf1T1M(object):
             kwargs['dot_col'] = self.pd_params[pc][vx_mask]
         dag_scatter(
             ax=ax,
-            X=self.pd_params[px][vx_mask],
-            Y=self.pd_params[py][vx_mask],
+            X=self.pd_params[px][vx_mask].to_numpy(),
+            Y=self.pd_params[py][vx_mask].to_numpy(),
             **kwargs
         )    
         ax.set_xlabel(px)
@@ -795,8 +795,8 @@ class PrfMulti(object):
             return
         dag_scatter(
             ax=ax,
-            X=self.prf_obj[px_id].pd_params[px_p][vx_mask],
-            Y=self.prf_obj[py_id].pd_params[py_p][vx_mask],
+            X=self.prf_obj[px_id].pd_params[px_p][vx_mask].to_numpy(),
+            Y=self.prf_obj[py_id].pd_params[py_p][vx_mask].to_numpy(),
             **kwargs
         )              
         ax.set_xlabel(px)        

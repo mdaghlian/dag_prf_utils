@@ -267,7 +267,12 @@ def dag_mesh_slice(mesh_info, **kwargs):
 
 
 def dag_sph2flat(coords, **kwargs):
-    '''Trying to "fake" flatten the sphere
+    '''Flatten a sphere to 2D
+    This is a bad way to flatten the cortex
+    You should probably do proper surface cuts etc...
+    But this is a quick and dirty way to do it. And may even be ok when you do if for ROIs...
+    It is a work in progress, which may improve overtime...
+    
     TODO: 
     * option to define the centre... 
     * better way to do the projection?
@@ -278,9 +283,7 @@ def dag_sph2flat(coords, **kwargs):
     lon -= center_lon
     
     # Ensure lon is within the range [-pi, pi]
-    lon = (lon + np.pi) % (2 * np.pi) - np.pi
-        
-
+    lon = (lon + np.pi) % (2 * np.pi) - np.pi    
     '''
     # First move to 0,0,0...
     coords -= coords.mean(axis=0)
@@ -289,33 +292,16 @@ def dag_sph2flat(coords, **kwargs):
     atol = 10
     if not np.allclose(d20, d20[0], atol=atol):
         print(f'Warning: Not all points are equidistant from 0,0,0 atol={atol}')
-    # centre_sph = kwargs.get('centre_sph', None)
-    # centre_bool = kwargs.get('centre_bool', None)
-    # if centre_bool is not None:        
-    #     centre_sph = coords[centre_bool].mean(axis=0)        
-    #     print(f'Centre: {centre_sph}')
-
-    # if centre_sph is not None:
-    #     # Now rotate the sphere so that the vector centre_sph is at the centre         
-    #     # Find the elevation and azimuth of centre_sph        
-    #     r,pol,azi = dag_coord_convert3d(centre_sph[0], centre_sph[1], centre_sph[2], 'cart2pol')
-    #     old_r,old_pol,old_azi = dag_coord_convert3d(coords[:,0], coords[:,1], coords[:,2], 'cart2pol')
-    #     # Now lets rotate!
-    #     new_pol = (old_pol - pol) % (2*np.pi)
-    #     new_azi = (old_azi - azi) % (2*np.pi)              
-    #     new_x, new_y, new_z = dag_coord_convert3d(old_r,new_pol,new_azi, 'pol2cart')
-    #     coords = np.vstack([new_x, new_y, new_z]).T
 
     # Now flatten to 2D using longitude and latitude
     x,y,z = coords[:,0], coords[:,1], coords[:,2]
-    lat= np.arctan2(z, np.sqrt(x**2 + y**2)) #* 2 # 
+    lat= np.arctan2(z, np.sqrt(x**2 + y**2)) * 2 # 
     lon = np.arctan2(y, x)
     # print(f'Lat: {lat.min()} {lat.max()}')
     # print(f'Lon: {lon.min()} {lon.max()}')
 
 
     # Adjust longitudes based on the new center longitude
-    # centre_new = kwargs.get('centre_new', None)
     centre_bool = kwargs.get('centre_bool', None)
     if centre_bool is not None:
         centre_lat = lat[centre_bool].mean()
@@ -325,26 +311,25 @@ def dag_sph2flat(coords, **kwargs):
         lat = (lat + np.pi) % (2 * np.pi) - np.pi
         lon -= centre_lon
         lon = (lon + np.pi) % (2 * np.pi) - np.pi
-    # bloop
+
     return lon, lat
 
 
 
 import copy
-def dag_fake_flatten(sphere_mesh_info, **kwargs):
+def dag_bad_flatten(sphere_mesh_info, **kwargs):
     '''Take the spherical coordinates
-    > flatten them to 2D (just polar)
-    > find the enclosing edges convex hull 
-    > remove the faces with 3 vx in the hull    
+    This is a bad way to flatten the sphere - you should probably do proper surface cuts etc...    
+    flatten them to 2D (just polar)
     '''
     z = kwargs.get('z', 0)
-    fake_flat = {}
+    bad_flat = {}
     p1, p2 = dag_sph2flat(sphere_mesh_info['coords'], **kwargs)
     # find relative scale...
     mag = sphere_mesh_info['coords'].max() / p1.max() 
-    fake_flat['x'] = p1 * mag
-    fake_flat['y'] = p2 * mag
-    fake_flat['z'] = np.ones_like(fake_flat['x']) * z
+    bad_flat['x'] = p1 * mag
+    bad_flat['y'] = p2 * mag
+    bad_flat['z'] = np.ones_like(bad_flat['x']) * z
     
     # Cut faces with any of the "cut_bool" vertices in them
     cut_bool = kwargs.get('cut_bool', None)
@@ -362,16 +347,16 @@ def dag_fake_flatten(sphere_mesh_info, **kwargs):
     face_lengths = []
     for i_f in range(sphere_mesh_info['i'].shape[0]):
         ei2j = np.sqrt(
-            (fake_flat['x'][sphere_mesh_info['i'][i_f]] - fake_flat['x'][sphere_mesh_info['j'][i_f]])**2 +
-            (fake_flat['y'][sphere_mesh_info['i'][i_f]] - fake_flat['y'][sphere_mesh_info['j'][i_f]])**2
+            (bad_flat['x'][sphere_mesh_info['i'][i_f]] - bad_flat['x'][sphere_mesh_info['j'][i_f]])**2 +
+            (bad_flat['y'][sphere_mesh_info['i'][i_f]] - bad_flat['y'][sphere_mesh_info['j'][i_f]])**2
         )
         ei2k = np.sqrt(
-            (fake_flat['x'][sphere_mesh_info['i'][i_f]] - fake_flat['x'][sphere_mesh_info['k'][i_f]])**2 +
-            (fake_flat['y'][sphere_mesh_info['i'][i_f]] - fake_flat['y'][sphere_mesh_info['k'][i_f]])**2
+            (bad_flat['x'][sphere_mesh_info['i'][i_f]] - bad_flat['x'][sphere_mesh_info['k'][i_f]])**2 +
+            (bad_flat['y'][sphere_mesh_info['i'][i_f]] - bad_flat['y'][sphere_mesh_info['k'][i_f]])**2
         )
         ej2k = np.sqrt(
-            (fake_flat['x'][sphere_mesh_info['j'][i_f]] - fake_flat['x'][sphere_mesh_info['k'][i_f]])**2 +
-            (fake_flat['y'][sphere_mesh_info['j'][i_f]] - fake_flat['y'][sphere_mesh_info['k'][i_f]])**2
+            (bad_flat['x'][sphere_mesh_info['j'][i_f]] - bad_flat['x'][sphere_mesh_info['k'][i_f]])**2 +
+            (bad_flat['y'][sphere_mesh_info['j'][i_f]] - bad_flat['y'][sphere_mesh_info['k'][i_f]])**2
         )
         face_lengths.append(ei2j+ei2k+ej2k)
     face_lengths = np.array(face_lengths)
@@ -383,14 +368,14 @@ def dag_fake_flatten(sphere_mesh_info, **kwargs):
     cut_faces |= f_w_long_edges
     print(f'Faces with long edges: {f_w_long_edges.sum()}')    
 
-    fake_flat['faces']  = sphere_mesh_info['faces'][~cut_faces,:]
-    fake_flat['i']      = sphere_mesh_info['i'][~cut_faces]
-    fake_flat['j']      = sphere_mesh_info['j'][~cut_faces]
-    fake_flat['k']      = sphere_mesh_info['k'][~cut_faces]
+    bad_flat['faces']  = sphere_mesh_info['faces'][~cut_faces,:]
+    bad_flat['i']      = sphere_mesh_info['i'][~cut_faces]
+    bad_flat['j']      = sphere_mesh_info['j'][~cut_faces]
+    bad_flat['k']      = sphere_mesh_info['k'][~cut_faces]
 
-    pts = np.vstack([fake_flat['x'],fake_flat['y'], fake_flat['z']]).T    
+    pts = np.vstack([bad_flat['x'],bad_flat['y'], bad_flat['z']]).T    
     pts[cut_bool] = 0 # Move pts to cut to 0
-    polys = fake_flat['faces']
+    polys = bad_flat['faces']
     return pts, polys
 
 

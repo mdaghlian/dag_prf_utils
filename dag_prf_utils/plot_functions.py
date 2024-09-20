@@ -645,6 +645,11 @@ def dag_plot_bin_line(ax, X,Y, bin_using, **kwargs):
         Y_upper_bar = Y_std
         Y_lower_shade = Y_mid - Y_std
         Y_upper_shade = Y_mid + Y_std
+    # replace any nans with zeros or ymid
+    # Y_lower_bar[np.isnan(Y_lower_bar)] = 0
+    # Y_upper_bar[np.isnan(Y_upper_bar)] = 0
+    # Y_lower_shade[np.isnan(Y_lower_shade)] = Y_mid[np.isnan(Y_lower_shade)]
+    # Y_upper_shade[np.isnan(Y_upper_shade)] = Y_mid[np.isnan(Y_upper_shade)]
 
     # Apply minimum per bin
     XY_count = binned_statistic(bin_using, X, bins=bins, statistic='count')[0]
@@ -656,13 +661,14 @@ def dag_plot_bin_line(ax, X,Y, bin_using, **kwargs):
                 Y_upper_bar[i_bin] = np.nan
                 Y_lower_shade[i_bin] = np.nan
                 Y_upper_shade[i_bin] = np.nan
+    
 
     if do_bars:
-        # print()
+        mask = ~np.isnan(Y_mid)
         ax.errorbar(
-            X_mid,
-            Y_mid,
-            yerr=[Y_lower_bar, Y_upper_bar],
+            X_mid[mask],
+            Y_mid[mask],
+            yerr=[Y_lower_bar[mask], Y_upper_bar[mask]],
             # xerr=X_std,
             color=line_col,
             label=line_label, 

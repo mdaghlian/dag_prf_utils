@@ -30,7 +30,7 @@ class TSPlotter(Prf1T1M):
         else: 
             print('MAKING UP A PRFPY STIMULUS FOR PLOTTING PURPOSE')
             if 'csf' in self.model:
-                self.edge_type = kwargs.get('edge_type', 'gaussian')
+                self.edge_type = kwargs.get('edge_type', 'CRF')
                 self.TR_in_s = kwargs.get('TR_in_s', 1.5)
                 self.prfpy_stim = CSenFStimulus(
                     SF_seq=[0,0],

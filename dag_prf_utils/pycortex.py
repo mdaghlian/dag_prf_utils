@@ -644,7 +644,7 @@ class PyctxMaker(GenMeshMaker):
         self.svg_overlay = opj(self.sub_ctx_path, 'overlays.svg')
         # Try adding flat
         try:
-            self.add_fake_flat_to_mesh_info()
+            self.add_flat_to_mesh_info()
         except:
             pass
         self.vertex_dict = {} 
@@ -844,7 +844,7 @@ class PyctxMaker(GenMeshMaker):
             if 'flat_' in file:
                 os.unlink(opj(self.sub_ctx_path, 'surfaces', file))
 
-    def make_fake_flat_map(self, **kwargs):
+    def make_bad_flat_map(self, **kwargs):
         '''
         Pycotex uses flatmaps for a bunch of things
         But if you can't be bothered to do it properly, and just want
@@ -861,7 +861,7 @@ class PyctxMaker(GenMeshMaker):
 
         do_flip = kwargs.get('do_flip', False)
 
-        # Make a fake flatmap...
+        # Make a bad flatmap...
         # [1] Look for the overlays.svg if it exists back it up
         old_overlay = opj(self.sub_ctx_path, 'overlays.svg')
         current_datetime_str = datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
@@ -902,7 +902,7 @@ class PyctxMaker(GenMeshMaker):
                     roi_name='occ', y_max=cut_along_y)[hemi]                
                 hemi_kwargs['cut_bool'] = cut_bool
 
-            pts,polys = dag_fake_flatten(
+            pts,polys = dag_bad_flatten(
                 self.mesh_info['sphere'][hemi], **hemi_kwargs)
             # We want it to be roughly on the same scale as the inflated map
             diff_x = pts[:,0].mean() - infl_x.mean()
@@ -963,7 +963,7 @@ class PyctxMaker(GenMeshMaker):
             old_file = opj(self.sub_ctx_path, 'overlays.svg')
             new_file = opj(self.sub_ctx_path, 'og_overlays.svg')
             os.system(f'cp {old_file} {new_file}')
-        self.add_fake_flat_to_mesh_info()
+        self.add_flat_to_mesh_info()
     
     def add_rois_to_svg(self, roi_list, filename=None):
         if filename is None:
@@ -1030,7 +1030,7 @@ class PyctxMaker(GenMeshMaker):
         # svgroipack = get_overlay(self.subject, filename, mpts, mpolys)
         # svg = etree.parse(svgroipack.svgfile, parser=parser)
 
-    def add_fake_flat_to_mesh_info(self):
+    def add_flat_to_mesh_info(self):
         '''
         Add the flatmap to the mesh_info
         '''

@@ -13,11 +13,11 @@ except:
     from prfpy.stimulus import PRFStimulus2D
     from prfpy.model import Iso2DGaussianModel, Norm_Iso2DGaussianModel, DoG_Iso2DGaussianModel, CSS_Iso2DGaussianModel
 import nibabel as nib
-from dag_prf_utils.prfpy_functions import prfpy_params_dict
+from dag_prf_utils.prfpy_functions import prfpy_params_dict, Prf1T1M
 from dag_prf_utils.prfpy_ts_plotter import TSPlotter
 from dag_prf_utils.mesh_dash import MeshDash, dag_mesh_pickle
 from dag_prf_utils.fs_tools import FSMaker
-
+from dag_prf_utils.pycortex import PyctxMaker, set_ctx_path
 
 def dag_auto_surf_function(surf_type, **kwargs):
     '''
@@ -262,7 +262,90 @@ def dag_auto_surf_function(surf_type, **kwargs):
             # Do not show it in the notebook
             print(f'http://localhost:{port}/')
             app.run_server(host=host, port=port, debug=False, use_reloader=False)             
-    else:
+    # ****************************************************
+    # ****************************************************
+    elif surf_type == 'pycortex':
+
+        # Make the mesh dash object
+        fs = PyctxMaker(
+            sub=sub, 
+            fs_dir=fs_dir,
+            output_dir=output_dir,
+            )    
+        
+        if model is not None:
+            try:
+                prf_obj = Prf1T1M(
+                    prf_params=data_info['pars'],
+                    model=model,
+                    incl_hrf=True, 
+                )
+            except:
+                prf_obj = Prf1T1M(
+                    prf_params=data_info['pars'],
+                    model=model,
+                    incl_hrf=False, 
+                )
+            if pars_to_plot is None:
+                pars_to_plot = list(prf_obj.pd_params.keys())
+
+            for p in pars_to_plot:
+                data        = prf_obj.pd_params[p].to_numpy()
+                data_mask   = prf_obj.pd_params['rsq'].to_numpy()
+                if p=='pol':
+                    cmap = 'marco_pol'
+                    vmin,vmax = -np.pi, np.pi
+                    kwargs = dict(cmap=cmap, vmin=vmin, vmax=vmax)
+                elif p=='ecc':
+                    cmap = 'ecc2'
+                    vmin,vmax = 0, int(np.nanmax(data))
+                    kwargs = dict(cmap=cmap, vmin=vmin, vmax=vmax)
+                elif p=='rsq':
+                    cmap='plasma'
+                    vmin,vmax = 0,1
+                    kwargs = dict(cmap=cmap, vmin=vmin, vmax=vmax)                
+                elif p in ('x', 'y'):
+                    cmap = 'RdBu'
+                    vmin,vmax = -int(np.nanmax(data)), int(np.nanmax(data))
+                    kwargs = dict(cmap=cmap, vmin=vmin, vmax=vmax)
+
+                else:
+                    kwargs = {}
+                
+                fs.add_vertex_obj(
+                    data=data, 
+                    data_mask=data_mask,
+                    surf_name=p,  
+                    **kwargs,  
+                )
+                # break
+        elif len(data_info['pars_dict']) > 0:
+            for k in data_info['pars_dict'].keys():
+                fs.add_vertex_obj(
+                    data=data_info['pars_dict'][k], 
+                    vx_col_name=k,    
+                )
+        else:            
+            # We don't know what everything is... 
+            if len(data_info['pars'].shape)==1:
+                data_info['pars'] = data_info['pars'][:,np.newaxis]
+
+            for p in np.arange(data_info['pars'].shape[1]):
+                data        = data_info['pars'][:,p]
+                data_mask   = data_info['pars'][:,-1]            
+                fs.add_vertex_obj(
+                    data=data, 
+                    data_mask = data_mask>min_rsq,
+                    vx_col_name=p,    
+                )
+        if dump:
+            fs.return_pyc_saver(viewer=False)
+        if open_surf:
+            fs.return_pyc_saver(viewer=True)
+    # ****************************************************
+    # ****************************************************
+    # FS OBJECT
+    elif surf_type == 'fs':
         # FS OBJECT
         fs = FSMaker(
             sub=sub, 

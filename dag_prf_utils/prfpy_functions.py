@@ -383,6 +383,8 @@ class Prf1T1M(object):
         '''
         if px_list is None:
             px_list = list(self.pd_params.keys())
+        elif not isinstance(px_list, list):
+            px_list = [px_list]
                 
         # relevant mask 
         vx_mask = self.return_vx_mask(th)
@@ -655,6 +657,8 @@ class PrfMulti(object):
         '''
         if px_list is None:
             px_list = list(self.pd_params.keys())
+        elif not isinstance(px_list, list):
+            px_list = [px_list]
         px_id = [None] * len(px_list)
         px_p = [None] * len(px_list)
         for i,p in enumerate(px_list):

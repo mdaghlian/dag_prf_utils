@@ -21,7 +21,24 @@ def dag_dct_detrending(ts_au, n_trend_to_remove, do_psc=True, baseline_pt=None):
     if ts_au.ndim == 1:
         ts_au = ts_au.reshape(-1, 1)
 
-    if n_trend_to_remove!=0:
+    if n_trend_to_remove=='linear':
+        _, n_cols = ts_au.shape
+        
+        # Create the matrix A where each row is [x, 1] for all x values
+        x = np.arange(n_cols)
+        A = np.vstack([x, np.ones(n_cols)]).T  # Shape is (n_cols, 2)
+        
+        # Use lstsq (least squares solution) to solve for m and b for all rows at once
+        # y = array, A is the design matrix, A @ [m, b] = y
+        # np.linalg.lstsq solves the linear system A @ [m, b] = y for each row
+        coeffs = np.linalg.lstsq(A, ts_au.T, rcond=None)[0]
+        
+        # coeffs contains [m, b] for each row, but in transposed form
+        slopes = coeffs[0]  # First row corresponds to m (slopes)
+        # Subtract out the linear trend
+        ts_detrend = ts_au - (slopes[...,np.newaxis] * x)        
+
+    elif n_trend_to_remove!=0:
         # Preparation: demean the time series
         ts_au_centered = ts_au - np.mean(ts_au, axis=1, keepdims=True)
 

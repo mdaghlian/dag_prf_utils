@@ -1020,19 +1020,15 @@ class PyctxMaker(GenMeshMaker):
         
         for i,vx in enumerate(vx_list):
             roi_name = f"{vx['roi']}"
-            # print(roi_name)
-            # # # id_count = 0
-            # # if vx['first_instance']:
-            # #     id_count = 0
-            # # else:
-            # #     id_count += 1
-            # #     roi_name = '_'.join([roi_name, str(id_count)])
             roilayer = _make_layer(
                 _find_layer(_find_layer(svg, "rois"),"shapes"),
                 roi_name, 
                 )
             x_coords = vx['border_coords'][0].copy()
             y_coords = vx['border_coords'][1].copy()
+            # In svg language the path is defined by a string
+            # M x1,y1 L x2,y2 L x3,y3 L x4,y4 Z 
+            # where M is move to, L is line to, Z is close path            
             path_data = f"M {x_coords[0]:.4f},{y_coords[0]:.4f} "            
             # Generate path data
             for i in range(1, len(x_coords)):

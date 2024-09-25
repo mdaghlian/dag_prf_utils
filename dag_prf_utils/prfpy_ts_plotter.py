@@ -33,8 +33,8 @@ class TSPlotter(Prf1T1M):
                 self.edge_type = kwargs.get('edge_type', 'CRF')
                 self.TR_in_s = kwargs.get('TR_in_s', 1.5)
                 self.prfpy_stim = CSenFStimulus(
-                    SF_seq=[0,0],
-                    CON_seq=[0,0],
+                    SF_seq=np.array([0,1]),
+                    CON_seq=np.array([0,1]),
                     TR=self.TR_in_s,
                 )
                 self.prfpy_model = CSenFModel(

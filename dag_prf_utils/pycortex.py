@@ -693,6 +693,8 @@ class PyctxMaker(GenMeshMaker):
         
         pycortex_args = kwargs.get('pycortex_args', {})
         return_vx_obj = kwargs.get('return_vx_obj', False) # Return the vertex object? Or save it to self.vertex_dict 
+        # Remove any nonsense...
+        data = np.nan_to_num(data)
 
         if ctx_method.lower()=='custom':
             # Use custom rgb method
@@ -718,6 +720,23 @@ class PyctxMaker(GenMeshMaker):
             # Use either vertex1d or vertex2d        
             data_mask = kwargs.get('data_mask', np.ones(self.total_n_vx, dtype=bool))
             data_alpha = kwargs.get('data_alpha', np.ones(self.total_n_vx))
+            
+            # Some sanity checks - because pycortex is a bit finicky
+            if (data_alpha == data).all():
+                # dimensions are the same... force it to be vertex1d
+                ctx_method = 'vertex1d'
+            if data[data_mask].std() == 0:
+                # If all values are the same, don't bother...
+                print('All values are the same... just using undersurf')
+                ctx_method = 'custom'
+                this_vertex_dict, this_cmap_dict = self.add_vertex_obj(
+                    data=np.random.rand(self.total_n_vx),
+                    surf_name=surf_name,
+                    data_mask=np.zeros(self.total_n_vx, dtype=bool),
+                    ctx_method='custom',
+                    return_vx_obj=True,
+                )            
+
             data_alpha[~data_mask] = 0 # Make values to be masked have alpha=0
             cmap = kwargs.get('cmap', None) # 'autumnblack_alpha_2D') 
             if cmap is not None:   
@@ -734,7 +753,7 @@ class PyctxMaker(GenMeshMaker):
             vmax2 = kwargs.get('vmax2', 1)
             # dtype_to_set = kwargs.get('dtype_to_set', np.float32)            
             data = data.astype(np.float32)
-            data[~data_mask] = masked_value # 
+            # data[~data_mask] = masked_value # 
             # data[np.isnan(data)] = 0
             data_alpha = data_alpha.astype(np.float32)
             # data_alpha[np.isnan(data_alpha)] = 0
@@ -752,7 +771,9 @@ class PyctxMaker(GenMeshMaker):
                 # pick 1 random index 
                 # random_index = np.random.randint(0, len(data))
                 # data_alpha[random_index] = np.random.rand()
-                
+                # vmin1 = 0
+                # vmax1 = 1.5
+                cmap = 'pyc_plasma_2D'
                 this_vertex_dict = cortex.Vertex2D(
                         dim1=data, 
                         dim2=data_alpha,
@@ -765,16 +786,16 @@ class PyctxMaker(GenMeshMaker):
                         **pycortex_args,
                     )
                 # TO FIX THE "unique" pycortex ISSUE...
-                print(this_vertex_dict)
+                # print(this_vertex_dict)
 
                 this_vertex_dict.dim1.unique_id = np.random.rand(500)
                 this_vertex_dict.dim2.unique_id = np.random.rand(500)
                 this_cmap_dict = 'pyc'
             
             elif ctx_method.lower()=='vertex1d':
-                print(data.min())
-                print(vmin1)
-                print(data)
+                # print(data.min())
+                # print(vmin1)
+                # print(data)
                 this_vertex_dict = cortex.Vertex(
                     data=data, 
                     cmap=cmap,                 

@@ -13,6 +13,7 @@ except:
     from prfpy.stimulus import PRFStimulus2D
     from prfpy.model import Iso2DGaussianModel, Norm_Iso2DGaussianModel, DoG_Iso2DGaussianModel, CSS_Iso2DGaussianModel
 import nibabel as nib
+import cortex
 from dag_prf_utils.prfpy_functions import prfpy_params_dict, Prf1T1M
 from dag_prf_utils.prfpy_ts_plotter import TSPlotter
 from dag_prf_utils.mesh_dash import MeshDash, dag_mesh_pickle
@@ -265,7 +266,7 @@ def dag_auto_surf_function(surf_type, **kwargs):
     # ****************************************************
     # ****************************************************
     elif surf_type == 'pycortex':
-
+        ctx_method = kwargs.pop('ctx_method', 'custom')
         # Make the mesh dash object
         fs = PyctxMaker(
             sub=sub, 
@@ -291,32 +292,37 @@ def dag_auto_surf_function(surf_type, **kwargs):
 
             for p in pars_to_plot:
                 data        = prf_obj.pd_params[p].to_numpy()
-                data_mask   = prf_obj.pd_params['rsq'].to_numpy()
+                data_rsq   = prf_obj.pd_params['rsq'].to_numpy()
+                data_mask   = prf_obj.pd_params['rsq'].to_numpy()>min_rsq
+                if 'ecc' in prf_obj.pd_params.keys():
+                    data_mask &= prf_obj.pd_params['ecc'].to_numpy()<max_ecc
                 if p=='pol':
                     cmap = 'marco_pol'
                     vmin,vmax = -np.pi, np.pi
-                    kwargs = dict(cmap=cmap, vmin=vmin, vmax=vmax)
+                    ctx_kwargs = dict(cmap=cmap, vmin=vmin, vmax=vmax)
                 elif p=='ecc':
                     cmap = 'ecc2'
                     vmin,vmax = 0, int(np.nanmax(data))
-                    kwargs = dict(cmap=cmap, vmin=vmin, vmax=vmax)
+                    ctx_kwargs = dict(cmap=cmap, vmin=vmin, vmax=vmax)
                 elif p=='rsq':
                     cmap='plasma'
                     vmin,vmax = 0,1
-                    kwargs = dict(cmap=cmap, vmin=vmin, vmax=vmax)                
+                    ctx_kwargs = dict(cmap=cmap, vmin=vmin, vmax=vmax)                
                 elif p in ('x', 'y'):
                     cmap = 'RdBu'
                     vmin,vmax = -int(np.nanmax(data)), int(np.nanmax(data))
-                    kwargs = dict(cmap=cmap, vmin=vmin, vmax=vmax)
+                    ctx_kwargs = dict(cmap=cmap, vmin=vmin, vmax=vmax)
 
                 else:
-                    kwargs = {}
-                
+                    ctx_kwargs = {}
+                ctx_kwargs['ctx_method'] = ctx_method
+                if ctx_method == 'vertex2d':
+                    ctx_kwargs['data_alpha'] = data_rsq
                 fs.add_vertex_obj(
                     data=data, 
                     data_mask=data_mask,
                     surf_name=p,  
-                    **kwargs,  
+                    **ctx_kwargs,  
                 )
                 # break
         elif len(data_info['pars_dict']) > 0:
@@ -332,16 +338,26 @@ def dag_auto_surf_function(surf_type, **kwargs):
 
             for p in np.arange(data_info['pars'].shape[1]):
                 data        = data_info['pars'][:,p]
-                data_mask   = data_info['pars'][:,-1]            
+                data_mask   = data_info['pars'][:,-1]>min_rsq            
                 fs.add_vertex_obj(
                     data=data, 
                     data_mask = data_mask>min_rsq,
                     vx_col_name=p,    
                 )
         if dump:
-            fs.return_pyc_saver(viewer=False)
-        if open_surf:
-            fs.return_pyc_saver(viewer=True)
+            # fs.return_pyc_saver(viewer=False)
+            # fs.pyc.to_static(filename=file_name)
+            cortex.webgl.make_static(
+                file_name,
+                fs.vertex_dict, 
+                )
+        if open_surf:            
+            cortex.webgl.show(
+                fs.vertex_dict, 
+                port=np.random.randint(8000, 9000),
+                open_browser=False,
+                autoclose=False,
+                )
     # ****************************************************
     # ****************************************************
     # FS OBJECT

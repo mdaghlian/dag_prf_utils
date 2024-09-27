@@ -5,3 +5,6 @@
 *.cpython*
 */__pycache__
 *.bu
+*.log
+*.nfs0*
+rh.EXPE*

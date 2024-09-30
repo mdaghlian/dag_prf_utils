@@ -268,7 +268,7 @@ def dag_mesh_slice(mesh_info, **kwargs):
 
 def dag_sph2flat(coords, **kwargs):
     '''Flatten a sphere to 2D
-    This is a bad way to flatten the cortex
+    This is a probably a bad way to flatten the cortex
     You should probably do proper surface cuts etc...
     But this is a quick and dirty way to do it. And may even be ok when you do if for ROIs...
     It is a work in progress, which may improve overtime...
@@ -317,19 +317,19 @@ def dag_sph2flat(coords, **kwargs):
 
 
 import copy
-def dag_bad_flatten(sphere_mesh_info, **kwargs):
+def dag_latlon_flatten(sphere_mesh_info, **kwargs):
     '''Take the spherical coordinates
     This is a bad way to flatten the sphere - you should probably do proper surface cuts etc...    
     flatten them to 2D (just polar)
     '''
     z = kwargs.get('z', 0)
-    bad_flat = {}
+    latlon_flat = {}
     p1, p2 = dag_sph2flat(sphere_mesh_info['coords'], **kwargs)
     # find relative scale...
     mag = sphere_mesh_info['coords'].max() / p1.max() 
-    bad_flat['x'] = p1 * mag
-    bad_flat['y'] = p2 * mag
-    bad_flat['z'] = np.ones_like(bad_flat['x']) * z
+    latlon_flat['x'] = p1 * mag
+    latlon_flat['y'] = p2 * mag
+    latlon_flat['z'] = np.ones_like(latlon_flat['x']) * z
     
     # Cut faces with any of the "cut_bool" vertices in them
     cut_bool = kwargs.get('cut_bool', None)
@@ -347,16 +347,16 @@ def dag_bad_flatten(sphere_mesh_info, **kwargs):
     face_lengths = []
     for i_f in range(sphere_mesh_info['i'].shape[0]):
         ei2j = np.sqrt(
-            (bad_flat['x'][sphere_mesh_info['i'][i_f]] - bad_flat['x'][sphere_mesh_info['j'][i_f]])**2 +
-            (bad_flat['y'][sphere_mesh_info['i'][i_f]] - bad_flat['y'][sphere_mesh_info['j'][i_f]])**2
+            (latlon_flat['x'][sphere_mesh_info['i'][i_f]] - latlon_flat['x'][sphere_mesh_info['j'][i_f]])**2 +
+            (latlon_flat['y'][sphere_mesh_info['i'][i_f]] - latlon_flat['y'][sphere_mesh_info['j'][i_f]])**2
         )
         ei2k = np.sqrt(
-            (bad_flat['x'][sphere_mesh_info['i'][i_f]] - bad_flat['x'][sphere_mesh_info['k'][i_f]])**2 +
-            (bad_flat['y'][sphere_mesh_info['i'][i_f]] - bad_flat['y'][sphere_mesh_info['k'][i_f]])**2
+            (latlon_flat['x'][sphere_mesh_info['i'][i_f]] - latlon_flat['x'][sphere_mesh_info['k'][i_f]])**2 +
+            (latlon_flat['y'][sphere_mesh_info['i'][i_f]] - latlon_flat['y'][sphere_mesh_info['k'][i_f]])**2
         )
         ej2k = np.sqrt(
-            (bad_flat['x'][sphere_mesh_info['j'][i_f]] - bad_flat['x'][sphere_mesh_info['k'][i_f]])**2 +
-            (bad_flat['y'][sphere_mesh_info['j'][i_f]] - bad_flat['y'][sphere_mesh_info['k'][i_f]])**2
+            (latlon_flat['x'][sphere_mesh_info['j'][i_f]] - latlon_flat['x'][sphere_mesh_info['k'][i_f]])**2 +
+            (latlon_flat['y'][sphere_mesh_info['j'][i_f]] - latlon_flat['y'][sphere_mesh_info['k'][i_f]])**2
         )
         face_lengths.append(ei2j+ei2k+ej2k)
     face_lengths = np.array(face_lengths)
@@ -368,14 +368,14 @@ def dag_bad_flatten(sphere_mesh_info, **kwargs):
     cut_faces |= f_w_long_edges
     print(f'Faces with long edges: {f_w_long_edges.sum()}')    
 
-    bad_flat['faces']  = sphere_mesh_info['faces'][~cut_faces,:]
-    bad_flat['i']      = sphere_mesh_info['i'][~cut_faces]
-    bad_flat['j']      = sphere_mesh_info['j'][~cut_faces]
-    bad_flat['k']      = sphere_mesh_info['k'][~cut_faces]
+    latlon_flat['faces']  = sphere_mesh_info['faces'][~cut_faces,:]
+    latlon_flat['i']      = sphere_mesh_info['i'][~cut_faces]
+    latlon_flat['j']      = sphere_mesh_info['j'][~cut_faces]
+    latlon_flat['k']      = sphere_mesh_info['k'][~cut_faces]
 
-    pts = np.vstack([bad_flat['x'],bad_flat['y'], bad_flat['z']]).T    
+    pts = np.vstack([latlon_flat['x'],latlon_flat['y'], latlon_flat['z']]).T    
     pts[cut_bool] = 0 # Move pts to cut to 0
-    polys = bad_flat['faces']
+    polys = latlon_flat['faces']
     return pts, polys
 
 

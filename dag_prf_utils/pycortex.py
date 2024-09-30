@@ -874,6 +874,7 @@ class PyctxMaker(GenMeshMaker):
         It takes the spherical coordinates of each surface
         Based on the latitude and longitude -> very quick does not use mris_flatten
         '''
+        ow = kwargs.get('ow', False)
         centre_roi = kwargs.get('centre_roi', None)
         cut_occ = kwargs.get('cut_occ', False)
         cut_along_y = kwargs.get('cut_along_y', None)                
@@ -887,9 +888,14 @@ class PyctxMaker(GenMeshMaker):
         old_overlay = opj(self.sub_ctx_path, 'overlays.svg')
         current_datetime_str = datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
         bu_overlay = opj(self.sub_ctx_path, f'overlays_BU_{current_datetime_str}.svg')
-        if os.path.exists(old_overlay):
-            print('backing up existing overlay')
+        if os.path.exists(old_overlay) and ow:
+            print('Overwriting... (but backing up existing overlay)')
             os.system(f'cp {old_overlay} {bu_overlay}')
+        elif os.path.exists(old_overlay) and not ow:
+            print('Overlay already exists... not overwriting')
+            self.add_flat_to_mesh_info()
+            return None
+
         # bloop
         hemi_pts = {}
         hemi_polys = {}
@@ -923,7 +929,7 @@ class PyctxMaker(GenMeshMaker):
                     roi_name='occ', y_max=cut_along_y)[hemi]                
                 hemi_kwargs['cut_bool'] = cut_bool
 
-            pts,polys = dag_bad_flatten(
+            pts,polys = dag_latlon_flatten(
                 self.mesh_info['sphere'][hemi], **hemi_kwargs)
             # We want it to be roughly on the same scale as the inflated map
             diff_x = pts[:,0].mean() - infl_x.mean()
@@ -1071,6 +1077,7 @@ class PyctxMaker(GenMeshMaker):
             # print(flat)
 
             # self.mesh_info['flat'][hemi] = flat
+    
     def make_flatmap_patch(self, **kwargs):
         '''
         Make a patch for later use by MRIs flatten

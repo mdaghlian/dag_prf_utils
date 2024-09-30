@@ -1742,6 +1742,8 @@ def dag_group_and_individual_2dict(ax, mdict, **kwargs):
         dictionary with the following structure:
         mdict[subject][x] = y        
     '''
+    do_bar = kwargs.get('do_bar', True)
+    do_points = kwargs.get('do_points', True)
     bar_width = kwargs.get('bar_width', 0.5)
     jitter_width = kwargs.get('jitter_width', 0.5)
     err_kwargs = kwargs.get('err_kwargs', 
@@ -1822,20 +1824,22 @@ def dag_group_and_individual_2dict(ax, mdict, **kwargs):
         this_yLOWER = np.array([y_lower[s][x] for x in x_keys]) if y_lower is not None else None
         this_yERR = [this_y - this_yLOWER, this_yUPPER - this_y] if y_upper is not None else None
         
-        ax.errorbar(
-            x=x_standard + s_jitter[iS],
-            y=this_y,
-            yerr=this_yERR,
-            color=s_cols[s],
-            label=s if do_scols else None,
-            **err_kwargs,
+        if do_points:
+            ax.errorbar(
+                x=x_standard + s_jitter[iS],
+                y=this_y,
+                yerr=this_yERR,
+                color=s_cols[s],
+                label=s if do_scols else None,
+                **err_kwargs,
+            )
+    if do_bar:
+        ax.bar(
+            x=x_standard,
+            height=overall_m,
+            width=bar_width,
+            **bar_kwargs,        
         )
-    ax.bar(
-        x=x_standard,
-        height=overall_m,
-        width=bar_width,
-        **bar_kwargs,        
-    )
     dag_group_and_i_xticks(
         ax=ax, 
         mdict=mdict, 

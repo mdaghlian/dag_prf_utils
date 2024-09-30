@@ -865,15 +865,18 @@ class PyctxMaker(GenMeshMaker):
             if 'flat_' in file:
                 os.unlink(opj(self.sub_ctx_path, 'surfaces', file))
 
-    def make_flat_map_LATLONG(self, **kwargs):
+    def make_flat_map_CUSTOM(self, **kwargs):
         '''
         Pycotex uses flatmaps for a bunch of things
         But if you can't be bothered to do it properly, and just want
         to display freesurfer ROIs in pycortex you can do this
 
-        It takes the spherical coordinates of each surface
-        Based on the latitude and longitude -> very quick does not use mris_flatten
+        Custom method to flatten (not using mris_flatten)
+        * option 1: use latitude and longitude
+        * option 2: do some clever UV mapping with igl code...
         '''
+        method = kwargs.pop('method', 'latlon')
+        hemi_project = kwargs.get('hemi_project', 'sphere')
         ow = kwargs.get('ow', False)
         centre_roi = kwargs.get('centre_roi', None)
         cut_occ = kwargs.get('cut_occ', False)
@@ -929,8 +932,10 @@ class PyctxMaker(GenMeshMaker):
                     roi_name='occ', y_max=cut_along_y)[hemi]                
                 hemi_kwargs['cut_bool'] = cut_bool
 
-            pts,polys = dag_latlon_flatten(
-                self.mesh_info['sphere'][hemi], **hemi_kwargs)
+            pts,polys = dag_flatten(
+                mesh_info=self.mesh_info[hemi_project][hemi], 
+                method=method,
+                **hemi_kwargs)
             # We want it to be roughly on the same scale as the inflated map
             diff_x = pts[:,0].mean() - infl_x.mean()
             diff_y = pts[:,1].mean() - infl_y.mean()

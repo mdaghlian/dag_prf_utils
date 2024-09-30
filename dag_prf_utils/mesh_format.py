@@ -9,6 +9,7 @@ opj = os.path.join
 from dag_prf_utils.utils import *
 from dag_prf_utils.plot_functions import *
 
+
 def dag_find_border_vx(roi_bool, mesh_info, return_type='bool'):
     '''
     Find those vx which are on a border... 
@@ -314,49 +315,107 @@ def dag_sph2flat(coords, **kwargs):
 
     return lon, lat
 
+def dag_igl_flatten(mesh_info, **kwargs):
+    '''Flatten a sphere to 2D
+    This is a probably a bad way to flatten the cortex
+    You should probably do proper surface cuts etc...
+    But this is a quick and dirty way to do it. And may even be ok when you do if for ROIs...
+    It is a work in progress, which may improve overtime...
+    
+    TODO: 
+    * option to define the centre... 
+    * better way to do the projection?
+    https://en.wikipedia.org/wiki/Map_projection
+    
+    
+    # Adjust longitudes based on the new center longitude
+    lon -= center_lon
+    
+    # Ensure lon is within the range [-pi, pi]
+    lon = (lon + np.pi) % (2 * np.pi) - np.pi    
+    '''
+    centre_bool = kwargs.pop('centre_bool', None)
+    submesh_info = dag_submesh_from_mesh(mesh_info, submesh_bool=centre_bool, **kwargs)
+    obj_str = dag_obj_write(submesh_info)
+    # Write to file
+    obj_file = '/tmp/tmp.obj'
+    dag_str2file(filename=obj_file, txt=obj_str)
+    # https://github.com/libigl/libigl-python-bindings/blob/main/tutorial/tutorials.ipynb
+    import igl
+    v, f = igl.read_triangle_mesh(obj_file)
+    
+    # Find the open boundary
+    bnd = igl.boundary_loop(f)
 
+    # Map the boundary to a circle, preserving edge proportions
+    bnd_uv = igl.map_vertices_to_circle(v, bnd)
+
+    # Harmonic parametrization for the internal vertices
+    uv = igl.harmonic(v, f, bnd, bnd_uv, 1)
+
+    arap = igl.ARAP(v, f, 2, np.zeros(0))
+    uva = arap.solve(np.zeros((0, 0)), uv)
+    p1 = np.zeros_like(mesh_info['x'])
+    p2 = np.zeros_like(mesh_info['y'])
+    # 
+    # plt.scatter(uva[:,0], uva[:,1])
+    # plt.show()
+    # bloop
+    p1[submesh_info['vx_idx']] = uva[:,0]
+    p2[submesh_info['vx_idx']] = uva[:,1]
+    face_to_cut = np.zeros_like(mesh_info['i'], dtype=bool)
+    face_to_cut[submesh_info['face_idx']] = True
+    # remove the file
+    os.remove(obj_file)    
+    return p1, p2, face_to_cut
 
 import copy
-def dag_latlon_flatten(sphere_mesh_info, **kwargs):
+def dag_flatten(mesh_info, **kwargs):
     '''Take the spherical coordinates
     This is a bad way to flatten the sphere - you should probably do proper surface cuts etc...    
     flatten them to 2D (just polar)
     '''
+    method = kwargs.get('method', 'latlon')
     z = kwargs.get('z', 0)
-    latlon_flat = {}
-    p1, p2 = dag_sph2flat(sphere_mesh_info['coords'], **kwargs)
+    flat_info = {}
+    if method=='latlon':
+        p1, p2 = dag_sph2flat(mesh_info['coords'], **kwargs)
+        method_cut_bool = None
+    elif method=='igl':
+        p1, p2, method_cut_bool = dag_igl_flatten(mesh_info, **kwargs)
+
     # find relative scale...
-    mag = sphere_mesh_info['coords'].max() / p1.max() 
-    latlon_flat['x'] = p1 * mag
-    latlon_flat['y'] = p2 * mag
-    latlon_flat['z'] = np.ones_like(latlon_flat['x']) * z
+    mag = mesh_info['coords'].max() / p1.max() 
+    flat_info['x'] = p1 * mag
+    flat_info['y'] = p2 * mag
+    flat_info['z'] = np.ones_like(flat_info['x']) * z
     
     # Cut faces with any of the "cut_bool" vertices in them
-    cut_bool = kwargs.get('cut_bool', None)
+    cut_bool = kwargs.get('cut_bool', method_cut_bool)
     if cut_bool is not None:
         # Find any faces with vertices in the cut
         cut_vx = np.where(cut_bool)[0]
-        cut_faces = np.isin(sphere_mesh_info['i'], cut_vx) + np.isin(sphere_mesh_info['j'], cut_vx) + np.isin(sphere_mesh_info['k'], cut_vx)
+        cut_faces = np.isin(mesh_info['i'], cut_vx) + np.isin(mesh_info['j'], cut_vx) + np.isin(mesh_info['k'], cut_vx)
         cut_faces = cut_faces>0
         print(f'Cutting {cut_faces.sum()} faces out of {cut_faces.shape[0]}')
     else:
-        cut_faces = np.zeros(sphere_mesh_info['i'].shape[0], dtype=bool)
+        cut_faces = np.zeros(mesh_info['i'].shape[0], dtype=bool)
     
     
     # Find the mean length of an edge 
     face_lengths = []
-    for i_f in range(sphere_mesh_info['i'].shape[0]):
+    for i_f in range(mesh_info['i'].shape[0]):
         ei2j = np.sqrt(
-            (latlon_flat['x'][sphere_mesh_info['i'][i_f]] - latlon_flat['x'][sphere_mesh_info['j'][i_f]])**2 +
-            (latlon_flat['y'][sphere_mesh_info['i'][i_f]] - latlon_flat['y'][sphere_mesh_info['j'][i_f]])**2
+            (flat_info['x'][mesh_info['i'][i_f]] - flat_info['x'][mesh_info['j'][i_f]])**2 +
+            (flat_info['y'][mesh_info['i'][i_f]] - flat_info['y'][mesh_info['j'][i_f]])**2
         )
         ei2k = np.sqrt(
-            (latlon_flat['x'][sphere_mesh_info['i'][i_f]] - latlon_flat['x'][sphere_mesh_info['k'][i_f]])**2 +
-            (latlon_flat['y'][sphere_mesh_info['i'][i_f]] - latlon_flat['y'][sphere_mesh_info['k'][i_f]])**2
+            (flat_info['x'][mesh_info['i'][i_f]] - flat_info['x'][mesh_info['k'][i_f]])**2 +
+            (flat_info['y'][mesh_info['i'][i_f]] - flat_info['y'][mesh_info['k'][i_f]])**2
         )
         ej2k = np.sqrt(
-            (latlon_flat['x'][sphere_mesh_info['j'][i_f]] - latlon_flat['x'][sphere_mesh_info['k'][i_f]])**2 +
-            (latlon_flat['y'][sphere_mesh_info['j'][i_f]] - latlon_flat['y'][sphere_mesh_info['k'][i_f]])**2
+            (flat_info['x'][mesh_info['j'][i_f]] - flat_info['x'][mesh_info['k'][i_f]])**2 +
+            (flat_info['y'][mesh_info['j'][i_f]] - flat_info['y'][mesh_info['k'][i_f]])**2
         )
         face_lengths.append(ei2j+ei2k+ej2k)
     face_lengths = np.array(face_lengths)
@@ -368,15 +427,84 @@ def dag_latlon_flatten(sphere_mesh_info, **kwargs):
     cut_faces |= f_w_long_edges
     print(f'Faces with long edges: {f_w_long_edges.sum()}')    
 
-    latlon_flat['faces']  = sphere_mesh_info['faces'][~cut_faces,:]
-    latlon_flat['i']      = sphere_mesh_info['i'][~cut_faces]
-    latlon_flat['j']      = sphere_mesh_info['j'][~cut_faces]
-    latlon_flat['k']      = sphere_mesh_info['k'][~cut_faces]
+    flat_info['faces']  = mesh_info['faces'][~cut_faces,:]
+    flat_info['i']      = mesh_info['i'][~cut_faces]
+    flat_info['j']      = mesh_info['j'][~cut_faces]
+    flat_info['k']      = mesh_info['k'][~cut_faces]
 
-    pts = np.vstack([latlon_flat['x'],latlon_flat['y'], latlon_flat['z']]).T    
+    pts = np.vstack([flat_info['x'],flat_info['y'], flat_info['z']]).T    
     pts[cut_bool] = 0 # Move pts to cut to 0
-    polys = latlon_flat['faces']
+    polys = flat_info['faces']
     return pts, polys
+
+
+def dag_submesh_from_mesh(mesh_info, submesh_bool, **kwargs):
+    '''Create a submesh from a mesh
+    '''
+    check_contiguous = kwargs.get('check_contiguous', True)
+    morph = kwargs.get('morph', 0)
+    # Check is contiguous?
+    if check_contiguous:
+        vx_border = dag_find_border_vx_in_order(roi_bool=submesh_bool, mesh_info=mesh_info)
+        assert len(vx_border)==1, 'Submesh is not contiguous'
+    if morph!=0:
+        submesh_bool = dag_mesh_morph(mesh_info=mesh_info, vx_bool=submesh_bool, morph=morph)
+
+    submesh = {
+        'full_mesh': copy.deepcopy(mesh_info),
+        'vx_idx': np.where(submesh_bool)[0],
+        'x': mesh_info['x'][submesh_bool],
+        'y': mesh_info['y'][submesh_bool],
+        'z': mesh_info['z'][submesh_bool],        
+        'coords': mesh_info['coords'][submesh_bool,:],
+    }
+    # Translate old to new index
+    new_idx = np.arange(submesh_bool.shape[0])
+    old_idx = np.where(submesh_bool)[0]
+    # Create a mapping from old vx to new ones
+    submesh['idx_map'] = dict(zip(old_idx, new_idx))
+    # Now sort out the faces
+    # Check if any of the faces are in the submesh
+    submesh['face_idx'] = np.where(np.isin(mesh_info['i'], submesh['vx_idx']) & \
+        np.isin(mesh_info['j'], submesh['vx_idx']) & \
+        np.isin(mesh_info['k'], submesh['vx_idx']))[0]
+    
+    # Translate old to new index
+    for c in ['i', 'j', 'k']:
+        old_c = mesh_info[c][submesh['face_idx']]
+        submesh[c] = np.array([submesh['idx_map'][old_idx] for old_idx in old_c])
+    # Faces 
+    submesh['faces'] = np.array([submesh['i'], submesh['j'], submesh['k']]).T
+    return submesh
+
+def dag_mesh_morph(mesh_info, vx_bool, morph=1):
+    ''' Dilate/erode the mesh from the border by buffer_n
+    Dilate  (+ve) - 1 find faces in the border and add the neighbours
+    Erode   (-ve) - 1 find faces in the border and remove the neighbours
+    '''
+    vx_bool = vx_bool.copy()
+    while np.abs(morph)>0:
+        if morph<0:
+            vx_border = dag_find_border_vx(roi_bool=vx_bool, mesh_info=mesh_info)
+            # Remove the vx in the border
+            vx_bool[vx_border] = False
+            morph += 1
+        elif morph>0:
+            # Find the border
+            vx_idx = np.where(vx_bool)[0] # Which vx inside ROI
+            # Which faces have only 2 vx inside ROI?
+            in_face_x = {} 
+            for face_x in ['i', 'j', 'k']:
+                in_face_x[face_x] = np.isin(mesh_info[face_x], vx_idx) * 1.0
+            border_faces = (in_face_x['i'] + in_face_x['j'] + in_face_x['k']) >0
+            border_faces &= (in_face_x['i'] + in_face_x['j'] + in_face_x['k']) <= 2
+            # Find the vx in the border faces, not in the ROI, and add them
+            vx_border_idx = np.unique(mesh_info['faces'][border_faces,:].flatten())
+            vx_bool[vx_border_idx] = True
+            morph -= 1            
+
+    return vx_bool
+
 
 
 def dag_cut_box(mesh_info, **kwargs):

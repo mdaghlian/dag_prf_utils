@@ -248,7 +248,7 @@ class FSMaker(object):
                     fs_cmd += f':curvature_method=binary'
         fs_cmd +=  f' --camera Azimuth {cam_azimuth} Zoom {cam_zoom} Elevation {cam_elevation} Roll {cam_roll} '
         fs_cmd += f'{col_bar_flag} {scr_shot_flag}'
-        fs_cmd += ' --verbose  --viewport 3d ' #--viewsize 99999 99999'        
+        fs_cmd += ' --verbose  --viewport 3d --viewsize 99999 99999'        
         fs_cmd += f' --nocursor '
         fs_cmd += extra_args
         if keep_running:

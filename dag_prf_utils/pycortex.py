@@ -191,8 +191,7 @@ def get_thickness(thick_map, hemi, vertex_nr):
 
 
 class PyctxSaver():
-    """PyctxSaver copied from JH "SavePycortexViews"
-    SavePycortexViews
+    """SavePycortexViews
 
     Save the elements of a `dict` containing vertex/volume objects to images given a set of viewing settings. If all goes well, a browser will open. Just wait for your settings to be applied in the viewer. You can then proceed from there. If your selected orientation is not exactly right, you can still manually adapt it before running :func:`linescanning.pycortex.SavePycortexViews.save_all()`, which will save all elements in the dataset to png-files given `fig_dir` and `base_name`. Additionally, colormaps will be produced if `data_dict` contains instances of :class:`linescanning.pycortex.Vertex2D_fix` and will produce instances of :class:`linescanning.plotting.LazyColorbar` in a single figure for all elements in `data_dict`. This figure will also be saved when calling :func:`linescanning.pycortex.SavePycortexViews.save_all()` with suffix `_desc-colormaps.<ext>`, where <ext> is set by `cm_ext` (default = **pdf**).
 
@@ -249,20 +248,47 @@ class PyctxSaver():
 
     Example
     ----------
+    >>> from linescanning import pycortex
+    >>> import numpy as np
+    >>> # let's say your have statistical maps with the correct dimensions called 'data' for subject 'sub-xx'
+    >>> subject = "sub-xx"
+    >>> output_dir = "some_directory"
+    >>> base_name = "sub-xx_ses-1"
+    >>> data_v = pycortex.Vertex2D_fix(
+    >>>     data,
+    >>>     subject=subject,
+    >>>     vmin1=3.1,
+    >>>     vmax1=10,
+    >>>     cmap="autumn")
+    >>> #
+    >>> # plop this object in SavePycortexViewer
+    >>> pyc = pycortex.SavePycortexViews(
+    >>>     {"zstats": data_v},
+    >>>     subjects=subject,
+    >>>     azimuth=180,            # these settings are focused around V1
+    >>>     altitude=120,           # these settings are focused around V1
+    >>>     radius=260,             # these settings are focused around V1
+    >>>     save_cm=True,
+    >>>     fig_dir=output_dir,
+    >>>     base_name=base_name)
 
+    >>> # to save "zstats"-object, we can run
+    >>> pyc.save_all()
+
+    >>> # to save the object as a static viewer (cortex.make_static()):
+    >>> pyc.to_static() 
     """
 
     def __init__(
         self,
-        data_dict: Union[dict, cortex.Vertex,cortex.VertexRGB,cortex.Vertex2D],
-        cms_dict: dict=None,
+        data_dict,
         subject: str=None,
         fig_dir: str=None,
         specularity: int=0,
-        unfold: int=0,
+        unfold: int=1,
         azimuth: int=180,
-        altitude: int=90,
-        radius: int=250,
+        altitude: int=105,
+        radius: int=163,
         pivot: float=0,
         size: tuple=(2400,1200),
         data_name: str="occipital_inflated",
@@ -270,20 +296,23 @@ class PyctxSaver():
         rois_visible: int=0,
         rois_labels: int=0,
         sulci_visible: int=1,
+        lh: bool=True,
+        rh: bool=True,
+        sulci_labels: int=0,
         cm_scalar: float=0.85,
         cm_width: int=6,
         cm_ext: str="pdf",
         cm_decimals: int=2,
-        cm_nr: int=5,        
-        lh: bool=True,
-        rh: bool=True,
-        sulci_labels: int=0,
+        cm_nr: int=5,
         viewer: bool=True,
         clicker: str="vertex",
+        prf_file: str=None,
+        dm: str=None,
+        model: str=None,
+        func_data: Union[str,np.ndarray]=None,
         **kwargs):
 
-        self.data_dict = data_dict
-        self.cms_dict = cms_dict
+        self.tmp_dict = data_dict
         self.subject = subject
         self.fig_dir = fig_dir
         self.altitude = altitude
@@ -305,9 +334,13 @@ class PyctxSaver():
         self.cm_scalar = cm_scalar
         self.cm_width = cm_width
         self.cm_nr = cm_nr
-        self.cm_decimals = cm_decimals        
+        self.cm_decimals = cm_decimals
         self.clicker = clicker
         self.viewer = viewer
+        self.prf_file = prf_file
+        self.dm = dm
+        self.model = model
+        self.func_data = func_data
 
         if not isinstance(self.subject, str):
             raise ValueError("Please specify the subject ID as per pycortex' filestore naming")
@@ -318,33 +351,55 @@ class PyctxSaver():
         if not isinstance(self.fig_dir, str):
             self.fig_dir = os.getcwd()            
 
+        if not isinstance(self.tmp_dict, dict):
+            if isinstance(self.tmp_dict, np.ndarray):
+                self.tmp_dict = {
+                    "data": cortex.Vertex(
+                        self.tmp_dict, 
+                        subject=self.subject, 
+                        **kwargs)}
+            else:
+                self.tmp_dict = {"data": self.tmp_dict}
+
         # check what kind of object they are; if Vertex2D_fix, make colormaps
+        self.data_dict = {}
         self.cms = {}
         self.cm_fig, self.cm_axs = plt.subplots(
-            nrows=len(self.data_dict), 
-            figsize=(self.cm_width,self.cm_scalar*len(self.cms_dict)),
+            nrows=len(self.tmp_dict), 
+            figsize=(self.cm_width,self.cm_scalar*len(self.tmp_dict)),
             constrained_layout=True
         )
         
-        for iK,key in enumerate(list(self.cms_dict.keys())):
-            if len(self.cms_dict) == 1:
-                ax = self.cm_axs
-            else:
-                ax = self.cm_axs[iK]
-            
-            if self.cms_dict[key] == 'pyc':
-                ax.set_title('pyc')
-                self.cms[key] = ax
-            else:
-                self.cms[key] = dag_cmap_plotter(
-                    cmap=self.cms_dict[key]['cmap'], 
-                    vmin=self.cms_dict[key]['vmin'], 
-                    vmax=self.cms_dict[key]['vmax'], 
-                    title=str(key), 
-                    return_ax=True, 
-                    ax=ax,
-                )
+        for ix,(key,val) in enumerate(self.tmp_dict.items()):
+            if False: #isinstance(val, Vertex2D_fix):
+                self.data_dict[key] = val.get_result()        
 
+                if len(self.tmp_dict) == 1:
+                    ax = self.cm_axs
+                else:
+                    ax = self.cm_axs[ix]
+
+                cm = val.get_colormap(
+                    ori="horizontal", 
+                    label=key, 
+                    flip_label=True, 
+                    axs=ax)
+                
+                self.cms[key] = cm
+                
+            else: 
+                
+                # cm = plotting.LazyColorbar(
+                #     cmap=val.cmap,
+                #     txt=key,
+                #     vmin=val.vmin,
+                #     vmax=val.vmax, 
+                #     flip_label=True, 
+                #     ori="horizontal", 
+                #     axs=self.cm_axs[ix])
+                
+                self.cms[key] = None # cm  
+                self.data_dict[key] = val
         
         # check what do to with hemispheres
         for ii in ["left","right"]:
@@ -383,21 +438,43 @@ class PyctxSaver():
 
         if self.viewer:
             if isinstance(self.clicker, str):
-                if self.clicker == "plot":
-                    clicker_func = self.clicker_plot
-                elif self.clicker == "vertex":
+                if self.clicker == "vertex":
                     clicker_func = self.clicker_function
+                elif self.clicker == "plot":
+                    clicker_func = self.clicker_plot
+
+                    if isinstance(self.prf_file, str):
+                        # try to read model- from the filename
+                        if not isinstance(self.model, str):
+                            try:
+                                self.comps = utils.split_bids_components(self.prf_file)
+                            except:
+                                self.comps = []
+                            
+                            if "model" in self.comps:
+                                self.model = self.comps["model"]
+
+                        self.prf_obj = prf.pRFmodelFitting(
+                            self.func_data,
+                            design_matrix=self.dm,
+                            model=self.model,
+                            **kwargs
+                        )
+
+                        self.prf_obj.load_params(
+                            self.prf_file, 
+                            model=self.model,
+                            stage="iter")
 
                 else:
                     raise ValueError(f"clicker must be one of 'vertex' (just prints vertex to terminal) or 'plot' (plots position in visual space), not '{self.clicker}'")
             else:
                 clicker_func = None
                 
-            # self.js_handle = cortex.webgl.show(self.data_dict, pickerfun=clicker_func)
+            self.js_handle = cortex.webgl.show(self.data_dict, pickerfun=clicker_func)
             # self.js_handle = cortex.webgl.show(self.data_dict)
-            cortex.webgl.show(self.data_dict)
             self.params_to_save = list(self.data_dict.keys())
-            # self.set_view()
+            self.set_view()
 
     def clicker_function(
         self,
@@ -413,7 +490,11 @@ class PyctxSaver():
             index = rctm[int(vertex)]
         
         print(f"vertex ID: {index} (hemi = {hemi})")
+        # if isinstance(prf_file, (pd.DataFrame,str,dict,np.ndarray)):
+        #     self.obj_ = prf.pRFmodelFitting(
+        #         prf_file,
 
+        #     )
 
     def clicker_plot(
         self,
@@ -427,22 +508,39 @@ class PyctxSaver():
             index = lctm[int(vertex)]
         else:
             index = len(lctm)+rctm[int(vertex)]
-        print(f"index {index}")#: {pars}")
+
+        # # create figure
+        # plt.ion()
+        # self.fig = plt.figure(constrained_layout=True, figsize=(15,5))
+        # gs = self.fig.add_gridspec(ncols=2, width_ratios=[10,20])
+        # ax1 = self.fig.add_subplot(gs[0])
+        # ax2 = self.fig.add_subplot(gs[1])
+
+
+        # # pass on axes as arg
+        # pars,prf_,_,_ = self.prf_obj.plot_vox(
+        #     vox_nr=index,
+        #     axs=[ax1,ax2],
+        #     model=self.model,
+        #     title="pars"
+        # )
+
+        pars,prf_,_,_ = self.prf_obj.plot_vox(
+            vox_nr=index,
+            # axs=[ax1,ax2],
+            model=self.model,
+            title="pars",
+            save_as=opj(os.path.dirname(self.prf_file), f"{self.subject}_desc-clicker_plot.pdf")
+        )        
+
+        # ax2.imshow(prf_, cmap="magma")
+        print(f"index {index}: {pars}")
 
         return
-    def to_static(self, filename=None, *args, **kwargs):
-        output_dir = kwargs.pop('output_dir', self.fig_dir)
-        if filename is None:
-            filename = f"{self.base_name}_desc-static"        
-        if os.path.exists(opj(output_dir, filename)):
-            print(f"directory already exists. deleting")
-            # remove directory
-            shutil.rmtree(opj(output_dir, filename))
-        print(f'Saving static to {opj(output_dir, filename)}')
-        print(args)
-        print(kwargs)
+    def to_static(self, *args, **kwargs):
+        filename = f"{self.base_name}_desc-static"
         cortex.webgl.make_static(
-            opj(output_dir, filename),
+            opj(self.fig_dir, filename),
             self.data_dict,
             *args,
             **kwargs)
@@ -553,13 +651,15 @@ class PyctxSaver():
                     min_max = [data_dict[key].vmin,data_dict[key].vmax]
 
                 cm_ax = axs.inset_axes(cm_inset)
-                dag_cmap_plotter(
-                    cmap=self.cms_dict[key]['cmap'], 
-                    vmin=self.cms_dict[key]['vmin'], 
-                    vmax=self.cms_dict[key]['vmax'], 
-                    title=str(key),   
-                    ax=cm_ax,               
-                )                
+                # plotting.LazyColorbar(
+                #     cmap=data_dict[key].cmap,
+                #     vmin=min_max[0],
+                #     vmax=min_max[1], 
+                #     axs=cm_ax,
+                #     dec=self.cm_decimals,
+                #     nr=self.cm_nr,
+                #     *args,
+                #     **kwargs)
 
         plt.tight_layout()
         fig.suptitle(
@@ -589,7 +689,7 @@ class PyctxSaver():
         param_to_save,
         fig_dir=None,
         base_name=None):
-        bloop
+
         self.js_handle.setData([param_to_save])
         time.sleep(1)
         
@@ -610,6 +710,7 @@ class PyctxSaver():
             subprocess.call(["convert", "-trim", output_path, output_path])
         except:
             pass    
+
 
 
 
@@ -876,9 +977,11 @@ class PyctxMaker(GenMeshMaker):
         * option 2: do some clever UV mapping with igl code...
         '''
         method = kwargs.pop('method', 'latlon')
+        morph = kwargs.pop('morph', 10) # How much to dilate or erode the mask (if doing igl)
         hemi_project = kwargs.get('hemi_project', 'sphere')
         ow = kwargs.get('ow', False)
         centre_roi = kwargs.get('centre_roi', None)
+        cut_box = kwargs.get('cut_box', False)
         cut_occ = kwargs.get('cut_occ', False)
         cut_along_y = kwargs.get('cut_along_y', None)                
         if cut_occ:
@@ -918,10 +1021,12 @@ class PyctxMaker(GenMeshMaker):
         for hemi in ['lh','rh']:
             hemi_kwargs = kwargs.copy()
             hemi_kwargs['z'] = new_z
+            hemi_kwargs['morph'] = morph
             if centre_roi is not None:
                 # Load the ROI bool for this hemisphere
                 centre_bool = self._return_roi_bool_both_hemis(centre_roi)[hemi]
                 hemi_kwargs['centre_bool'] = centre_bool
+            if cut_box:
                 hemi_kwargs['cut_bool'] = dag_cut_box(
                     mesh_info=self.mesh_info['inflated'][hemi],
                     vx_bool=centre_bool,

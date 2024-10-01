@@ -335,26 +335,45 @@ def dag_igl_flatten(mesh_info, **kwargs):
     lon = (lon + np.pi) % (2 * np.pi) - np.pi    
     '''
     centre_bool = kwargs.pop('centre_bool', None)
-    submesh_info = dag_submesh_from_mesh(mesh_info, submesh_bool=centre_bool, **kwargs)
-    obj_str = dag_obj_write(submesh_info)
-    # Write to file
-    obj_file = '/tmp/tmp.obj'
-    dag_str2file(filename=obj_file, txt=obj_str)
-    # https://github.com/libigl/libigl-python-bindings/blob/main/tutorial/tutorials.ipynb
-    import igl
-    v, f = igl.read_triangle_mesh(obj_file)
-    
-    # Find the open boundary
-    bnd = igl.boundary_loop(f)
+    successful_flatten = False
+    morph = kwargs.pop('morph', 0)
+    while not successful_flatten:
+        submesh_info = dag_submesh_from_mesh(mesh_info, submesh_bool=centre_bool, morph = morph, **kwargs)
+        obj_str = dag_obj_write(submesh_info)
+        # Write to file
+        obj_file = '/tmp/tmp.obj'
+        dag_str2file(filename=obj_file, txt=obj_str)
+        # https://github.com/libigl/libigl-python-bindings/blob/main/tutorial/tutorials.ipynb
+        import igl
+        v, f = igl.read_triangle_mesh(obj_file)
+        os.remove(obj_file)    
+        
+        # Find the open boundary
+        bnd = igl.boundary_loop(f)
 
-    # Map the boundary to a circle, preserving edge proportions
-    bnd_uv = igl.map_vertices_to_circle(v, bnd)
+        # Map the boundary to a circle, preserving edge proportions
+        bnd_uv = igl.map_vertices_to_circle(v, bnd)
 
-    # Harmonic parametrization for the internal vertices
-    uv = igl.harmonic(v, f, bnd, bnd_uv, 1)
+        # Harmonic parametrization for the internal vertices
+        uv = igl.harmonic(v, f, bnd, bnd_uv, 1)
 
-    arap = igl.ARAP(v, f, 2, np.zeros(0))
-    uva = arap.solve(np.zeros((0, 0)), uv)
+        arap = igl.ARAP(v, f, 2, np.zeros(0))
+        uva = arap.solve(np.zeros((0, 0)), uv)
+        if uva.max()<0.1:
+            morph += 1
+            print(f'Failed to flatten, retrying with morph={morph}')
+        else:
+            successful_flatten = True   
+            print(f'Successful flatten with morph={morph}')
+            print('Here it looks like this...')
+            plt.figure()
+            plt.scatter(uva[:,0], uva[:,1])
+            plt.show()
+
+        
+        assert morph<100, 'Failed to flatten, too many retries'
+            
+        
     p1 = np.zeros_like(mesh_info['x'])
     p2 = np.zeros_like(mesh_info['y'])
     # 
@@ -363,10 +382,10 @@ def dag_igl_flatten(mesh_info, **kwargs):
     # bloop
     p1[submesh_info['vx_idx']] = uva[:,0]
     p2[submesh_info['vx_idx']] = uva[:,1]
-    face_to_cut = np.zeros_like(mesh_info['i'], dtype=bool)
-    face_to_cut[submesh_info['face_idx']] = True
+    face_to_cut = np.ones_like(mesh_info['i'], dtype=bool)
+    face_to_cut[submesh_info['face_idx']] = False
     # remove the file
-    os.remove(obj_file)    
+
     return p1, p2, face_to_cut
 
 import copy
@@ -392,15 +411,17 @@ def dag_flatten(mesh_info, **kwargs):
     
     # Cut faces with any of the "cut_bool" vertices in them
     cut_bool = kwargs.get('cut_bool', method_cut_bool)
-    if cut_bool is not None:
-        # Find any faces with vertices in the cut
-        cut_vx = np.where(cut_bool)[0]
-        cut_faces = np.isin(mesh_info['i'], cut_vx) + np.isin(mesh_info['j'], cut_vx) + np.isin(mesh_info['k'], cut_vx)
-        cut_faces = cut_faces>0
-        print(f'Cutting {cut_faces.sum()} faces out of {cut_faces.shape[0]}')
-    else:
-        cut_faces = np.zeros(mesh_info['i'].shape[0], dtype=bool)
-    
+    # print(cut_bool)
+    # bloop
+    # if cut_bool is not None:
+    #     # Find any faces with vertices in the cut
+    #     cut_vx = np.where(cut_bool)[0]
+    #     cut_faces = np.isin(mesh_info['i'], cut_vx) + np.isin(mesh_info['j'], cut_vx) + np.isin(mesh_info['k'], cut_vx)
+    #     cut_faces = cut_faces>0
+    #     print(f'Cutting {cut_faces.sum()} faces out of {cut_faces.shape[0]}')
+    # else:
+    #     cut_faces = np.zeros(mesh_info['i'].shape[0], dtype=bool)
+    cut_faces = np.zeros(mesh_info['i'].shape[0], dtype=bool)
     
     # Find the mean length of an edge 
     face_lengths = []
@@ -442,11 +463,14 @@ def dag_submesh_from_mesh(mesh_info, submesh_bool, **kwargs):
     '''Create a submesh from a mesh
     '''
     check_contiguous = kwargs.get('check_contiguous', True)
+    check_missing_vx = kwargs.get('check_missing_vx', True)
+    check_unique_faces = kwargs.get('check_unique_faces', True)
     morph = kwargs.get('morph', 0)
     # Check is contiguous?
     if check_contiguous:
         vx_border = dag_find_border_vx_in_order(roi_bool=submesh_bool, mesh_info=mesh_info)
         assert len(vx_border)==1, 'Submesh is not contiguous'
+        
     if morph!=0:
         submesh_bool = dag_mesh_morph(mesh_info=mesh_info, vx_bool=submesh_bool, morph=morph)
 
@@ -475,6 +499,28 @@ def dag_submesh_from_mesh(mesh_info, submesh_bool, **kwargs):
         submesh[c] = np.array([submesh['idx_map'][old_idx] for old_idx in old_c])
     # Faces 
     submesh['faces'] = np.array([submesh['i'], submesh['j'], submesh['k']]).T
+    # Check for non-unique faces 
+    if check_unique_faces:
+        ordered_faces = np.sort(submesh['faces'], axis=1)
+        ordered_face_str = [f'{f[0]}_{f[1]}_{f[2]}' for f in ordered_faces]
+        unique_faces = np.unique(ordered_face_str)
+        if len(unique_faces)!=len(ordered_face_str):
+            print(f'Non-unique faces!!!')
+
+    if check_missing_vx:
+        # Remove missing vx
+        ids = np.arange(submesh['x'].shape[0])
+        ids_in_faces = submesh['faces'].flatten()
+        missing_vx = np.setdiff1d(ids, ids_in_faces)
+        if missing_vx.shape[0]>0:
+            print(f'Missing {missing_vx.shape[0]} vx')
+            print(f'If you want to be more inclusive try again with morph>0')
+        # Check contiguous again
+
+        # if remove_missing_vx:            
+        #     print('re running with missing vx removed')
+        #     submesh_bool[missing_vx] = False
+        #     submesh = dag_submesh_from_mesh(mesh_info=mesh_info, submesh_bool=submesh_bool, **kwargs)
     return submesh
 
 def dag_mesh_morph(mesh_info, vx_bool, morph=1):
@@ -482,16 +528,16 @@ def dag_mesh_morph(mesh_info, vx_bool, morph=1):
     Dilate  (+ve) - 1 find faces in the border and add the neighbours
     Erode   (-ve) - 1 find faces in the border and remove the neighbours
     '''
-    vx_bool = vx_bool.copy()
+    vx_bool_loop = vx_bool.copy()
     while np.abs(morph)>0:
         if morph<0:
-            vx_border = dag_find_border_vx(roi_bool=vx_bool, mesh_info=mesh_info)
+            vx_border = dag_find_border_vx(roi_bool=vx_bool_loop, mesh_info=mesh_info)
             # Remove the vx in the border
-            vx_bool[vx_border] = False
+            vx_bool_loop[vx_border] = False
             morph += 1
         elif morph>0:
             # Find the border
-            vx_idx = np.where(vx_bool)[0] # Which vx inside ROI
+            vx_idx = np.where(vx_bool_loop)[0] # Which vx inside ROI
             # Which faces have only 2 vx inside ROI?
             in_face_x = {} 
             for face_x in ['i', 'j', 'k']:
@@ -500,10 +546,10 @@ def dag_mesh_morph(mesh_info, vx_bool, morph=1):
             border_faces &= (in_face_x['i'] + in_face_x['j'] + in_face_x['k']) <= 2
             # Find the vx in the border faces, not in the ROI, and add them
             vx_border_idx = np.unique(mesh_info['faces'][border_faces,:].flatten())
-            vx_bool[vx_border_idx] = True
+            vx_bool_loop[vx_border_idx] = True
             morph -= 1            
 
-    return vx_bool
+    return vx_bool_loop
 
 
 

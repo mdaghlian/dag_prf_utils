@@ -983,7 +983,7 @@ class PyctxMaker(GenMeshMaker):
         hemi_project = kwargs.get('hemi_project', 'sphere')
         ow = kwargs.get('ow', False)
         centre_roi = kwargs.get('centre_roi', None)
-        centre_bool = kwargs.pop('centre_bool', np.ones(self.total_n_vx))
+        centre_bool = kwargs.pop('centre_bool', np.zeros(self.total_n_vx, dtype=bool))
         centre_bool_hemi = {
             'lh': centre_bool[:self.n_vx['lh']],
             'rh': centre_bool[self.n_vx['lh']:]

@@ -9,11 +9,30 @@ opj = os.path.join
 from dag_prf_utils.utils import *
 from dag_prf_utils.plot_functions import *
 
+def dag_find_isolated_vx(mesh_info, roi_bool):
+    ''' Find isolated vertices in (connected to no other faces) '''
+    assert 'i' in mesh_info.keys(), 'mesh_info should have i,j,k'
+    roi_idx = np.where(roi_bool)[0]
+    # Which Vx are connected to at least 2 others..
+    in_face_x = {} 
+    for face_x in ['i', 'j', 'k']:
+        in_face_x[face_x] = np.isin(mesh_info[face_x], roi_idx) * 1.0
+    faces_with_1_vx_only = (in_face_x['i'] + in_face_x['j'] + in_face_x['k']) == 1
+    faces_with_more_than_1_vx = (in_face_x['i'] + in_face_x['j'] + in_face_x['k']) > 1
+    vx_in_faces_with_1_vx_only = np.unique(mesh_info['faces'][faces_with_1_vx_only,:].flatten())
+    vx_in_faces_with_more_than_1_vx = np.unique(mesh_info['faces'][faces_with_more_than_1_vx,:].flatten())
+    # Only those in the ROI
+    vx_in_faces_with_1_vx_only = np.intersect1d(vx_in_faces_with_1_vx_only, roi_idx)
+    vx_in_faces_with_more_than_1_vx = np.intersect1d(vx_in_faces_with_more_than_1_vx, roi_idx)
 
-def dag_find_border_vx(roi_bool, mesh_info, return_type='bool'):
+    isolated_vx = np.setdiff1d(vx_in_faces_with_1_vx_only, vx_in_faces_with_more_than_1_vx)
+    return isolated_vx
+
+def dag_find_border_vx(mesh_info, roi_bool, return_type='bool'):
     '''
     Find those vx which are on a border... 
     '''
+    assert 'i' in mesh_info.keys(), 'mesh_info should have i,j,k'
     roi_idx = np.where(roi_bool)[0] # Which vx inside ROI
     # Which faces have only 2 vx inside ROI?
     in_face_x = {} 
@@ -44,11 +63,12 @@ def dag_find_border_vx(roi_bool, mesh_info, return_type='bool'):
     return border_vx_out
     
 
-def dag_find_border_vx_in_order(roi_bool, mesh_info, return_coords=False):
+def dag_find_border_vx_in_order(mesh_info, roi_bool, return_coords=False):
     '''dag_find_border_vx_in_order
     Find the border vertices in order to draw a closed loop    
     '''
-    outer_edge_list = dag_get_roi_border_edge(roi_bool, mesh_info)    
+    assert 'i' in mesh_info.keys(), 'mesh_info should have i,j,k'
+    outer_edge_list = dag_get_roi_border_edge(mesh_info, roi_bool)    
     border_vx = dag_order_edges(outer_edge_list)
     if not return_coords:
         return border_vx
@@ -64,10 +84,11 @@ def dag_find_border_vx_in_order(roi_bool, mesh_info, return_coords=False):
     return border_vx,border_vx_coords
 
 
-def dag_get_roi_border_edge(roi_bool, mesh_info):
+def dag_get_roi_border_edge(mesh_info, roi_bool):
     '''
     Find those vx which are on a border... 
     '''
+    assert 'i' in mesh_info.keys(), 'mesh_info should have i,j,k'
     roi_idx = np.where(roi_bool)[0]
     in_face_x = {}
     for face_x in ['i', 'j', 'k']:
@@ -266,34 +287,40 @@ def dag_mesh_slice(mesh_info, **kwargs):
 #     # return az,elev
 #     return x,y,z
 
-def dag_dilate_and_drop(mesh_info, vx_bool_start, max_drop=10):
+def dag_dilate_and_drop(mesh_info, vx_bool_start, **kwargs):
     '''Dilate boolean array on mesh until it is contiguous
     Or until max_drop is reached (i.e., number of isolated vx is satisfactory)    
     '''
+    max_drop = kwargs.get('max_drop', 10)
+    drop_isolated = kwargs.get('drop_isolated', True)
+
     vx_bool = vx_bool_start.copy()
     keep_going = True
-    n_steps = 0 
+    n_steps = 0     
     while keep_going & (n_steps<100):
+        # Find any isolated vx?
+        if drop_isolated:
+            isolated_vx = dag_find_isolated_vx(roi_bool=vx_bool, mesh_info=mesh_info)
+            vx_bool[isolated_vx] = False
         # Is it contiguous?
         vx_border = dag_find_border_vx_in_order(roi_bool=vx_bool, mesh_info=mesh_info)
         if len(vx_border)==1:
             # Ok how many are we dropping?
             keep_going = False
             break
-        # Find the biggest border
-        border_sizes = []
+        
+        # Lets remove the little loops...
+        vx_to_drop = []
         for i_vx in vx_border:
-            border_sizes.append(len(i_vx))
-        biggest_border_size = np.max(border_sizes)
-        # If we remove the biggest border, how many left? 
-        smaller_borders = sum(border_sizes) - biggest_border_size
-        if smaller_borders<max_drop:
-            # Try again with the smallest border removed
-            smallest_border = np.argmin(border_sizes)
-            vx_bool[vx_border[smallest_border]] = False
-        else:
+            if len(i_vx)<max_drop:
+                # Dropping the vx in this 
+                vx_to_drop.extend(i_vx)
+        if len(vx_to_drop)==0:            
             # Try again, but lets dilate the selection
             vx_bool = dag_mesh_morph(mesh_info=mesh_info, vx_bool=vx_bool, morph=1)
+        else:
+            # Try again with removeing small borders
+            vx_bool[vx_to_drop] = False
         
         n_steps += 1            
         # Every 10 steps print out the number of vx
@@ -373,7 +400,6 @@ def dag_igl_flatten(mesh_info, **kwargs):
     lon = (lon + np.pi) % (2 * np.pi) - np.pi    
     '''
     centre_bool = kwargs.pop('centre_bool', 'bleep') # np.ones_like(mesh_info['x'], dtype=bool))
-    print(centre_bool)
     roi_bool = centre_bool.copy()
     successful_flatten = False
     morph = kwargs.pop('morph', 0)
@@ -417,15 +443,29 @@ def dag_igl_flatten(mesh_info, **kwargs):
             print(f'Failed to flatten, retrying with morph={morph}')
         else:
             successful_flatten = True   
+            # Lets do a quick check, we want roughly the same orientation
+            # If not, then we need to flip the orientation
+            # [1] x 
+            corr_x = dag_get_corr(v[:,0], uva[:,0])
+            corr_y = dag_get_corr(v[:,1], uva[:,1])
+            if corr_x<0:
+                uva[:,0] *= -1
+            if corr_y<0:
+                uva[:,1] *= -1
+            print(f'Corr x: {corr_x:.2f} y: {corr_y:.2f}')
+            # bloop
             print(f'Successful flatten with morph={morph}')
             print('Here it looks like this...')
-            plt.figure()
-            plt.scatter(uva[:,0], uva[:,1])
+            fig, axs = plt.subplots(1,2)
+            axs[0].scatter(uva[:,0], uva[:,1], c=v[:,0])
+            axs[0].set_title('Old x color')
+            axs[1].scatter(uva[:,0], uva[:,1], c=v[:,1])
+            axs[1].set_title('Old y color')
             plt.show()
         
         n_steps += 1            
             
-        
+    
     p1 = np.zeros_like(mesh_info['x'])
     p2 = np.zeros_like(mesh_info['y'])
     p1[submesh_info['vx_idx']] = uva[:,0]

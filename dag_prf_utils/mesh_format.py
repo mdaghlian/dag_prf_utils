@@ -266,6 +266,44 @@ def dag_mesh_slice(mesh_info, **kwargs):
 #     # return az,elev
 #     return x,y,z
 
+def dag_dilate_and_drop(mesh_info, vx_bool_start, max_drop=10):
+    '''Dilate boolean array on mesh until it is contiguous
+    Or until max_drop is reached (i.e., number of isolated vx is satisfactory)    
+    '''
+    vx_bool = vx_bool_start.copy()
+    keep_going = True
+    n_steps = 0 
+    while keep_going & (n_steps<100):
+        # Is it contiguous?
+        vx_border = dag_find_border_vx_in_order(roi_bool=vx_bool, mesh_info=mesh_info)
+        if len(vx_border)==1:
+            # Ok how many are we dropping?
+            keep_going = False
+            break
+        # Find the biggest border
+        border_sizes = []
+        for i_vx in vx_border:
+            border_sizes.append(len(i_vx))
+        biggest_border_size = np.max(border_sizes)
+        # If we remove the biggest border, how many left? 
+        smaller_borders = sum(border_sizes) - biggest_border_size
+        if smaller_borders<max_drop:
+            # Try again with the smallest border removed
+            smallest_border = np.argmin(border_sizes)
+            vx_bool[vx_border[smallest_border]] = False
+        else:
+            # Try again, but lets dilate the selection
+            vx_bool = dag_mesh_morph(mesh_info=mesh_info, vx_bool=vx_bool, morph=1)
+        
+        n_steps += 1            
+        # Every 10 steps print out the number of vx
+        if n_steps%10==0:
+            print(f'Vx included: {vx_bool.mean()*100:.2f}%')
+    return vx_bool
+
+
+
+
 
 def dag_sph2flat(coords, **kwargs):
     '''Flatten a sphere to 2D
@@ -334,11 +372,22 @@ def dag_igl_flatten(mesh_info, **kwargs):
     # Ensure lon is within the range [-pi, pi]
     lon = (lon + np.pi) % (2 * np.pi) - np.pi    
     '''
-    centre_bool = kwargs.pop('centre_bool', None)
+    centre_bool = kwargs.pop('centre_bool', 'bleep') # np.ones_like(mesh_info['x'], dtype=bool))
+    print(centre_bool)
+    roi_bool = centre_bool.copy()
     successful_flatten = False
     morph = kwargs.pop('morph', 0)
-    while not successful_flatten:
-        submesh_info = dag_submesh_from_mesh(mesh_info, submesh_bool=centre_bool, morph = morph, **kwargs)
+    import contextlib
+    n_steps = 0
+    while (not successful_flatten) & (n_steps<100):        
+        submesh_info = dag_submesh_from_mesh(mesh_info, submesh_bool=roi_bool, morph = morph, check_contiguous=False, **kwargs)
+        if submesh_info is None:
+            # Not contiguous
+            roi_bool = dag_mesh_morph(mesh_info=mesh_info, vx_bool=roi_bool, morph=morph + 1)
+            morph -= 1 # (we already step through it)
+            n_steps += 1
+            continue
+
         obj_str = dag_obj_write(submesh_info)
         # Write to file
         obj_file = '/tmp/tmp.obj'
@@ -356,9 +405,13 @@ def dag_igl_flatten(mesh_info, **kwargs):
 
         # Harmonic parametrization for the internal vertices
         uv = igl.harmonic(v, f, bnd, bnd_uv, 1)
-
-        arap = igl.ARAP(v, f, 2, np.zeros(0))
-        uva = arap.solve(np.zeros((0, 0)), uv)
+        import io as io_not_scipy
+        buffer = io_not_scipy.StringIO()
+        with contextlib.redirect_stdout(buffer):
+            arap = igl.ARAP(v, f, 2, np.zeros(0))
+            uva = arap.solve(np.zeros((0, 0)), uv)
+        output = buffer.getvalue()
+        print(output)
         if uva.max()<0.1:
             morph += 1
             print(f'Failed to flatten, retrying with morph={morph}')
@@ -369,24 +422,21 @@ def dag_igl_flatten(mesh_info, **kwargs):
             plt.figure()
             plt.scatter(uva[:,0], uva[:,1])
             plt.show()
-
         
-        assert morph<100, 'Failed to flatten, too many retries'
+        n_steps += 1            
             
         
     p1 = np.zeros_like(mesh_info['x'])
     p2 = np.zeros_like(mesh_info['y'])
-    # 
-    # plt.scatter(uva[:,0], uva[:,1])
-    # plt.show()
-    # bloop
     p1[submesh_info['vx_idx']] = uva[:,0]
     p2[submesh_info['vx_idx']] = uva[:,1]
-    face_to_cut = np.ones_like(mesh_info['i'], dtype=bool)
-    face_to_cut[submesh_info['face_idx']] = False
-    # remove the file
-
-    return p1, p2, face_to_cut
+    # face_to_cut = np.ones_like(mesh_info['i'], dtype=bool)
+    # face_to_cut[submesh_info['face_idx']] = False
+    vx_to_include = np.zeros_like(mesh_info['x'], dtype=bool)
+    vx_to_include[submesh_info['vx_idx']] = True
+    f_to_include = np.zeros_like(mesh_info['i'], dtype=bool)
+    f_to_include[submesh_info['face_idx']] = True
+    return p1, p2 , vx_to_include, f_to_include
 
 import copy
 def dag_flatten(mesh_info, **kwargs):
@@ -395,34 +445,31 @@ def dag_flatten(mesh_info, **kwargs):
     flatten them to 2D (just polar)
     '''
     method = kwargs.get('method', 'latlon')
+    vx_to_include = kwargs.get('vx_to_include', np.ones_like(mesh_info['x'], dtype=bool))
+    f_to_include = kwargs.get('f_to_include', np.ones_like(mesh_info['i'], dtype=bool))
     z = kwargs.get('z', 0)
     flat_info = {}
     if method=='latlon':
         p1, p2 = dag_sph2flat(mesh_info['coords'], **kwargs)
-        method_cut_bool = None
     elif method=='igl':
-        p1, p2, method_cut_bool = dag_igl_flatten(mesh_info, **kwargs)
+        p1, p2, vx_to_include_IGL, face_to_include_IGL = dag_igl_flatten(mesh_info, **kwargs)
+        vx_to_include = vx_to_include_IGL
+        f_to_include = face_to_include_IGL
+
 
     # find relative scale...
     mag = mesh_info['coords'].max() / p1.max() 
     flat_info['x'] = p1 * mag
     flat_info['y'] = p2 * mag
     flat_info['z'] = np.ones_like(flat_info['x']) * z
+
+    # FACES TO REMOVE [1] - missing vx    
+    vx_not_included = np.where(~vx_to_include)[0]
+    f_with_missing_vx = np.isin(mesh_info['i'], vx_not_included) + \
+        np.isin(mesh_info['j'], vx_not_included) + \
+        np.isin(mesh_info['k'], vx_not_included)    
     
-    # Cut faces with any of the "cut_bool" vertices in them
-    cut_bool = kwargs.get('cut_bool', method_cut_bool)
-    # print(cut_bool)
-    # bloop
-    # if cut_bool is not None:
-    #     # Find any faces with vertices in the cut
-    #     cut_vx = np.where(cut_bool)[0]
-    #     cut_faces = np.isin(mesh_info['i'], cut_vx) + np.isin(mesh_info['j'], cut_vx) + np.isin(mesh_info['k'], cut_vx)
-    #     cut_faces = cut_faces>0
-    #     print(f'Cutting {cut_faces.sum()} faces out of {cut_faces.shape[0]}')
-    # else:
-    #     cut_faces = np.zeros(mesh_info['i'].shape[0], dtype=bool)
-    cut_faces = np.zeros(mesh_info['i'].shape[0], dtype=bool)
-    
+    # [2] - faces with long edges
     # Find the mean length of an edge 
     face_lengths = []
     for i_f in range(mesh_info['i'].shape[0]):
@@ -444,32 +491,44 @@ def dag_flatten(mesh_info, **kwargs):
     std_face_lengths = face_lengths.std()
     # Find the faces with edges > 4*std
     f_w_long_edges = face_lengths > m_face_lengths + 4*std_face_lengths
-    
-    cut_faces |= f_w_long_edges
-    print(f'Faces with long edges: {f_w_long_edges.sum()}')    
 
-    flat_info['faces']  = mesh_info['faces'][~cut_faces,:]
-    flat_info['i']      = mesh_info['i'][~cut_faces]
-    flat_info['j']      = mesh_info['j'][~cut_faces]
-    flat_info['k']      = mesh_info['k'][~cut_faces]
+    # If these are in the faces to include then remove them...
+    f_to_include[f_with_missing_vx] = False
+    f_to_include[f_w_long_edges] = False
+    print(f'Faces with missing vx: {f_with_missing_vx.sum()}')
+    print(f'Faces with long edges: {f_w_long_edges.sum()}')   
+    print(f_to_include.mean()) 
+
+    # Keep only the specified faces 
+    flat_info['faces']  = mesh_info['faces'][f_to_include,:]
+    flat_info['i']      = mesh_info['i'][f_to_include]
+    flat_info['j']      = mesh_info['j'][f_to_include]
+    flat_info['k']      = mesh_info['k'][f_to_include]
 
     pts = np.vstack([flat_info['x'],flat_info['y'], flat_info['z']]).T    
-    pts[cut_bool] = 0 # Move pts to cut to 0
+    # pts[cut_bool] = 0 # Move pts to cut to 0
     polys = flat_info['faces']
-    return pts, polys
+    return pts, polys, vx_to_include
+
+def dag_is_contiguous(mesh_info, vx_bool):
+    '''Check if the mesh is contiguous'''
+    vx_border = dag_find_border_vx_in_order(roi_bool=vx_bool, mesh_info=mesh_info)
+    return vx_border
 
 
 def dag_submesh_from_mesh(mesh_info, submesh_bool, **kwargs):
     '''Create a submesh from a mesh
     '''
-    check_contiguous = kwargs.get('check_contiguous', True)
+    check_contiguous = kwargs.get('check_contiguous', 'message')
     check_missing_vx = kwargs.get('check_missing_vx', True)
     check_unique_faces = kwargs.get('check_unique_faces', True)
     morph = kwargs.get('morph', 0)
     # Check is contiguous?
     if check_contiguous:
         vx_border = dag_find_border_vx_in_order(roi_bool=submesh_bool, mesh_info=mesh_info)
-        assert len(vx_border)==1, 'Submesh is not contiguous'
+        if len(vx_border)!=1:
+            print('Submesh is not contiguous')
+            return None
         
     if morph!=0:
         submesh_bool = dag_mesh_morph(mesh_info=mesh_info, vx_bool=submesh_bool, morph=morph)

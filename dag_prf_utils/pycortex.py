@@ -975,18 +975,20 @@ class PyctxMaker(GenMeshMaker):
         Custom method to flatten (not using mris_flatten)
         * option 1: use latitude and longitude
         * option 2: do some clever UV mapping with igl code...
+
+        TODO: remove cut from Y 
         '''
         method = kwargs.pop('method', 'latlon')
         morph = kwargs.pop('morph', 10) # How much to dilate or erode the mask (if doing igl)
         hemi_project = kwargs.get('hemi_project', 'sphere')
         ow = kwargs.get('ow', False)
         centre_roi = kwargs.get('centre_roi', None)
+        centre_bool = kwargs.pop('centre_bool', np.ones(self.total_n_vx))
+        centre_bool_hemi = {
+            'lh': centre_bool[:self.n_vx['lh']],
+            'rh': centre_bool[self.n_vx['lh']:]
+        }
         cut_box = kwargs.get('cut_box', False)
-        cut_occ = kwargs.get('cut_occ', False)
-        cut_along_y = kwargs.get('cut_along_y', None)                
-        if cut_occ:
-            cut_along_y = -35 # cut out front of brain
-
         do_flip = kwargs.get('do_flip', False)
 
         # Make a bad flatmap...
@@ -1002,7 +1004,6 @@ class PyctxMaker(GenMeshMaker):
             self.add_flat_to_mesh_info()
             return None
 
-        # bloop
         hemi_pts = {}
         hemi_polys = {}
         pts_combined = []
@@ -1024,20 +1025,15 @@ class PyctxMaker(GenMeshMaker):
             hemi_kwargs['morph'] = morph
             if centre_roi is not None:
                 # Load the ROI bool for this hemisphere
-                centre_bool = self._return_roi_bool_both_hemis(centre_roi)[hemi]
-                hemi_kwargs['centre_bool'] = centre_bool
+                centre_bool_hemi[hemi] |= self._return_roi_bool_both_hemis(centre_roi)[hemi]
+            # Cut a box around them?            
             if cut_box:
-                hemi_kwargs['cut_bool'] = dag_cut_box(
+                hemi_kwargs['vx_to_include'] = dag_cut_box(
                     mesh_info=self.mesh_info['inflated'][hemi],
-                    vx_bool=centre_bool,
-                )!=1
-            if cut_along_y is not None:
-                # Load the ROI bool for this hemisphere
-                cut_bool = self._return_roi_bool_both_hemis(
-                    roi_name='occ', y_max=cut_along_y)[hemi]                
-                hemi_kwargs['cut_bool'] = cut_bool
-
-            pts,polys = dag_flatten(
+                    vx_bool=centre_bool_hemi[hemi],
+                )
+            hemi_kwargs['centre_bool'] = centre_bool_hemi[hemi]
+            pts,polys,vx_to_include = dag_flatten(
                 mesh_info=self.mesh_info[hemi_project][hemi], 
                 method=method,
                 **hemi_kwargs)
@@ -1188,69 +1184,69 @@ class PyctxMaker(GenMeshMaker):
 
             # self.mesh_info['flat'][hemi] = flat
     
-    def make_flatmap_patch(self, **kwargs):
-        '''
-        Make a patch for later use by MRIs flatten
-        -> same logic as the "LAT LONG" method
-        -> (i.e., find a border, make a patch)
-        -> But this sets it up for an extra stage - mris_flatten
-        which will use clever algorithms to make a flatmap with less distortions
-        than the simple LAT LONG method
+    # def make_flatmap_patch(self, **kwargs):
+    #     '''
+    #     Make a patch for later use by MRIs flatten
+    #     -> same logic as the "LAT LONG" method
+    #     -> (i.e., find a border, make a patch)
+    #     -> But this sets it up for an extra stage - mris_flatten
+    #     which will use clever algorithms to make a flatmap with less distortions
+    #     than the simple LAT LONG method
 
-        TAKES LONGER THOUGH
-        '''
-        centre_roi = kwargs.get('centre_roi', None)
-        cut_occ = kwargs.get('cut_occ', False)
-        cut_along_y = kwargs.get('cut_along_y', None)                
-        if cut_occ:
-            cut_along_y = -35 # cut out front of brain
-        patch_name = kwargs.get('patch_name', 'EXPERIMENT_flat')
-        hemi_list = kwargs.get('hemi_list', ['lh','rh'])
-        ow = kwargs.get('ow', False)
+    #     TAKES LONGER THOUGH
+    #     '''
+    #     centre_roi = kwargs.get('centre_roi', None)
+    #     cut_occ = kwargs.get('cut_occ', False)
+    #     cut_along_y = kwargs.get('cut_along_y', None)                
+    #     if cut_occ:
+    #         cut_along_y = -35 # cut out front of brain
+    #     patch_name = kwargs.get('patch_name', 'EXPERIMENT_flat')
+    #     hemi_list = kwargs.get('hemi_list', ['lh','rh'])
+    #     ow = kwargs.get('ow', False)
 
                 
-        for hemi in hemi_list:
-            if centre_roi is not None:
-                # Load the ROI bool for this hemisphere
-                centre_bool = self._return_roi_bool_both_hemis(centre_roi)[hemi]
-                cut_bool = dag_cut_box(
-                    mesh_info=self.mesh_info['inflated'][hemi],
-                    vx_bool=centre_bool,
-                )!=1
-            if cut_along_y is not None:
-                # Load the ROI bool for this hemisphere
-                cut_bool = self._return_roi_bool_both_hemis(
-                    roi_name='occ', y_max=cut_along_y)[hemi]                
-            # Now lets get the outer edge list
-            border_edges = dag_get_roi_border_edge(
-                roi_bool=cut_bool, 
-                mesh_info=self.mesh_info['inflated'][hemi]
-                )
-            # Make it a set
-            border_edges = set(border_edges.flatten())
-            # Now verts in form [(v, x, y, z), ...]
-            verts = []
-            cut_include = np.where(~cut_bool)[0]
-            for v in cut_include:
-                verts.append((
-                    v, 
-                    np.array([self.mesh_info['inflated'][hemi]['x'][v], self.mesh_info['inflated'][hemi]['y'][v], self.mesh_info['inflated'][hemi]['z'][v]]))
-                )
+    #     for hemi in hemi_list:
+    #         if centre_roi is not None:
+    #             # Load the ROI bool for this hemisphere
+    #             centre_bool = self._return_roi_bool_both_hemis(centre_roi)[hemi]
+    #             vx_to_remove = dag_cut_box(
+    #                 mesh_info=self.mesh_info['inflated'][hemi],
+    #                 vx_bool=centre_bool,
+    #             )!=1
+    #         if cut_along_y is not None:
+    #             # Load the ROI bool for this hemisphere
+    #             vx_to_remove = self._return_roi_bool_both_hemis(
+    #                 roi_name='occ', y_max=cut_along_y)[hemi]                
+    #         # Now lets get the outer edge list
+    #         border_edges = dag_get_roi_border_edge(
+    #             roi_bool=~vx_to_remove,  
+    #             mesh_info=self.mesh_info['inflated'][hemi]
+    #             )
+    #         # Make it a set
+    #         border_edges = set(border_edges.flatten())
+    #         # Now verts in form [(v, x, y, z), ...]
+    #         verts = []
+    #         vx_to_include_idx = np.where(~vx_to_remove)[0]
+    #         for v in vx_to_include_idx:
+    #             verts.append((
+    #                 v, 
+    #                 np.array([self.mesh_info['inflated'][hemi]['x'][v], self.mesh_info['inflated'][hemi]['y'][v], self.mesh_info['inflated'][hemi]['z'][v]]))
+    #             )
 
-            # Now lets try to make a patch
-            output_patch = opj(self.fs_dir, self.sub,  'surf', f'{hemi}.{patch_name}.patch.3d')
-            # Check if it exists
-            if os.path.exists(output_patch):
-                if ow:
-                    print(f'Overwriting {output_patch}')
-                    os.unlink(output_patch)
-                else:
-                    print(f'Patch already exists. Skipping')
-                    continue
-            cortex.freesurfer.write_patch(
-                filename=output_patch, pts=verts, 
-                edges=border_edges
-            )
+    #         # Now lets try to make a patch
+    #         output_patch = opj(self.fs_dir, self.sub,  'surf', f'{hemi}.{patch_name}.patch.3d')
+    #         # Check if it exists
+    #         if os.path.exists(output_patch):
+    #             if ow:
+    #                 print(f'Overwriting {output_patch}')
+    #                 os.unlink(output_patch)
+    #             else:
+    #                 print(f'Patch already exists. Skipping')
+    #                 continue
+    #         cortex.freesurfer.write_patch(
+    #             filename=output_patch, pts=verts, 
+    #             edges=border_edges
+    #         )
     
     def flatten_patch(self, **kwargs):
         patch_name = kwargs.get('patch_name', 'EXPERIMENT_flat')

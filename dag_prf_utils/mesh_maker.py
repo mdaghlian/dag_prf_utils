@@ -44,6 +44,7 @@ class GenMeshMaker(FSMaker):
         
         # [1] Load mesh info
         # PULL FROM FREESURFER
+        self.do_offsets = kwargs.get('do_offsets', True)
         self.mesh_info = {}        
         for mesh_name in ['inflated', 'sphere', 'pial', ]:
             self.mesh_info[mesh_name] = self._return_fs_mesh_coords_both_hemis(mesh=mesh_name)
@@ -223,21 +224,24 @@ class GenMeshMaker(FSMaker):
 
         # Put it into x,y,z, i,j,k format. Plus add offset to x
         mesh_info = {}                                    
+        mesh_info = copy(this_mesh_info)
         mesh_info['x']=this_mesh_info['coords'][:,0]
-        if 'sphere' in mesh:
-            mesh_info['x'] += 100 if hemi=='rh' else -100
-        elif 'inflated' in mesh:
-            mesh_info['x'] += 50 if hemi=='rh' else -50
-        elif 'pial' in mesh:
-            mesh_info['x'] += 25 if hemi=='rh' else -25
-
+        if self.do_offsets:
+            print(f'Adding offset to mesh...')
+            if 'sphere' in mesh:
+                mesh_info['x'] += 100 if hemi=='rh' else -100
+            elif 'inflated' in mesh:
+                mesh_info['x'] += 50 if hemi=='rh' else -50
+            elif 'pial' in mesh:
+                mesh_info['x'] += 25 if hemi=='rh' else -25
         mesh_info['y']=this_mesh_info['coords'][:,1]
         mesh_info['z']=this_mesh_info['coords'][:,2]
         mesh_info['i']=this_mesh_info['faces'][:,0]
         mesh_info['j']=this_mesh_info['faces'][:,1]
         mesh_info['k']=this_mesh_info['faces'][:,2]
-        mesh_info['coords'] = this_mesh_info['coords']
-        mesh_info['faces'] = this_mesh_info['faces']
+        # mesh_info['coords'] = this_mesh_info['coords']
+        # mesh_info['faces'] = this_mesh_info['faces']
+
 
         return mesh_info
     

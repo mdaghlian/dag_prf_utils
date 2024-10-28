@@ -582,8 +582,12 @@ def dag_submesh_from_mesh(mesh_info, submesh_bool, **kwargs):
         'x': mesh_info['x'][submesh_bool],
         'y': mesh_info['y'][submesh_bool],
         'z': mesh_info['z'][submesh_bool],        
-        'coords': mesh_info['coords'][submesh_bool,:],
+        'coords': mesh_info['coords'][submesh_bool,:],        
     }
+    # Other keys...
+    for k in mesh_info.keys():
+        if k not in submesh.keys():
+            submesh[k] = submesh['full_mesh'][k]
     # Translate old to new index
     new_idx = np.arange(submesh_bool.shape[0])
     old_idx = np.where(submesh_bool)[0]
@@ -786,19 +790,34 @@ def dag_obj_write(mesh_info, **kwargs):
 
 def dag_fs_write(mesh_info, output_file, **kwargs):
 
-    pts = mesh_info['coords'].copy()
+    pts = mesh_info['coords'].copy() 
+    # pts[:,0] -= 100 
+    # pts[:,1] -= 100
+    # pts[:,2] += 100
+
+    # V2 
+    # pts[:,[0,1]] = pts[:,[1,0]]
+    # V3 
+    # pts[:,[0,2]] = pts[:,[2,0]]
+    # V4
+    # pts[:,0] += 25
+
+    # Switch x and y
+    # pts[:,[0,1]] = pts[:,[1,0]]
     polys = mesh_info['faces'].copy()
     comment = kwargs.get('comment', '')
-
+    print(mesh_info.keys())
     # Step 2: Open the file in binary write mode
     with open(output_file, 'wb') as fp:
         # Write the magic number header for .surf format
-        fp.write(b'\xff\xff\xfe')  # Magic number for FreeSurfer binary .surf file
+        fp.write(b'\xFF\xFF\xFE')  # Magic number for FreeSurfer binary .surf file
         fp.write((comment+'\n\n').encode())
         fp.write(struct.pack('>2I', len(pts), len(polys)))
         fp.write(pts.astype(np.float32).byteswap().tostring())
         fp.write(polys.astype(np.uint32).byteswap().tostring())
         fp.write(b'\n')
+        if mesh_info['volume_info']!={}:
+            fp.write(dag_serialize_volume_info(mesh_info['volume_info']))
 
     print(f"Surface file '{output_file}'")
 

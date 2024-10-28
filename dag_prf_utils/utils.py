@@ -14,6 +14,7 @@ import shutil
 from datetime import datetime
 import matplotlib.image as mpimg
 from scipy import io, interpolate
+from collections import OrderedDict
 
 import io as io_module
 from IPython.utils import io as ipy_io
@@ -1067,7 +1068,7 @@ def dag_fread3(fobj):
     return (b1 << 16) + (b2 << 8) + b3
 
 
-def dag_read_fs_mesh(filepath, return_xyz=False):
+def dag_read_fs_mesh(filepath, return_xyz=False, return_info=True):
     """Adapted from https://github.com/nipy/nibabel/blob/master/nibabel/freesurfer/io.py
     ...
     Read a triangular format Freesurfer surface mesh.
@@ -1095,6 +1096,10 @@ def dag_read_fs_mesh(filepath, return_xyz=False):
         fnum = np.fromfile(fobj, '>i4', 1)[0]
         coords = np.fromfile(fobj, '>f4', vnum * 3).reshape(vnum, 3)
         faces = np.fromfile(fobj, '>i4', fnum * 3).reshape(fnum, 3)
+        if return_info:
+            volume_info = dag_read_volume_info(fobj)        
+        else:
+            volume_info = {}
 
     coords = coords.astype(np.float64)  # XXX: due to mayavi bug on mac 32bits
 
@@ -1103,6 +1108,7 @@ def dag_read_fs_mesh(filepath, return_xyz=False):
         'fnum' : fnum,
         'coords' : coords,
         'faces' : faces,        
+        'volume_info' : volume_info,
     }
     if return_xyz:
         new_mesh_info = {}                                    
@@ -1115,6 +1121,61 @@ def dag_read_fs_mesh(filepath, return_xyz=False):
         mesh_info = new_mesh_info
 
     return mesh_info
+
+def dag_read_volume_info(fobj):
+    """Copied from from https://github.com/nipy/nibabel/blob/master/nibabel/freesurfer/io.py
+    Helper for reading the footer from a surface file.
+    """
+    volume_info = OrderedDict()
+    head = np.fromfile(fobj, '>i4', 1)
+    if not np.array_equal(head, [20]):  # Read two bytes more
+        head = np.concatenate([head, np.fromfile(fobj, '>i4', 2)])
+        if not np.array_equal(head, [2, 0, 20]):
+            print.warn('Unknown extension code.')
+            return volume_info
+
+    volume_info['head'] = head
+    for key in ('valid', 'filename', 'volume', 'voxelsize', 'xras', 'yras', 'zras', 'cras'):
+        pair = fobj.readline().decode('utf-8').split('=')
+        if pair[0].strip() != key or len(pair) != 2:
+            raise OSError('Error parsing volume info.')
+        if key in ('valid', 'filename'):
+            volume_info[key] = pair[1].strip()
+        elif key == 'volume':
+            volume_info[key] = np.array(pair[1].split(), int)
+        else:
+            volume_info[key] = np.array(pair[1].split(), float)
+    # Ignore the rest
+    return volume_info
+
+def dag_serialize_volume_info(volume_info):
+    """Copied from from https://github.com/nipy/nibabel/blob/master/nibabel/freesurfer/io.py
+    Helper for serializing the volume info.
+    """
+    keys = ['head', 'valid', 'filename', 'volume', 'voxelsize', 'xras', 'yras', 'zras', 'cras']
+    diff = set(volume_info.keys()).difference(keys)
+    if len(diff) > 0:
+        raise ValueError(f'Invalid volume info: {diff.pop()}.')
+
+    strings = list()
+    for key in keys:
+        if key == 'head':
+            if not (
+                np.array_equal(volume_info[key], [20])
+                or np.array_equal(volume_info[key], [2, 0, 20])
+            ):
+                print('Unknown extension code.')
+            strings.append(np.array(volume_info[key], dtype='>i4').tobytes())
+        elif key in ('valid', 'filename'):
+            val = volume_info[key]
+            strings.append(f'{key} = {val}\n'.encode())
+        elif key == 'volume':
+            val = volume_info[key]
+            strings.append(f'{key} = {val[0]} {val[1]} {val[2]}\n'.encode())
+        else:
+            val = volume_info[key]
+            strings.append(f'{key:6s} = {val[0]:.10g} {val[1]:.10g} {val[2]:.10g}\n'.encode())
+    return b''.join(strings)
 # ***
 
 

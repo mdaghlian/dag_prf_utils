@@ -1732,6 +1732,58 @@ def dag_draw_significance_bar(ax, text, i_sub1, i_sub2, y_value=None, **kwargs):
     ax.text(xmid, y_value, text, color=text_color, size=text_size, ha='center', va='bottom')
 
 
+def dag_group_and_individual_3dict(ax, mdict, **kwargs):
+    y_upper = kwargs.pop('y_upper', None)
+    y_lower = kwargs.pop('y_lower', None)
+    l2_kwargs = kwargs.pop('l2_kwargs', {})
+
+    # Ok lets loop around and call 2 dict...
+    nl2 = 0
+    xlim0 = np.inf
+    xlim1 = -np.inf
+    x_standard = []
+    x_keys = []
+    
+    for i,k in enumerate(mdict.keys()):
+            
+        this_tick_out = dag_group_and_individual_2dict(
+                ax=ax,
+                mdict=mdict[k],
+                y_upper=y_upper[k],
+                y_lower=y_lower[k],
+                x_offset=nl2,
+                return_ticks=True,
+                **l2_kwargs.copy()
+                )
+        if (i==0) & ('x_cols' in l2_kwargs.keys()):
+            
+            line4leg = []
+            label4leg = []
+            
+            for lab,lin in l2_kwargs['x_cols'].items():
+                line4leg.append(plt.Line2D([0], [0], color=lin, lw=2))
+                label4leg.append(lab)
+            plt.legend(line4leg, label4leg)
+
+            # Add legend...
+
+        # Create object of same color as the line
+        # bleep
+        nl2 += len(mdict[k].keys())
+        xlim0 = min(xlim0, this_tick_out['xlim0'])
+        xlim1 = max(xlim1, this_tick_out['xlim1'])
+        x_standard.append(this_tick_out['x_standard'])
+        x_keys.append(this_tick_out['x_keys'])
+    ax.set_xlim(xlim0, xlim1)
+    x_standard = [np.mean(x) for x in x_standard]
+    ax.set_xticks(x_standard)
+    ax.set_xticklabels(mdict.keys())
+    # red_line = plt.Line2D([0], [0], color='red', lw=2)  # Create a red line object
+    # plt.legend([red_line, 'Y=0 Line', 'Sine Wave'], ['Y=0 Line', 'Sine Wave'])
+    # plt.legend()
+    # ax.set_xticklabels(x_keys)
+
+
 
 
 def dag_group_and_individual_2dict(ax, mdict, **kwargs):
@@ -1744,6 +1796,7 @@ def dag_group_and_individual_2dict(ax, mdict, **kwargs):
     '''
     do_bar = kwargs.get('do_bar', True)
     do_points = kwargs.get('do_points', True)
+    return_ticks = kwargs.get('return_ticks', False)
     bar_width = kwargs.get('bar_width', 0.5)
     jitter_width = kwargs.get('jitter_width', 0.5)
     err_kwargs = kwargs.get('err_kwargs', 
@@ -1770,7 +1823,8 @@ def dag_group_and_individual_2dict(ax, mdict, **kwargs):
                 if x not in x_keys:
                     x_keys.append(x)    
     # position of the x key
-    x_pos = kwargs.get('x_pos', {x:i for i,x in enumerate(x_keys)})
+    x_offset = kwargs.get('x_offset', 0)
+    x_pos = kwargs.get('x_pos', {x:i+x_offset for i,x in enumerate(x_keys)})
     x_cols = kwargs.get('x_cols', {x:'b' for x in x_keys})
     if isinstance(x_cols, str):
         this_cols = x_cols
@@ -1840,14 +1894,18 @@ def dag_group_and_individual_2dict(ax, mdict, **kwargs):
             width=bar_width,
             **bar_kwargs,        
         )
-    dag_group_and_i_xticks(
-        ax=ax, 
-        mdict=mdict, 
-        s_keys=s_keys,
-        bar_width=bar_width,
-        keys_to_plot=keys_to_plot,
-        x_keys=x_keys,
-        x_pos=x_pos,)
+
+    ticks_out = dag_group_and_i_xticks(
+            ax=ax, 
+            mdict=mdict, 
+            s_keys=s_keys,
+            bar_width=bar_width,
+            keys_to_plot=keys_to_plot,
+            x_keys=x_keys,
+            x_pos=x_pos,
+            )
+    if return_ticks:
+        return ticks_out
 
     return ax
 
@@ -1860,6 +1918,7 @@ def dag_group_and_i_xticks(ax, mdict, **kwargs):
     bar_width = kwargs.get('bar_width', 0.5)
     keys_to_plot = kwargs.get('keys_to_plot', None)
     x_keys = kwargs.get('x_keys', keys_to_plot)
+    return_ticks = kwargs.get('return_ticks', False)
     if x_keys is None:
         x_keys = []
         for s in s_keys:
@@ -1876,6 +1935,7 @@ def dag_group_and_i_xticks(ax, mdict, **kwargs):
     xlim0 = np.min(x_standard) - bar_width*2
     xlim1 = np.max(x_standard) + bar_width*2
     ax.set_xlim([xlim0, xlim1])
+    return dict(x_standard=x_standard, x_pos=x_pos, x_keys=x_keys, xlim0=xlim0, xlim1=xlim1)
 
 
 def dag_merid_helper(main_ax,wedge_angle, colors, **kwargs):

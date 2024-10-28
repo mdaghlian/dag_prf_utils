@@ -90,6 +90,7 @@ class TSPlotter(Prf1T1M):
         Also we may or may not want to include the hrf
         '''
         th = kwargs.get('th', {})
+        idx = kwargs.get('idx', None)
         # Include hrf in output parameters        
         include_hrf = kwargs.get('include_hrf', True)        
         if include_hrf:
@@ -103,6 +104,9 @@ class TSPlotter(Prf1T1M):
             this_pred_idx = self.pred_idx - 2 # Remove the hrf parameters, on top of the rsq
 
         vx_mask = self.return_vx_mask(th) # what to mask
+        if idx is not None:
+            vx_mask = np.zeros(self.n_vox, dtype=bool)
+            vx_mask[idx] = True
         pars_for_preds = list(self.prf_params_np[vx_mask,:this_pred_idx].T)
         return pars_for_preds
     

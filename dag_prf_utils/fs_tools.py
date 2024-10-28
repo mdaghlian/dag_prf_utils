@@ -246,6 +246,7 @@ class FSMaker(object):
                             fs_cmd += f':overlay_mask={this_roi_path}'       
                 else:
                     fs_cmd += f':curvature_method=binary'
+                    fs_cmd += shading_off_str
         fs_cmd +=  f' --camera Azimuth {cam_azimuth} Zoom {cam_zoom} Elevation {cam_elevation} Roll {cam_roll} '
         fs_cmd += f'{col_bar_flag} {scr_shot_flag}'
         fs_cmd += ' --verbose  --viewport 3d --viewsize 99999 99999'        

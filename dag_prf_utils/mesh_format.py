@@ -402,15 +402,16 @@ def dag_igl_flatten(mesh_info, **kwargs):
     centre_bool = kwargs.pop('centre_bool', 'bleep') # np.ones_like(mesh_info['x'], dtype=bool))
     roi_bool = centre_bool.copy()
     successful_flatten = False
-    morph = kwargs.pop('morph', 0)
+    # morph = kwargs.pop('morph', 0)
     import contextlib
     n_steps = 0
+    total_morph = 0
     while (not successful_flatten) & (n_steps<100):        
-        submesh_info = dag_submesh_from_mesh(mesh_info, submesh_bool=roi_bool, morph = morph, check_contiguous=False, **kwargs)
+        submesh_info = dag_submesh_from_mesh(mesh_info, submesh_bool=roi_bool, check_contiguous=False, **kwargs)
         if submesh_info is None:
             # Not contiguous
-            roi_bool = dag_mesh_morph(mesh_info=mesh_info, vx_bool=roi_bool, morph=morph + 1)
-            morph -= 1 # (we already step through it)
+            roi_bool = dag_mesh_morph(mesh_info=mesh_info, vx_bool=roi_bool, morph=1)
+            total_morph += 1
             n_steps += 1
             continue
 
@@ -428,33 +429,34 @@ def dag_igl_flatten(mesh_info, **kwargs):
 
         # Map the boundary to a circle, preserving edge proportions
         bnd_uv = igl.map_vertices_to_circle(v, bnd)
-
         # Harmonic parametrization for the internal vertices
         uv = igl.harmonic(v, f, bnd, bnd_uv, 1)
-        import io as io_not_scipy
-        buffer = io_not_scipy.StringIO()
-        with contextlib.redirect_stdout(buffer):
-            arap = igl.ARAP(v, f, 2, np.zeros(0))
-            uva = arap.solve(np.zeros((0, 0)), uv)
-        output = buffer.getvalue()
-        print(output)
-        if uva.max()<0.1:
-            morph += 1
-            print(f'Failed to flatten, retrying with morph={morph}')
+        arap = igl.ARAP(v, f, 2, np.zeros(0))
+        uva = arap.solve(np.zeros((0, 0)), uv)
+        # Check for any nans
+        nans_present = (np.isnan(uva)).sum()
+        print(f'Nans present: {nans_present.mean()}')
+        nans_present = nans_present>0
+        # Combine both outputs to check for "error"
+        # combined_output = stdout_output + stderr_output
+        if (0.1>uva.max()) or (100000<uva.max()) or nans_present: #'error' in output.lower():            
+            print(f'Failed to flatten, retrying with morph {total_morph}')
+            roi_bool = dag_mesh_morph(mesh_info=mesh_info, vx_bool=roi_bool, morph=1)
+            total_morph += 1
         else:
             successful_flatten = True   
             # Lets do a quick check, we want roughly the same orientation
             # If not, then we need to flip the orientation
             # [1] x 
-            corr_x = dag_get_corr(v[:,0], uva[:,0])
-            corr_y = dag_get_corr(v[:,1], uva[:,1])
-            if corr_x<0:
-                uva[:,0] *= -1
-            if corr_y<0:
-                uva[:,1] *= -1
-            print(f'Corr x: {corr_x:.2f} y: {corr_y:.2f}')
+            # corr_x = dag_get_corr(v[:,0], uva[:,0])
+            # corr_y = dag_get_corr(v[:,1], uva[:,1])
+            # if corr_x<0:
+            #     uva[:,0] *= -1
+            # if corr_y<0:
+            #     uva[:,1] *= -1
+            # print(f'Corr x: {corr_x:.2f} y: {corr_y:.2f}')
             # bloop
-            print(f'Successful flatten with morph={morph}')
+            print(f'Successful flatten with morph={total_morph}')
             print('Here it looks like this...')
             fig, axs = plt.subplots(1,2)
             axs[0].scatter(uva[:,0], uva[:,1], c=v[:,0])
@@ -468,6 +470,8 @@ def dag_igl_flatten(mesh_info, **kwargs):
     
     p1 = np.zeros_like(mesh_info['x'])
     p2 = np.zeros_like(mesh_info['y'])
+    # check for nans
+    assert not np.isnan(uva).any(), 'Nans present in uva'
     p1[submesh_info['vx_idx']] = uva[:,0]
     p2[submesh_info['vx_idx']] = uva[:,1]
     # face_to_cut = np.ones_like(mesh_info['i'], dtype=bool)
@@ -498,9 +502,8 @@ def dag_flatten(mesh_info, **kwargs):
 
 
     # find relative scale...
-    mag = mesh_info['coords'].max() / p1.max() 
-    flat_info['x'] = p1 * mag
-    flat_info['y'] = p2 * mag
+    flat_info['x'] = p1 - p1.mean()# Demean
+    flat_info['y'] = p2 - p2.mean()# Demean
     flat_info['z'] = np.ones_like(flat_info['x']) * z
 
     # FACES TO REMOVE [1] - missing vx    
@@ -781,11 +784,23 @@ def dag_obj_write(mesh_info, **kwargs):
     return obj_str
 
 
+def dag_fs_write(mesh_info, output_file, **kwargs):
 
+    pts = mesh_info['coords'].copy()
+    polys = mesh_info['faces'].copy()
+    comment = kwargs.get('comment', '')
 
+    # Step 2: Open the file in binary write mode
+    with open(output_file, 'wb') as fp:
+        # Write the magic number header for .surf format
+        fp.write(b'\xff\xff\xfe')  # Magic number for FreeSurfer binary .surf file
+        fp.write((comment+'\n\n').encode())
+        fp.write(struct.pack('>2I', len(pts), len(polys)))
+        fp.write(pts.astype(np.float32).byteswap().tostring())
+        fp.write(polys.astype(np.uint32).byteswap().tostring())
+        fp.write(b'\n')
 
-
-
+    print(f"Surface file '{output_file}'")
 
 # ************************************************************************
 def dag_vtk_to_ply(vtk_file):

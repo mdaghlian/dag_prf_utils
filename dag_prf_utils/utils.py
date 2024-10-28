@@ -15,6 +15,37 @@ from datetime import datetime
 import matplotlib.image as mpimg
 from scipy import io, interpolate
 
+import io as io_module
+from IPython.utils import io as ipy_io
+import contextlib
+
+class DagCaptureOutputs:
+    def __enter__(self):
+        # Save original stdout and stderr
+        self.original_stdout = sys.stdout
+        self.original_stderr = sys.stderr
+        
+        # Create StringIO objects to capture stdout and stderr
+        self.stdout_buffer = io_module.StringIO()
+        self.stderr_buffer = io_module.StringIO()
+        
+        # Redirect sys.stdout and sys.stderr to the StringIO objects
+        sys.stdout = self.stdout_buffer
+        sys.stderr = self.stderr_buffer
+
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        # Restore original stdout and stderr
+        sys.stdout = self.original_stdout
+        sys.stderr = self.original_stderr
+
+    def get_stdout(self):
+        return self.stdout_buffer.getvalue()
+
+    def get_stderr(self):
+        return self.stderr_buffer.getvalue()
+    
 def dag_make_backup(source_path, ow=False):
     # Check if the source exists
     if not os.path.exists(source_path):

@@ -368,7 +368,7 @@ class GenMeshMaker(FSMaker):
     # -> borders in order
     def _return_roi_borders_in_order(self, roi_list, **kwargs):
         '''Return the border vertices in order for each ROI in roi_list
-
+        TODO: make generic for boolean
         '''
         if not isinstance(roi_list, list):
             roi_list = [roi_list]
@@ -377,7 +377,7 @@ class GenMeshMaker(FSMaker):
         hemi_list = kwargs.get('hemi_list', ['lh', 'rh'])
         roi_obj = []
         roi_count = -1
-        for i_roi,roi in enumerate(roi_list):
+        for i_roi,roi in enumerate(roi_list):                
             roi_bool = dag_load_roi(self.sub, roi, fs_dir=self.fs_dir, split_LR=True, combine_matches=combine_matches, recursive_search=True)
             if 'lh' not in roi_bool.keys():
                 # We found extra matches!!!

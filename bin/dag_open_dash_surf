@@ -69,6 +69,9 @@ def main(argv):
         app = comb_fs.web_launch_with_dash()
         # Open the app in a browser    
         print(f'http://localhost:{port}/')
+        # Fix for running on macs
+        import matplotlib
+        matplotlib.use('Agg')        
         app.run_server(host='127.0.0.1', port=port, debug=False, use_reloader=False) 
 
 

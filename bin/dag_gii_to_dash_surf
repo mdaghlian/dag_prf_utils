@@ -183,6 +183,9 @@ def main(argv):
     # Open the app in a browser
     # Do not show it in the notebook
     print(f'http://localhost:8000/')
+    # Fix for running on macs...
+    import matplotlib
+    matplotlib.use('Agg')    
     app.run_server(host='127.0.0.1', port=8000, debug=False, use_reloader=False) 
 
 if __name__ == "__main__":

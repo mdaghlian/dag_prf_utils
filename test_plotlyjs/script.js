@@ -23,7 +23,7 @@ var data = [{
     i: meshi,
     j: meshj,
     k: meshk,
-    vertexcolor: colorSchemes["pol"],
+    // vertexcolor: colorSchemes["pol"],
     // intensity: [0, 0.33, 0.66, 1],
     // colorscale: [
     //   [0, 'rgb(255, 0, 0)'],
@@ -33,8 +33,35 @@ var data = [{
   }
 ];
 
+// Function to generate update menus for each color scheme
+function createColorDropdownOptions(colorSchemes) {
+    return Object.keys(colorSchemes).map((schemeName, index) => ({
+        label: schemeName,
+        method: 'restyle',
+        args: [{'vertexcolor': [colorSchemes[schemeName]]}]
+    }));
+}
 
-Plotly.newPlot('myDiv', data);
+// Layout with updatemenus for the dropdown
+var layout = {
+    title: "3D Mesh with Dynamic Color Dropdown",
+    scene: { 
+        xaxis: { title: 'X' },
+        yaxis: { title: 'Y' },
+        zaxis: { title: 'Z' }
+    },
+    updatemenus: [{
+        buttons: createColorDropdownOptions(colorSchemes),
+        direction: 'down',
+        showactive: true,
+        x: 0.1,
+        xanchor: 'left',
+        y: 1.1,
+        yanchor: 'top'
+    }]
+};
+
+Plotly.newPlot('myDiv', data, layout);
 
 // inflate the mesh
 

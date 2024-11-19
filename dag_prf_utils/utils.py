@@ -1182,7 +1182,9 @@ def dag_serialize_volume_info(volume_info):
 def dag_read_fs_curv_file(curv_file):
     with open(curv_file, 'rb') as h_us:
         h_us.seek(15)
-        curv_vals = np.fromstring(h_us.read(), dtype='>f4').byteswap().newbyteorder()
+        # curv_vals = np.fromstring(h_us.read(), dtype='>f4').byteswap().newbyteorder()
+        # Fix updated numpy...
+        curv_vals = np.frombuffer(h_us.read(), dtype='>f4').byteswap().view(np.dtype('>f4').newbyteorder())
     return curv_vals
 
 # ***********************************************************************************************

@@ -43,7 +43,7 @@ class MeshJS(GenMeshMaker):
     def reset_html(self):
         self.html_str = copy(self.html_str_template)
         self.js_str = copy(self.js_str_template)
-
+        self.rgb_strs = []
 
     def add_mesh_to_js(self, hemi):
         # [1] Starting mesh
@@ -74,6 +74,7 @@ class MeshJS(GenMeshMaker):
         for i in range(len(disp_rgb[hemi])):
             rgb_str += f'[{disp_rgb[hemi][i][0]}, {disp_rgb[hemi][i][1]}, {disp_rgb[hemi][i][2]}],'
         rgb_str = rgb_str[:-1] + '],'
+        rgb_str += '\nswapcol'
         print(rgb_str[:200])
         self.js_str = self.js_str.replace('swapcol', rgb_str)   
 

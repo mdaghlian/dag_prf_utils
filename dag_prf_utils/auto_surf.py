@@ -262,6 +262,9 @@ def dag_auto_surf_function(surf_type, **kwargs):
             # Open the app in a browser
             # Do not show it in the notebook
             print(f'http://localhost:{port}/')
+            # Fix for running in macs
+            import matplotlib
+            matplotlib.use('Agg')            
             app.run_server(host=host, port=port, debug=False, use_reloader=False)             
     # ****************************************************
     # ****************************************************
@@ -540,6 +543,9 @@ def dag_auto_from_prf_obj(prf_obj, sub, **kwargs):
             # Open the app in a browser
             # Do not show it in the notebook
             print(f'http://localhost:{port}/')
+            # Fix for running in macs
+            import matplotlib
+            matplotlib.use('Agg')            
             app.run_server(host=host, port=port, debug=False, use_reloader=False)             
     
     else:

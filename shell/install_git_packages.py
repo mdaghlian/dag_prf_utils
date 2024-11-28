@@ -2,7 +2,7 @@ import os
 import subprocess
 
 # Define the folder to clone repositories
-target_folder = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'dpu_packages'))
+target_folder = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', 'dpu_packages'))
 print(f"Cloning repositories in {target_folder}")
 
 os.makedirs(target_folder, exist_ok=True)

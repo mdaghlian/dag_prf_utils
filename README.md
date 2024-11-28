@@ -1,23 +1,20 @@
 # dag_prf_utils repository
-This repository is a collection of useful tools (mainly) for analysing and visualising PRF data. It is designed to work with prfpy https://github.com/VU-Cog-Sci/prfpy, but some of the tools are general purpose.
-Other potentially useful repos:
-https://github.com/gallantlab/pycortex
-https://github.com/gjheij/linescanning (much has been stolen from here!!! Thanks Jurjen, you are an angel)
+This repository is a collection of useful tools (mainly) for analysing and visualising PRF data. It is designed to work with prfpy 
 
+https://github.com/gjheij/linescanning (much has been stolen from here!!! Thanks Jurjen, you are an angel)
 
 ## In active development
 This package is still in development and its API might change. 
 
 ## Installation 
-[1] Install prfpy, this should cover everything, use this to make a nice conda environment with all the required dependencies (https://github.com/VU-Cog-Sci/prfpy)
+[1] Create a new environment 
+> conda create -n env_name ipython 
 
-[2] If you're on linux, and you want to have the command line tools (stuff in /bin) then run
+[2] Activate the environment
+> conda activate env_name 
+
+[3] Run the install script. This will also download some other useful tools. 
 > bash shell/dpu_setup setup
-Otherwise, you can just do `python setup.py develop`
-
-[3] OPTIONAL: If you want to use blender, you can install that too. You may need to specify the path in the __init__ file
-
-[4] OPTIONAL: Meshlab might also be useful (https://www.meshlab.net/ to install)
 
 
 # Overview of files 

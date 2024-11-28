@@ -916,6 +916,7 @@ def dag_scatter(X,Y,ax=None, **kwargs):
     dot_col = kwargs.get('dot_col', None)
     dot_alpha = kwargs.get('dot_alpha', None)    
     dot_cmap = kwargs.get('dot_cmap', None)
+    dot_size = kwargs.get('dot_size', None)
     vmin = kwargs.get('vmin', None)
     vmax = kwargs.get('vmax', None)
     dot_label=kwargs.get('dot_label')
@@ -929,7 +930,7 @@ def dag_scatter(X,Y,ax=None, **kwargs):
 
     if do_scatter:        
         scat_col = ax.scatter(
-            X,Y, c=dot_col, alpha=dot_alpha, label=dot_label,
+            X,Y, c=dot_col, alpha=dot_alpha, label=dot_label, s=dot_size,
             cmap=dot_cmap, vmin=vmin, vmax=vmax) # added **kwargs
         # if dot_col is not None:
         if do_colbar:

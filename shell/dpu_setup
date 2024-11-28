@@ -47,6 +47,9 @@ if [[ $1 == "setup" ]]; then
     fi
     
     # install repo
+    echo "Installing dag_prf_utils and dependencies"
+    pip install -r ${DPU_REPO_DIR}/requirements.txt
+    python $DPU_REPO_DIR/shell/install_git_packages.py 
     python $DPU_REPO_DIR/setup.py develop    
 fi
 

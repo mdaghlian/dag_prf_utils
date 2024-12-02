@@ -148,7 +148,9 @@ class TSPlotter(Prf1T1M):
         Plot time series for PRF model with 1 RF 
         > i.e., gauss, css
         '''
+        do_text = kwargs.get('do_text', True)
         do_dm = kwargs.pop('do_dm', False)
+        normalize_ts = kwargs.get('normalize_ts', False)
         ts_kwargs = dict(linestyle='-', markersize=10, lw=5, alpha=.5)
         ts_kwargs_in = kwargs.get('ts_kwargs', {})
         ts_kwargs.update(ts_kwargs_in)
@@ -162,6 +164,8 @@ class TSPlotter(Prf1T1M):
                 normalize_RFs=self.prfpy_model.normalize_RFs).T,axes=(1,2))
         this_rf = np.squeeze(this_rf)
         this_pred_ts = np.squeeze(self.prfpy_model.return_prediction(*list(self.prf_params_np[idx,:-1])))
+        if normalize_ts:
+            this_pred_ts = this_pred_ts / np.max(this_pred_ts)
         ts_x = np.arange(this_pred_ts.shape[-1]) * self.TR_in_s
         # Plotting stimuli?
         # do_current_stim = True
@@ -173,9 +177,9 @@ class TSPlotter(Prf1T1M):
         ax[0].set_title(f'PRF, vx={idx}')
         ax[0].imshow(this_rf, cmap='magma', vmin=0, vmax=1) # Plot csf curve
         ax[0].axis('off')
-
-        param_text = self.make_prf_str(idx)
-        ax[1].text(1.35, 0.20, param_text, transform=ax[1].transAxes, fontsize=10, va='center', ha='right', family='monospace',)
+        if do_text:
+            param_text = self.make_prf_str(idx)
+            ax[1].text(1.35, 0.20, param_text, transform=ax[1].transAxes, fontsize=10, va='center', ha='right', family='monospace',)
         # ts
         ax[1].plot(ts_x,this_pred_ts, **ts_kwargs) 
         if self.real_ts is not None:
@@ -200,10 +204,16 @@ class TSPlotter(Prf1T1M):
         return
 
 
-    def gauss2_ts_plot(self, idx, time_pt=None, return_fig=False):
+    def gauss2_ts_plot(self, idx, time_pt=None, return_fig=False, **kwargs):
         '''
         
         '''
+        do_text = kwargs.get('do_text', True)
+        do_dm = kwargs.pop('do_dm', False)
+        normalize_ts = kwargs.get('normalize_ts', False)
+        ts_kwargs = dict(linestyle='-', markersize=10, lw=5, alpha=.5)
+        ts_kwargs_in = kwargs.get('ts_kwargs', {})
+        ts_kwargs.update(ts_kwargs_in)
 
         # [1]
         this_arf = np.rot90(gauss2D_iso_cart(
@@ -223,7 +233,8 @@ class TSPlotter(Prf1T1M):
         this_rf = [this_arf, this_srf]
 
         this_pred_ts = np.squeeze(self.prfpy_model.return_prediction(*list(self.prf_params_np[idx,:-1])))
-        
+        if normalize_ts:
+            this_pred_ts = this_pred_ts / np.max(this_pred_ts)
         # Plotting stimuli?
         # do_current_stim = True
         fig  = plt.figure()
@@ -242,14 +253,29 @@ class TSPlotter(Prf1T1M):
             rf_ax[i].imshow(this_rf[i], cmap='magma', vmin=0, vmax=1) # 
             rf_ax[i].axis('off')
 
-        param_text = self.make_prf_str(idx)
-        ts_ax.text(1.35, 0.20, param_text, transform=ts_ax.transAxes, fontsize=10, va='center', ha='right', family='monospace',)
+        if do_text:
+            param_text = self.make_prf_str(idx)        
+            ts_ax.text(1.35, 0.20, param_text, transform=ts_ax.transAxes, fontsize=10, va='center', ha='right', family='monospace',)
         # ts
         ts_x = np.arange(this_pred_ts.shape[-1]) * 1.5        
-        ts_ax.plot(ts_x,this_pred_ts, '-', markersize=10, lw=5, alpha=.5) # color=self.plot_cols[eye]        
+        ts_ax.plot(ts_x,this_pred_ts, **ts_kwargs)
         if self.real_ts is not None:
             self.real_ts_plot(ax=ts_ax, idx=idx)        
         ts_ax.plot((0,ts_x[-1]), (0,0), 'k')   
+
+        # Do dm?        
+        if do_dm:
+            ax[1].set_xticks(np.arange(ts_x[0], ts_x[-1],15))            
+            dag_add_dm_to_ts(                
+                fig, 
+                ax=ax[1], 
+                dm=self.prfpy_stim.design_matrix, 
+                TR_in_s=self.TR_in_s, 
+                dx_axs=2, do_time=False, 
+                move_y=-.1
+                )
+            ax[1].set_xticks(np.arange(ts_x[0], ts_x[-1],50))            
+            # ax[1].set_xticks([])
 
 
         dag_update_fig_fontsize(fig, 15)        
@@ -357,66 +383,45 @@ class TSPlotter(Prf1T1M):
         )
         return ncsf_info
     
-    def csf_ts_plot(self, idx, return_fig=False, time_pt=None, **kwargs):
+    def csf_ts_plot(self, idx, time_pt=None, **kwargs):
         '''csf_ts_plot
         Do a nice representation of the CSF timeseries model
         '''
         TR_in_s = self.TR_in_s
         do_text     = kwargs.get('do_text', True)
         do_stim_info = kwargs.get('do_stim_info', True)
+        do_crf = kwargs.get('do_crf', True)
         time_pt_col = kwargs.get('time_pt_col', '#42eff5')
-        do_2_row = kwargs.get('do_2_row', False)
-        # return_fig = kwargs.get('return_fig', True)
+        fig = kwargs.get('fig', 'beep') #plt.figure())
+        fig.clear()
+        return_fig = kwargs.get('return_fig', True)
         dpi = kwargs.get('dpi', 100)
         # Load the specified info 
         ncsf_info = self.csf_ts_plot_get_info(idx)
         ts_x = np.arange(0, ncsf_info['ts'].shape[-1]) * TR_in_s
-        
         # Set up figure
-        grow_by = kwargs.get('grow_by', 1.8)
-        width_ratios = [2, 2, 6]        
-        if do_2_row:
-            width_ratios = [2,2]
-            if do_stim_info:
-                height_ratios = [2,1,.5]
-            else:
-                height_ratios = [2,1]
+        # SIMPLIFIED 
 
-
-            fig = plt.figure(figsize=(sum(width_ratios)*grow_by, sum(height_ratios)*grow_by), dpi=dpi)
-            gs = mpl.gridspec.GridSpec(len(height_ratios), len(width_ratios), width_ratios=width_ratios, height_ratios=height_ratios)
-            csf_ax = fig.add_subplot(gs[0, 0])
-            crf_ax = fig.add_subplot(gs[0, 1])
-            ts_ax = fig.add_subplot(gs[1, :])
-            if do_stim_info:
-                SF_ax = fig.add_subplot(gs[2, :])
-
-        elif do_stim_info:
-            height_ratios = [2,1]
-            fig,axs = plt.subplots(
-                nrows=len(height_ratios), ncols=len(width_ratios), 
-                gridspec_kw={'width_ratios': width_ratios, 'height_ratios':height_ratios},
-                figsize=(sum(width_ratios)*grow_by, sum(height_ratios)*grow_by),
-            )
-            top_row = axs[0]
-            axs[1][0].axis('off')
-            axs[1][1].axis('off')
-            SF_ax = axs[1][2]
-            csf_ax  = top_row[0]
-            crf_ax  = top_row[1]
-            ts_ax   = top_row[2]
-
+        grow_by = kwargs.get('grow_by', 1.5)
+        if do_crf:
+            width_ratios = [2, 2, 6] 
         else:
-            height_ratios = [2]
-            fig,top_row = plt.subplots(
-                nrows=len(height_ratios), ncols=len(width_ratios), 
-                gridspec_kw={'width_ratios': width_ratios, 'height_ratios':height_ratios},
-                figsize=(sum(width_ratios)*grow_by, sum(height_ratios)*grow_by),
-            )            
-            csf_ax  = top_row[0]
-            crf_ax  = top_row[1]
-            ts_ax   = top_row[2]
-        
+            width_ratios = [2, 6]
+        if do_stim_info:
+            height_ratios = [2,1]
+        else:
+            height_ratios = [1]
+        # Apply new size & dpi
+        fig.set_size_inches(sum(width_ratios)*grow_by, sum(height_ratios)*grow_by)
+        fig.set_dpi(dpi)
+        # Create axs
+        gs = mpl.gridspec.GridSpec(len(height_ratios), len(width_ratios), width_ratios=width_ratios, height_ratios=height_ratios)
+        csf_ax = fig.add_subplot(gs[0, 0])
+        ts_ax = fig.add_subplot(gs[0, -1])
+        if do_stim_info:
+            SF_ax = fig.add_subplot(gs[1, -1])
+        if do_crf:
+            crf_ax = fig.add_subplot(gs[0, 1])
         # *********** ax -1,2: Stimulus info ***********
         if do_stim_info:
             self.sub_plot_stim_info(
@@ -424,18 +429,17 @@ class TSPlotter(Prf1T1M):
                 time_pt=time_pt,kwargs=kwargs,
             )
 
-        # CSF curve + with imshow to display CRF curve 
+        # CSF curve + with imshow to display CRF curve         
         self.sub_plot_csf(
             ax=csf_ax, ncsf_info=ncsf_info, 
             time_pt=time_pt, kwargs=kwargs,           
         )
-
-        # CRF
-        self.sub_plot_crf(
-            ax=crf_ax, ncsf_info=ncsf_info, 
-            time_pt=time_pt, kwargs=kwargs,            
-        )        
-
+        if do_crf:
+            # CRF
+            self.sub_plot_crf(
+                ax=crf_ax, ncsf_info=ncsf_info, 
+                time_pt=time_pt, kwargs=kwargs,            
+            )        
         # Time series
         self.sub_plot_ts(
             ax=ts_ax, idx=idx, ncsf_info=ncsf_info, 

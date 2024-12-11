@@ -743,7 +743,7 @@ def dag_ply_write(mesh_info, diplay_rgb=None, hemi=None, values=None, incl_rgb=T
         ply_str += f'{float(mesh_info["y"][i_vx]):.6f} ' 
         ply_str += f'{float(mesh_info["z"][i_vx]):.6f} ' 
         if incl_rgb:
-            ply_str += f' {diplay_rgb[i_vx,0]} {diplay_rgb[i_vx,1]} {diplay_rgb[i_vx,2]} '
+            ply_str += f' {int(diplay_rgb[i_vx,0])} {int(diplay_rgb[i_vx,1])} {int(diplay_rgb[i_vx,2])} '
 
         ply_str += f'{values[i_vx]:.3f}\n'
     

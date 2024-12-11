@@ -3,6 +3,8 @@ from numpy import genfromtxt
 import matplotlib.pyplot as plt
 import matplotlib as mpl
 from datetime import datetime
+import copy
+import pickle
 import os
 opj = os.path.join
 
@@ -24,6 +26,7 @@ class BlendMaker(GenMeshMaker):
         super().__init__(sub, fs_dir, output_dir)
         time_now = datetime.now().strftime('%Y-%m-%d_%H-%M')
         self.blender_file_name = opj(self.output_dir, f'{self.sub}_{time_now}.blend')
+        self.blend_vx_col = {}        
         self.roi_names = []
         self.surf_names = []
         # ** OPTIONAL **
@@ -36,33 +39,18 @@ class BlendMaker(GenMeshMaker):
             os.mkdir(self.output_dir)
         self.blender_script = opj(output_dir, 'blender_script.py')
         # BASIC SETUP -> APPLY FOR ALL SUBJECTS...
-        # [1] Make mesh files for the pial, and the inflated hemispheres
-        for mesh in ['pial', 'inflated', 'sphere']:
-            self.add_ply_surface(
-                surf_name=mesh, mesh_name=mesh, ow=self.ow,
-                incl_rgb=False, incl_values=False, 
-            )
-        # [2] Make rgb files for curvature 
-        # [-> curvature]
-        self.us_cols_split = {}
-        for us in self.us_cols.keys():
-            self.us_cols_split[us] = {}                
-            self.us_cols_split[us]['lh'] = self.us_cols[us][:self.n_vx['lh'],:]
-            self.us_cols_split[us]['rh'] = self.us_cols[us][self.n_vx['lh']:,:]
+        # [1] Save the meshes
+        mesh_dict = copy.deepcopy(self.mesh_info)
+        # Save as a pickle
+        with open(opj(self.output_dir, 'mesh_info.pkl'), 'wb') as f:
+            pickle.dump(mesh_dict, f)
         
-        for us_name in ['curv']:
-            self.surf_names.append(us_name)
-            for i_hemi in ['lh', 'rh']:
-                rgb_us_file = opj(self.output_dir,f'{i_hemi}.{us_name}_rgb.csv')
-                if os.path.exists(rgb_us_file) and self.ow:
-                    print(f'Overwriting: {rgb_us_file}')
-                elif os.path.exists(rgb_us_file) and not self.ow:
-                    print(f'Already exists: {rgb_us_file}, and not overwriting')
-                    continue
-                
-                rgb_str = dag_get_rgb_str(self.us_cols_split[us_name][i_hemi])
-                # Save as files
-                dag_str2file(filename=rgb_us_file, txt=rgb_str)
+        # [2] Make rgb files for curvature 
+        for us in ['curv']:
+            self.blend_vx_col[us] = {}
+            self.blend_vx_col[us]['lh'] = self.us_cols[us][:self.n_vx['lh'],:]
+            self.blend_vx_col[us]['rh'] = self.us_cols[us][self.n_vx['lh']:,:]
+        
 
     def add_blender_cmap(self, data, surf_name, **kwargs):
         '''
@@ -77,17 +65,10 @@ class BlendMaker(GenMeshMaker):
         # Save the colormap
         fig = dag_cmap_plotter(title=surf_name, return_fig=True, **cmap_dict)
         fig.savefig(opj(self.output_dir, f'{surf_name}_rgb.png'))
-        for hemi in ['lh','rh']:
-            rgb_file = opj(self.output_dir,f'{hemi}.{surf_name}_rgb.csv')
-            if os.path.exists(rgb_file) and ow:
-                print(f'Overwriting: {rgb_file}')
-            elif os.path.exists(rgb_file) and not ow:
-                print(f'Already exists: {rgb_file}, and not overwriting')                
-                continue
-            
-            rgb_str = dag_get_rgb_str(display_rgb[hemi])
-            # Save as files
-            dag_str2file(filename=rgb_file, txt=rgb_str)
+        plt.close(fig)
+        # Save the rgb values
+        self.blend_vx_col[surf_name] = copy.deepcopy(display_rgb)
+
 
 
     def launch_blender(self, **kwargs):
@@ -100,6 +81,10 @@ class BlendMaker(GenMeshMaker):
         hemi_list       which hemispheres to load
         run_blender         
         '''
+        # Save the colour data
+        with open(opj(self.output_dir, 'blend_vx_col.pkl'), 'wb') as f:
+            pickle.dump(self.blend_vx_col, f)
+
         mesh_list = kwargs.get('mesh_list', ['pial', 'inflated', 'sphere'])
         if not isinstance(mesh_list, list):
             mesh_list = [mesh_list]
@@ -121,15 +106,15 @@ class BlendMaker(GenMeshMaker):
         blender_script_str = ''
         blender_script_str += bscript_start        
         #
-        blender_script_str += "mesh_dir = '" + self.output_dir + "'\n"        
+        blender_script_str += "mesh_dir = '.' \n"   
         blender_script_str += "blender_filename = '" + self.blender_file_name + "'\n"
-        blender_script_str += f"mesh_list = {mesh_list}\n"
-        blender_script_str += f"hemi_list = {hemi_list}\n"
         blender_script_str += bscript_load_mesh
         # 
-        blender_script_str += f"load_all_surf = {str(load_all_surf)}\n"
-        blender_script_str += f"surf_list = {surf_list}\n"        
         blender_script_str += bscript_load_rgb
+        if os.path.exists(opj(self.output_dir, 'movie.npz')):
+            blender_script_str += bscript_movie
+        if os.path.exists(opj(self.output_dir, 'xy.npy')):
+            blender_script_str += bscript_uv_map
         #
         blender_script_str += bscript_end
         #
@@ -153,6 +138,7 @@ class BlendMaker(GenMeshMaker):
 
 bscript_start = '''
 ### ALWAYS DO THIS AT THE START
+import pickle
 import csv
 import os 
 opj = os.path.join
@@ -190,16 +176,42 @@ def add_mesh_slider(obj1, obj2, slider_name, add_basis=True):
     mesh_data1.update()
     bpy.data.objects.remove(obj2)
 
-# NEXT REMEMBER TO ADD: mesh_dir (where are we working with blender)    
-# hemi_list (which hemispheres to load)
-# mesh_list (which meshes to load)
+
 '''
 
 bscript_load_mesh = '''
+# Load the pickle file with the mesh info
+import pickle
+with open(opj(mesh_dir, 'mesh_info.pkl'), 'rb') as f:
+    mesh_info = pickle.load(f)
+# Load the pickle file with the color info
+with open(opj(mesh_dir, 'blend_vx_col.pkl'), 'rb') as f:
+    blend_vx_col = pickle.load(f)
+
+# mesh_list = list(mesh_info.keys())
+mesh_list = ['pial', 'inflated',] # 'sphere']
+
+hemi_list = list(mesh_info[mesh_list[0]].keys())
+# hemi_list = ['lh'] 
+
+n_vx = {}
+for i_hemi in hemi_list:
+    n_vx[i_hemi] = len(mesh_info[mesh_list[0]][i_hemi]['coords'])
+
 ### Load meshes & slider
 for i_hemi in hemi_list:
     for i_mesh in mesh_list:
-        bpy.ops.import_mesh.ply(filepath=opj(mesh_dir, f'{i_hemi}.{i_mesh}.ply'))        
+        # Create a new mesh and object
+        mesh_data = bpy.data.meshes.new(f"{i_hemi}.{i_mesh}")
+        mesh_data.from_pydata(
+            mesh_info[i_mesh][i_hemi]['coords'], 
+            [], 
+            mesh_info[i_mesh][i_hemi]['faces']
+        )
+        mesh_data.update()
+
+        mesh_object = bpy.data.objects.new(f"{i_hemi}.{i_mesh}", mesh_data)
+        bpy.context.collection.objects.link(mesh_object)        
     
     obj1 = bpy.data.objects[f'{i_hemi}.{mesh_list[0]}']
     if len(mesh_list)>1: # Add sliders if more than one mesh...
@@ -214,43 +226,16 @@ for i_hemi in hemi_list:
 '''
 
 bscript_load_rgb = '''
-# Before this - have you specified load_all_surf (all rgb files in folder)
-# Or surf_list (only load these specified surfaces)
-rgb_files = {'lh':[], 'rh':[]}
-#rgb_col_bars = []
-if load_all_surf:
-    file_list = os.listdir(mesh_dir)
-    for i in file_list:
-        if 'lh' in i:
-            hemi = 'lh'
-        elif 'rh' in i:
-            hemi = 'rh'
-        else:
-            hemi = None
-        if 'rgb.csv' in i:
-            rgb_files[hemi].append(i)
-    #     if 'rgb.png' in i:
-    #         rgb_col_bars.append(i)
-    # rgb_col_bars.sort()
-    for ih in hemi_list:
-        rgb_files[ih].sort()
-else: # else, load specified surf..
-    for hemi in hemi_list:
-        for i_surf in surf_list:
-            rgb_files[hemi].append(f'{hemi}.{i_surf}_rgb.csv')
-        rgb_files[hemi].sort()
-    # for i_surf in surf_list:
-    #     rgb_col_bars.append(f'{i_surf}_rgb.png')
-    
+# Now add the rgb colors to the meshes
 for ih,hemi in enumerate(hemi_list):
     # bpy.data.objects[ih].name = hemi
     # bpy.data.meshes[ih].name = hemi
     # Loop through and add color layers
-    for i1, i_col in enumerate(rgb_files[hemi]):
+    for i1, i_col in enumerate(blend_vx_col.keys()):
         print('loading')
         print(i_col)
         # [1] Load in rgb color data for this map
-        rgb_data = genfromtxt(opj(mesh_dir,i_col), delimiter=',')
+        rgb_data = blend_vx_col[i_col][hemi].copy()
         if rgb_data.max()>1:
             rgb_data = rgb_data/255
         r,g,b = rgb_data[:,0]*1, rgb_data[:,1], rgb_data[:,2]
@@ -265,7 +250,78 @@ for ih,hemi in enumerate(hemi_list):
                 i += 1
 '''
 
+bscript_movie = '''
+### ADD ANIMATION 
+# Load colours
+full_movie_cols = np.load(opj(mesh_dir, 'movie.npz'))['movie']
+num_timepoints = full_movie_cols.shape[1]
+fps = 2 # frames per second
+colors = full_movie_cols.copy()
+movie_cols = {}
+for i_hemi in hemi_list:
+    if i_hemi == 'lh':
+        movie_cols[i_hemi] = full_movie_cols[:n_vx['lh'],:,:]
+    else:
+        movie_cols[i_hemi] = full_movie_cols[n_vx['lh']:,:,:]
 
+# Now add the movie rgb colors to the meshes
+for ih,hemi in enumerate(hemi_list):
+    # bpy.data.objects[ih].name = hemi
+    # bpy.data.meshes[ih].name = hemi
+    # Loop through and add color layers
+    # How many layers are there?
+    n_layers = len(bpy.data.meshes[hemi].vertex_colors)
+    for i1 in range(num_timepoints):        
+        rgb_data = movie_cols[hemi][:,i1,:].copy()
+        if rgb_data.max()>1:
+            rgb_data = rgb_data/255
+        r,g,b = rgb_data[:,0]*1, rgb_data[:,1], rgb_data[:,2]
+
+        # Add new color layer
+        color_layer = bpy.data.meshes[hemi].vertex_colors.new(name=f'movie_{i1:03}')
+        
+        # layer_names.append(f'movie_{i1:03}')
+        i = 0
+        for poly in bpy.data.meshes[hemi].polygons:
+            for idx in poly.loop_indices:
+                this_vx = bpy.data.meshes[hemi].loops[idx].vertex_index
+                color_layer.data[i].color = (r[this_vx], g[this_vx], b[this_vx], 1)
+                i += 1
+        
+def set_vcols(frame):
+    layer_to_plot = frame 
+    if layer_to_plot > num_timepoints:
+        layer_to_plot = num_timepoints-1
+    for i_hemi in hemi_list:
+        bpy.data.meshes[i_hemi].attributes.active_color_index = layer_to_plot + n_layers
+def my_handler(scene):
+    frame = scene.frame_current
+    set_vcols(frame)
+bpy.app.handlers.frame_change_pre.append(my_handler)
+'''
+
+bscript_uv_map = '''
+### ADD UV MAP
+full_uv_coords = np.load(opj(mesh_dir, 'face_xy.npy'))
+uv_coords = {}
+for i_hemi in hemi_list:
+    if i_hemi == 'lh':
+        uv_coords[i_hemi] = full_uv_coords[:n_vx['lh'],:]
+    else:
+        uv_coords[i_hemi] = full_uv_coords[n_vx['lh']:,:]
+
+# Now add the uv coords to the meshes
+for ih,hemi in enumerate(hemi_list):
+    mesh = bpy.data.meshes[hemi]
+    bm = bmesh.new()
+    bm.from_mesh(mesh)
+    if not bm.loops.layers.uv:
+        bm.loops.layers.uv.new(name='UVMap')
+    uv_layer = bm.loops.layers.uv['UVMap']
+    for face in bm.faces:
+        for loop in face.loops:
+            loop[uv_layer].uv = (uv_coords[hemi][loop.vert.index,0], uv_coords[hemi][loop.vert.index,1])
+'''
 bscript_end = '''
 ### ALWAYS DO THIS AT THE END
 # Update the viewport to show the new shading
@@ -413,25 +469,5 @@ bpy.ops.wm.redraw_timer(type='DRAW_WIN_SWAP', iterations=1)
 
 # ********************************* BLENDER TOOLS ****************************************
 # THESE ARE ONLY GOING TO WORK *INSIDE* BLENDER...
-bp_script_add_animation='''
-# ADD ANIMATION TO VERTEX COLOR LAYERS...
-obj = bpy.data.objects['lh']
-total_n_frames = 20
-total_n_layers = len(obj.data.vertex_colors)
-layer_names = list(obj.data.vertex_colors.keys())
-def set_vcols(frame):
-        
-    layer_to_plot = int(total_n_layers * frame / total_n_frames)            
 
-    if layer_to_plot>total_n_layers:
-        layer_to_plot = total_n_layers
-    bpy.data.meshes["lh"].attributes.active_color_index = layer_to_plot#layer_names[layer_to_plot]
-    bpy.data.meshes["rh"].attributes.active_color_index = layer_to_plot#layer_names[layer_to_plot]
-
-def my_handler(scene):
-    frame = scene.frame_current
-    set_vcols(frame)
-
-bpy.app.handlers.frame_change_pre.append(my_handler) 
-'''
 

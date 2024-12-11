@@ -11,6 +11,7 @@ os.makedirs(target_folder, exist_ok=True)
 git_repos = [
     "https://github.com/spinoza-centre/prfpy_csenf.git",
     "https://github.com/mdaghlian/pycortex.git",
+    "https://github.com/mdaghlian/figure_finder.git"
 ]
 
 # Clone and install each repository in editable mode

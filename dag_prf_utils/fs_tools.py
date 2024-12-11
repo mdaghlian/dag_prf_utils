@@ -95,6 +95,7 @@ class FSMaker(object):
     def open_fs_surface(self, surf_name=[], **kwargs):
         # surf name - which surface to load...        
         fs_cmd = self.write_fs_cmd(surf_name=surf_name, **kwargs)
+        print(fs_cmd)
         # self.save_fs_cmd(surf_name, **kwargs)        
         # os.chdir(self.sub_surf_dir) # move to freeview dir        
         # os.system(fs_cmd)     

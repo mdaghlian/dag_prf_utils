@@ -175,7 +175,7 @@ class TSPlotter(Prf1T1M):
         # Setup ax 0
         ax[0].set_aspect('equal')
         ax[0].set_title(f'PRF, vx={idx}')
-        ax[0].imshow(this_rf, cmap='magma', vmin=0, vmax=1) # Plot csf curve
+        ax[0].imshow(this_rf, cmap='magma', ) #vmin=0, vmax=1) #
         ax[0].axis('off')
         if do_text:
             param_text = self.make_prf_str(idx)
@@ -250,7 +250,7 @@ class TSPlotter(Prf1T1M):
         for i in range(2):
             rf_ax[i].set_aspect('equal')
             # rf_ax[i].set_title(f'PRF, vx={idx}')
-            rf_ax[i].imshow(this_rf[i], cmap='magma', vmin=0, vmax=1) # 
+            rf_ax[i].imshow(this_rf[i], cmap='magma',) # vmin=0, vmax=1) # 
             rf_ax[i].axis('off')
 
         if do_text:

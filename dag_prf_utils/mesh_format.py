@@ -502,8 +502,8 @@ def dag_flatten(mesh_info, **kwargs):
 
 
     # find relative scale...
-    flat_info['x'] = p1 - p1.mean()# Demean
-    flat_info['y'] = p2 - p2.mean()# Demean
+    flat_info['x'] = p1 #- p1.mean()# Demean
+    flat_info['y'] = p2 #- p2.mean()# Demean
     flat_info['z'] = np.ones_like(flat_info['x']) * z
 
     # FACES TO REMOVE [1] - missing vx    

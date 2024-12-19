@@ -187,3 +187,37 @@ with plt.rc_context({'animation.frame_format': 'svg'}):
 
 #         break
 #     break
+
+
+
+            # We want the hemispheres to be on the same scale...
+            # ... TODO, all kinds of orientation messing? 
+            # if hemi == 'rh':
+            #     # Save the bounding box for the largest dimension. We will match 
+            # We want it to be roughly on the same scale as the inflated map
+            # diff_x = pts[:,0].mean() - infl_x.mean()
+            # diff_y = pts[:,1].mean() - infl_y.mean()
+            # pts[:,0] -= diff_x
+            # pts[:,1] -= diff_y
+            # scale_x = (infl_x.max() - infl_x.min()) / (pts[:,0].max() - pts[:,0].min())
+            # pts *= scale_x*3 # Meh seems nice enough
+
+            # # OLD TOOO REMOVE!!!!
+            # # FROM PYCORTEX IMPORT FLAT
+            # # ORIGINAL FLIP X AND Y, THEN FLIP Y UPSIDE DOWN
+            # # DOUBLE CHECK THE X,Y with SPHERE x,y
+            # # corr_x = dag_get_corr(self.mesh_info['sphere'][hemi]['x'], pts[:,0])
+            # # corr_y = dag_get_corr(self.mesh_info['sphere'][hemi]['y'], pts[:,1])
+            # # if corr_x<0:
+            # #     pts[:,0] *= -1
+            # #     print('flipping x')
+            # # if corr_y>0:
+            # #     pts[:,1] *= -1
+            # #     print('flipping y')
+            # # if do_flip:
+            # #     flat = pts[:, [1, 0, 2]] # Flip X and Y axis
+            # #     # Flip Y axis upside down
+            # #     flat[:, 1] = -flat[:, 1]
+            # # else:
+            # #     # bloop
+            # #     flat = pts

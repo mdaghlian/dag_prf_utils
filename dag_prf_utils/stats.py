@@ -2,14 +2,14 @@ import numpy as np
 from scipy.stats import t
 from scipy.fftpack import dct, idct
 
-def dag_dct_detrending(ts_au, n_trend_to_remove, do_psc=True, baseline_pt=None):
+def dag_detrending(ts_au, detrend_type, normalize_method='psc', baseline_pt=None):
     """
     Perform detrending using Discrete Cosine Transform (DCT) and optionally Percentage Signal Change (PSC).
 
     Parameters:
     - ts_au (numpy.ndarray): Input time series data, shape (n_vx, n_time_points).
-    - n_trend_to_remove (int or False): Number of DCT coefficients to remove for detrending. If False/0, no detrending is performed.
-    - do_psc (bool, optional): Whether to perform Percentage Signal Change (PSC) after detrending. Default is True.
+    - detrend_type (int or False): Number of DCT coefficients to remove for detrending. If False/0, no detrending is performed.
+    - normalize_method (str): Normalization method to use. Options are 'psc' (Percentage Signal Change) or 'zscore' (Z-score) or None.
     - baseline_pt (np.ndarray, int, list, or None, optional): Baseline points used for PSC calculation. If None, all points are considered as baseline.
         If 1 value: taske baseline values from 0 to baseline_pt
         If 2 value: it represents the range of points [start, stop] as baseline.
@@ -21,7 +21,7 @@ def dag_dct_detrending(ts_au, n_trend_to_remove, do_psc=True, baseline_pt=None):
     if ts_au.ndim == 1:
         ts_au = ts_au.reshape(-1, 1)
 
-    if n_trend_to_remove=='linear':
+    if detrend_type=='linear':
         _, n_cols = ts_au.shape
         
         # Create the matrix A where each row is [x, 1] for all x values
@@ -38,7 +38,7 @@ def dag_dct_detrending(ts_au, n_trend_to_remove, do_psc=True, baseline_pt=None):
         # Subtract out the linear trend
         ts_detrend = ts_au - (slopes[...,np.newaxis] * x)        
 
-    elif n_trend_to_remove!=0:
+    elif detrend_type!=0:
         # Preparation: demean the time series
         ts_au_centered = ts_au - np.mean(ts_au, axis=1, keepdims=True)
 
@@ -46,7 +46,7 @@ def dag_dct_detrending(ts_au, n_trend_to_remove, do_psc=True, baseline_pt=None):
         dct_values = dct(ts_au_centered, type=2, norm='ortho', axis=1)
 
         # Remove the specified number of coefficients
-        dct_values[:, :n_trend_to_remove] = 0
+        dct_values[:, :detrend_type] = 0
 
         # Inverse DCT to obtain detrended time series
         ts_detrend = idct(dct_values, type=2, norm='ortho', axis=1)
@@ -57,8 +57,11 @@ def dag_dct_detrending(ts_au, n_trend_to_remove, do_psc=True, baseline_pt=None):
         ts_detrend = ts_au.copy()
 
     # Perform Percentage Signal Change (PSC) if specified
-    if do_psc:
+    
+    if normalize_method == 'psc':
         ts_detrend = dag_psc(ts_detrend, baseline_pt)
+    elif normalize_method == 'zscore':
+        ts_detrend = (ts_detrend - np.mean(ts_detrend, axis=1, keepdims=True)) / np.std(ts_detrend, axis=1, ddof=1, keepdims=True)
 
     return ts_detrend
 

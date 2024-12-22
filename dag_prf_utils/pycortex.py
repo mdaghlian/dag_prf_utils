@@ -792,9 +792,7 @@ class PyctxMaker(GenMeshMaker):
         Can use the inbuild pycortex functions (Vertex2D, Vertex)
         But sometimes that doesn't work. 
         So added an option to do the RGB by hand (also makes colormaps more flexible)
-        The disadvantage of this is that it makes it non interactive. (i.e. cannot adjust threshold)
-        
-        
+        The disadvantage of this is that it makes it non interactive. (i.e. cannot adjust threshold)        
         
         See also 
         Issue 1: https://github.com/gallantlab/pycortex/issues/341
@@ -1083,10 +1081,10 @@ class PyctxMaker(GenMeshMaker):
             flat[connected_pts] -= flat[connected_pts].mean(axis=0)
             scale_x = (infl_x.max() - infl_x.min()) / (flat[:,0].max() - flat[:,0].min())
             flat *= scale_x*3 # Meh seems nice enough
-            if hemi == 'rh':
-                # Flip x and y,
-                pts[:,0] = -pts[:,0]
-                pts[:,1] = -pts[:,1]                 
+            # if hemi == 'rh':
+            #     # Flip x and y,
+            #     pts[:,0] = -pts[:,0]
+            #     pts[:,1] = -pts[:,1]                 
             if write_to_default:
                 flat_surf_path = opj(self.sub_ctx_path, 'surfaces', f'flat_{hemi}.gii')
                 print("saving to %s"%flat_surf_path)

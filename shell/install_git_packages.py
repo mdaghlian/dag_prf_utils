@@ -11,7 +11,8 @@ os.makedirs(target_folder, exist_ok=True)
 git_repos = [
     "https://github.com/spinoza-centre/prfpy_csenf.git",
     "https://github.com/mdaghlian/pycortex.git",
-    "https://github.com/mdaghlian/figure_finder.git"
+    "https://github.com/mdaghlian/figure_finder.git",
+    "https://github.com/mdaghlian/prfpy_bayes.git"
 ]
 
 # Clone and install each repository in editable mode
@@ -22,6 +23,6 @@ for repo in git_repos:
     # Clone the repository if not already cloned
     if not os.path.exists(repo_path):
         subprocess.run(["git", "clone", repo, repo_path])
-
+    
     # Install the repository in editable mode
     subprocess.run(["pip", "install", "-e", repo_path])

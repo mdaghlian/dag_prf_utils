@@ -24,6 +24,11 @@ try:
     from flask import Flask, send_file,render_template_string, send_from_directory
 except:
     print('no dash..')
+try: 
+    import cortex
+    from cortex.formats import read_gii
+except:
+    print('No cortex')
 
 path_to_utils = os.path.abspath(os.path.dirname(__file__))
 
@@ -258,7 +263,7 @@ class GenMeshMaker(FSMaker):
         return mesh_info
     
     def get_mesh_info(self, key):
-        if key not in self.mesh_info.keys():
+        if (key not in self.mesh_info.keys()) or (self.mesh_info[key] is {}):
             self.mesh_info[key] = self._return_fs_mesh_coords_both_hemis(mesh=key)
         return self.mesh_info[key]
     #endregion MESH COORDS
@@ -414,6 +419,303 @@ class GenMeshMaker(FSMaker):
         return roi_obj
     
     #endregion ROI FUNCTIONS
+
+
+    # *****************************************************************
+    # *****************************************************************
+    # *****************************************************************
+    #region FLAT FUNCTIONS
+    def ctx_get_ready(self, **kwargs):
+        from dag_prf_utils.pycortex import set_ctx_path, get_ctx_path
+        self.ctx_path = kwargs.get('ctx_path', None)
+        # self.special_flat_dir = 
+        if self.ctx_path is not None:
+            set_ctx_path(self.ctx_path)            
+            self.sub_ctx_path = opj(self.ctx_path, self.sub)
+        else:
+            self.ctx_path = get_ctx_path()
+            self.sub_ctx_path = opj(self.ctx_path, self.sub)
+        
+    def add_flat_to_mesh_info(self, **kwargs):
+        '''
+        Add the flatmap to the mesh_info
+        '''
+        flat_name = kwargs.get('flat_name', 'flat')
+        print(flat_name)
+        if flat_name in self.mesh_info.keys() and self.mesh_info[flat_name] != {}:
+            return
+        import nibabel as nib
+        self.mesh_info[flat_name] = {}
+        for hemi in ['lh','rh']:
+            # Find the flatmap -> try the specified flat_name
+            flat_surf_path = dag_find_file_in_folder(
+                filt=[hemi, flat_name, 'gii'],
+                path=self.sub_ctx_path,
+                return_msg=None,
+            )
+            if flat_surf_path is None:
+                # try the default
+                flat_surf_path = opj(self.sub_ctx_path, 'surfaces', f'{flat_name}_{hemi}.gii')
+                    
+            flat = nib.load(flat_surf_path)
+            flat_pts = flat.darrays[0].data
+            flat_polys = flat.darrays[1].data
+            self.mesh_info[flat_name][hemi] = {}
+            self.mesh_info[flat_name][hemi]['coords'] = flat_pts
+            self.mesh_info[flat_name][hemi]['faces'] = flat_polys
+            self.mesh_info[flat_name][hemi]['x'] = flat_pts[:,0]
+            self.mesh_info[flat_name][hemi]['y'] = flat_pts[:,1]
+            self.mesh_info[flat_name][hemi]['z'] = flat_pts[:,2]
+            self.mesh_info[flat_name][hemi]['i'] = flat_polys[:,0]
+            self.mesh_info[flat_name][hemi]['j'] = flat_polys[:,1]
+            self.mesh_info[flat_name][hemi]['k'] = flat_polys[:,2]    
+
+    def make_flat_map(self, **kwargs):
+        '''
+        Pycotex uses flatmaps for a bunch of things
+        But if you can't be bothered to do it properly, and just want
+        to display freesurfer ROIs in pycortex you can do this
+
+        Custom method to flatten (not using mris_flatten)
+        * option 1: use latitude and longitude
+        * option 2: do some clever UV mapping with igl code...
+
+        TODO: remove cut from Y 
+        '''
+        if not os.path.exists(self.custom_surf_dir):
+            os.makedirs(self.custom_surf_dir)
+        method = kwargs.pop('method', 'latlon')
+        morph = kwargs.pop('morph', 0) # How much to dilate or erode the mask (if doing igl)
+        hemi_project = kwargs.get('hemi_project', 'sphere')
+        flat_name = kwargs.get('flat_name', 'flat')
+        centre_roi = kwargs.get('centre_roi', None)
+        centre_bool = kwargs.pop('centre_bool', np.zeros(self.total_n_vx, dtype=bool))
+        centre_bool_hemi = {
+            'lh': centre_bool[:self.n_vx['lh']],
+            'rh': centre_bool[self.n_vx['lh']:]
+        }
+        cut_box = kwargs.get('cut_box', False)                        
+        
+        hemi_pts = {}
+        hemi_polys = {}
+        pts_combined = []
+        polys_combined = []
+        # Where to put flatmatp in z plane..
+        new_z = np.mean(np.hstack(
+            [self.mesh_info['inflated']['lh']['z'],self.mesh_info['inflated']['rh']['z']]
+            ))
+        infl_x = np.hstack(
+            [self.mesh_info['inflated']['lh']['x'],self.mesh_info['inflated']['rh']['x']]
+            )
+        infl_y = np.hstack(
+            [self.mesh_info['inflated']['lh']['y'],self.mesh_info['inflated']['rh']['y']]
+            )
+        for hemi in ['lh','rh']:
+            hemi_kwargs = kwargs.copy()
+            hemi_kwargs['z'] = new_z
+            hemi_kwargs['morph'] = morph
+            if centre_roi is not None:
+                # Load the ROI bool for this hemisphere
+                centre_bool_hemi[hemi] |= self._return_roi_bool_both_hemis(centre_roi)[hemi]
+            # Cut a box around them?            
+            if cut_box:
+                hemi_kwargs['vx_to_include'] = dag_cut_box(
+                    mesh_info=self.mesh_info['inflated'][hemi],
+                    vx_bool=centre_bool_hemi[hemi],
+                )
+            hemi_kwargs['centre_bool'] = centre_bool_hemi[hemi]
+            pts,polys,_ = dag_flatten(
+                mesh_info=self.mesh_info[hemi_project][hemi], 
+                method=method,
+                **hemi_kwargs)        
+            flat = pts
+            # do some cleaning...
+            polys = cortex.freesurfer._remove_disconnected_polys(polys)
+            flat = cortex.freesurfer._move_disconnect_points_to_zero(flat, polys)
+            # Demean everything
+            # Disconnected points 
+            connected_pts = np.zeros(len(pts), dtype=bool)
+            connected_pts[np.unique(polys)] = True
+            flat[connected_pts] -= flat[connected_pts].mean(axis=0)
+            scale_x = (infl_x.max() - infl_x.min()) / (flat[:,0].max() - flat[:,0].min())
+            flat *= scale_x*3 # Meh seems nice enough
+            if hemi == 'rh':
+                # Flip x and y,
+                pts[:,0] = -pts[:,0]
+                pts[:,1] = -pts[:,1]                 
+            flat_surf_path = opj(self.sub_ctx_path, 'surfaces', f'{flat_name}_{hemi}.gii')
+            print("saving to %s"%flat_surf_path)
+            if hemi == 'lh':
+                max_x_lh = flat[:,0].max()
+            else:
+                flat[:,0] += max_x_lh - flat[:,0].min() + .1 * (max_x_lh - flat[:,0].min())
+            cortex.formats.write_gii(flat_surf_path, pts=flat, polys=polys)
+            hemi_pts[hemi] = flat.copy()
+            hemi_polys[hemi] = polys.copy()
+            pts_combined.append(flat)
+            if hemi == 'rh':
+                polys += len(hemi_pts['lh'])
+            polys_combined.append(polys)
+
+        pts_combined = np.vstack(pts_combined)
+        polys_combined = np.vstack(polys_combined)
+        self.add_flat_to_mesh_info(flat_name=flat_name)
+
+    def flat_mpl(self, **kwargs):
+        '''Plot using matplotlib 
+        '''
+        data=kwargs.pop('data', None)
+        surf_name = kwargs.pop('surf_name', 'data')
+        rot_angles = kwargs.pop('rot_angles', None)
+        roi_list = kwargs.pop('roi_list', [])
+        if not isinstance(roi_list, list):
+            roi_list = [roi_list]
+        flat_name = kwargs.pop('flat_name', 'flat')
+        try:
+            self.add_flat_to_mesh_info(flat_name=flat_name)
+        except:
+            self.get_mesh_info(flat_name)
+        hemi_list = kwargs.get('hemi_list', ['lh', 'rh'])
+        ax = kwargs.pop('ax', None)
+        if ax is None:
+            fig, ax = plt.subplots(1,1, figsize=(10,10))
+        else:
+            fig = ax.get_figure()
+
+        disp_rgb, cmap_dict = self.return_display_rgb(
+            data=data, split_hemi=True, return_cmap_dict=True, **kwargs
+        )
+        print(cmap_dict)
+        try:
+            self.get_mesh_info(flat_name)
+            mpts = {
+                'lh': self.mesh_info[flat_name]['lh']['coords'],
+                'rh': self.mesh_info[flat_name]['rh']['coords'],
+            }
+            mpolys = {
+                'lh': self.mesh_info[flat_name]['lh']['faces'],
+                'rh': self.mesh_info[flat_name]['rh']['faces'],
+            }
+        except:
+            mL, mR = cortex.db.get_surf(self.sub, flat_name, merge=False, nudge=True)
+            mpts = {
+                'lh': mL[0],
+                'rh': mR[0],
+            }
+            mpolys = {
+                'lh': mL[1],
+                'rh': mR[1],
+            }
+
+        for hemi in hemi_list: 
+            if rot_angles is not None:
+                mpts[hemi] = dag_coord_rot(mpts[hemi], rot_angles)           
+            triang = mpl.tri.Triangulation(
+                mpts[hemi][:,0],
+                mpts[hemi][:,1],
+                triangles=mpolys[hemi],
+            )
+            # Plot the triangulated data using tripcolor
+            cmap = mpl.colors.ListedColormap(disp_rgb[hemi])
+            c = np.arange(len(disp_rgb[hemi]))
+            ax.tripcolor(
+                triang,
+                c,
+                cmap=cmap,
+                shading='gouraud',  # Smooth interpolation between vertices
+            )
+        for roi in roi_list:
+            roi_obj = self._return_roi_borders_in_order(roi)
+            for roi_dict in roi_obj:
+                hemi = roi_dict['hemi']
+                if hemi not in hemi_list:
+                    continue
+                x = mpts[hemi][roi_dict['border_vx'],0]
+                y = mpts[hemi][roi_dict['border_vx'],1]
+                ax.plot(
+                    x,y, 
+                    # roi_dict['border_coords'][:,0],
+                    # roi_dict['border_coords'][:,1],
+                    color='k',
+                    linewidth=2,
+                    label=roi_dict['roi'] if roi_dict['first_instance'] else None,
+                )
+        # Add color bar
+        norm = mpl.colors.Normalize(vmin=cmap_dict['vmin'], vmax=cmap_dict['vmax'])
+        cmap = dag_get_cmap(cmap_dict['cmap'])
+        sm = plt.cm.ScalarMappable(cmap=cmap, norm=norm)
+        sm.set_array([])
+        fig.colorbar(sm, ax=ax, orientation='horizontal', label=surf_name)
+        ax.axis('off')
+        ax.set_aspect('equal')
+        return cmap_dict
+    def reload_flat(self, flat_name):
+        '''Reload the flatmap
+        '''
+        self.mesh_info[flat_name] = {}
+        self.add_flat_to_mesh_info(flat_name=flat_name)
+
+    #endregion FLAT FUNCTIONS
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
     # *****************************************************************
     # *****************************************************************

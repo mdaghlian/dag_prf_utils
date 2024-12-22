@@ -724,6 +724,16 @@ def dag_pol_to_clock(pol):
     # Convert angles to the range [0, 12)
     clock_values = (pol / (2 * np.pi)) * 12
     return clock_values
+from scipy.spatial.transform import Rotation as R
+def dag_coord_rot(coords, angles):
+    '''
+    Rotate coordinates
+    '''        
+    r = R.from_euler('xyz', angles, degrees=True)
+    transformed_coords = r.apply(coords)
+    return transformed_coords
+
+
 
 def dag_weighted_mean(w,x, axis='all'):
     # w_mean = np.sum(w * x) / np.sum(w) # original form

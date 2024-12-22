@@ -129,7 +129,7 @@ class BlendMaker(GenMeshMaker):
         
         dag_str2file(filename=self.blender_script, txt=blender_script_str)
         if run_blender:
-            os.system(f'{blender_init} --python {self.blender_script}')
+            os.system(f'{blender_cmd} --python {self.blender_script}')
 
 
 

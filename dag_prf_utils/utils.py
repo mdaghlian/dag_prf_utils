@@ -516,8 +516,8 @@ def dag_id_occ_ctx(sub, fs_dir, split_LR=False, max_y=-35):
     for i_hemi in ['lh', 'rh']:
         surf = opj(fs_dir, sub, 'surf', f'{i_hemi}.inflated')
         mesh_info = dag_read_fs_mesh(surf)
-        occ_idx.append(mesh_info['coords'][:,1]>=max_y)        
-        occ_idx_split[i_hemi] = mesh_info['coords'][:,1]>=max_y
+        occ_idx.append(mesh_info['coords'][:,0]>=max_y)        
+        occ_idx_split[i_hemi] = mesh_info['coords'][:,0]>=max_y
     
     occ_idx = np.concatenate(occ_idx)
 

@@ -989,10 +989,10 @@ class PyctxMaker(GenMeshMaker):
             if '.svg' in file:
                 os.unlink(opj(self.sub_ctx_path, file))
     
-    def clear_flat(self):
+    def clear_flat(self, flat_name='flat'):
         file_list = os.listdir(opj(self.sub_ctx_path, 'surfaces'))
         for file in file_list:
-            if 'flat_' in file:
+            if flat_name+'_' in file:
                 os.unlink(opj(self.sub_ctx_path, 'surfaces', file))
 
     def make_flat_map_CUSTOM(self, **kwargs):

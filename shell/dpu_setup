@@ -48,6 +48,11 @@ if [[ $1 == "setup" ]]; then
     
     # install repo
     echo "Installing dag_prf_utils and dependencies"
+    # Try to install requirements with conda
+    if [ -f ${DPU_REPO_DIR}/requirements.txt ]; then
+        conda install --yes --file ${DPU_REPO_DIR}/requirements.txt
+    fi
+    # If conda fails, try pip    
     pip install -r ${DPU_REPO_DIR}/requirements.txt
     python $DPU_REPO_DIR/shell/install_git_packages.py 
     python $DPU_REPO_DIR/setup.py develop    

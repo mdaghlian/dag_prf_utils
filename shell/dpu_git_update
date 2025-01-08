@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+
+# Load the config
+source "$DPU_SETUP_DIR/dpu_config.sh"
+source "$DPU_SETUP_DIR/dpu_setup" # dpu setup without the install stage
+source "$DPU_SETUP_DIR/dpu_git_install --no-update" # dpu git update

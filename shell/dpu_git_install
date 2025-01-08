@@ -1,0 +1,53 @@
+#!/bin/bash
+
+# Check for git update only argument
+update_only=false
+if [ "$1" == "--update-only" ]; then
+    update_only=true
+fi
+
+# Load the config
+source "$DPU_SETUP_DIR/dpu_config.sh"
+
+# Define the folder to clone repositories
+target_folder=$(realpath "$DPU_SETUP_DIR/../../dpu_packages")
+echo "Cloning repositories in $target_folder"
+
+echo "Using $install_cmd to install requirements"
+
+# Create the target folder if it doesn't exist
+mkdir -p "$target_folder"
+
+# List Git repositories
+git_repos=(
+    "https://github.com/spinoza-centre/prfpy_csenf.git"
+    "https://github.com/mdaghlian/pycortex.git"
+    "https://github.com/mdaghlian/figure_finder.git"
+    "https://github.com/mdaghlian/prfpy_bayes.git"
+)
+
+# Clone and install each repository in editable mode
+for repo in "${git_repos[@]}"; do
+    repo_name=$(basename "$repo" .git)
+    repo_path="$target_folder/$repo_name"
+    
+    # Clone the repository if not already cloned
+    if [ ! -d "$repo_path" ]; then
+        git clone "$repo" "$repo_path"
+    else
+        # Update the repository if already cloned
+        git -C "$repo_path" pull
+    fi
+
+    # Skip the installation if the update_only flag is set
+    if [ "$update_only" = true ]; then
+        continue
+    fi
+    # Try installing the requirements with mamba or conda
+    if [ -f "$repo_path/requirements.txt" ]; then
+        $install_cmd "$repo_path/requirements.txt"
+    fi
+    
+    # Install the repository in editable mode
+    pip install -e "$repo_path"
+done

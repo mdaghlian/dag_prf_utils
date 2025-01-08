@@ -1,10 +1,14 @@
 #!/usr/bin/env bash
 
+# Load the config
+
 # specify the folder where dag_prf_utils is held
 DPU_SETUP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 DPU_SETUP_FILE="${DPU_SETUP_DIR}/dpu_setup"
 DPU_REPO_DIR=$(dirname ${DPU_SETUP_DIR})
 export DAG_UTILS=$DPU_REPO_DIR
+source "$DPU_SETUP_DIR/dpu_config.sh"
+echo $install_git_files
 
 if [[ $1 == "setup" ]]; then
     echo "==================================================================================================="
@@ -49,13 +53,16 @@ if [[ $1 == "setup" ]]; then
     # install repo
     echo "Installing dag_prf_utils and dependencies"
     # Try to install requirements with conda
-    if [ -f ${DPU_REPO_DIR}/requirements.txt ]; then
-        conda install --yes --file ${DPU_REPO_DIR}/requirements.txt
+    # $install_cmd ${DPU_REPO_DIR}/requirements.txt
+
+    # install from git if specified
+    if [[ $install_git_files == "True" ]]; then
+        echo "Installing from git"
+        source "$DPU_SETUP_DIR/dpu_git_install"
+    else
+        echo "Not installing from git"
     fi
-    # If conda fails, try pip    
-    pip install -r ${DPU_REPO_DIR}/requirements.txt
-    python $DPU_REPO_DIR/shell/install_git_packages.py 
-    python $DPU_REPO_DIR/setup.py develop    
+    pip install -e $DPU_REPO_DIR/
 fi
 
 # Make executables available in environment

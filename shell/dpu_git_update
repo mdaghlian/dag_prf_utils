@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
-
+DPU_SETUP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source $DPU_SETUP_DIR/dpu_config.sh
 # Load the config
-source "$DPU_SETUP_DIR/dpu_config.sh"
-source "$DPU_SETUP_DIR/dpu_setup" # dpu setup without the install stage
-source "$DPU_SETUP_DIR/dpu_git_install --no-update" # dpu git update
+bash $DPU_SETUP_DIR/dpu_git_install --git-update-only # dpu git update

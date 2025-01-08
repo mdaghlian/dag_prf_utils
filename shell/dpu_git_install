@@ -1,22 +1,20 @@
 #!/bin/bash
-
+DPU_SETUP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source $DPU_SETUP_DIR/dpu_config.sh
 # Check for git update only argument
-update_only=false
-if [ "$1" == "--update-only" ]; then
-    update_only=true
+git_update_only=false
+if [ "$1" == "--git-update-only" ]; then
+    git_update_only=true
 fi
 
-# Load the config
-source "$DPU_SETUP_DIR/dpu_config.sh"
-
 # Define the folder to clone repositories
-target_folder=$(realpath "$DPU_SETUP_DIR/../../dpu_packages")
+target_folder="$DPU_SETUP_DIR/../../dpu_packages"
 echo "Cloning repositories in $target_folder"
 
-echo "Using $install_cmd to install requirements"
-
 # Create the target folder if it doesn't exist
-mkdir -p "$target_folder"
+if [ ! -d "$target_folder" ]; then
+    mkdir -p "$target_folder"
+fi
 
 # List Git repositories
 git_repos=(
@@ -40,11 +38,13 @@ for repo in "${git_repos[@]}"; do
     fi
 
     # Skip the installation if the update_only flag is set
-    if [ "$update_only" = true ]; then
+    if [ "$git_update_only" = true ]; then
         continue
     fi
+    echo "Using $install_cmd to install requirements"
     # Try installing the requirements with mamba or conda
     if [ -f "$repo_path/requirements.txt" ]; then
+
         $install_cmd "$repo_path/requirements.txt"
     fi
     

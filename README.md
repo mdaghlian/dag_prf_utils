@@ -1,19 +1,39 @@
 # dag_prf_utils repository
 This repository is a collection of useful tools (mainly) for analysing and visualising PRF data. It is designed to work with prfpy 
 
-https://github.com/gjheij/linescanning (much has been stolen from here!!! Thanks Jurjen, you are an angel)
+Credit due to many people - (TODO: do this properly)
+
+Much stolen from:
+
+Jurjen Heij; https://github.com/gjheij/linescanning 
+Nibabel
+Nilearn
+Pycortex
+prfpy (of course)
+
 
 ## In active development
 This package is still in development and its API might change. 
 
 ## Installation 
+
+### Basic setup - you'll need to add prfpy or whatever is compatible 
+Just run the usual 
+> pip install -e . 
+
+### Full setup - download some of my other packages / forks of other peoples stuff
 [1] Create a new environment 
 > conda create -n env_name ipython 
 
 [2] Activate the environment
 > conda activate env_name 
 
-[3] Run the install script. This will also download some other useful tools. 
+[3] Setup your config file 
+> Do you want to install the other git packages?
+> Do you want to install using pip, conda or mamba? 
+> Set all of that here
+
+[4] Run the install script. This will also download some other useful tools. 
 > bash shell/dpu_setup setup
 
 

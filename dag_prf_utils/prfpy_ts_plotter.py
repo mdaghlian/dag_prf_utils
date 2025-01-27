@@ -130,7 +130,7 @@ class TSPlotter(Prf1T1M):
         elif self.model in ['norm', 'dog']:
             fig = self.gauss2_ts_plot(idx, time_pt, return_fig, **kwargs)        
         elif 'csf' in self.model:
-            fig = self.csf_ts_plot(idx, return_fig, time_pt, **kwargs)            
+            fig = self.csf_ts_plot(idx, return_fig=return_fig, time_pt=time_pt, **kwargs)            
 
         if return_fig:
             return fig
@@ -392,7 +392,7 @@ class TSPlotter(Prf1T1M):
         do_stim_info = kwargs.get('do_stim_info', True)
         do_crf = kwargs.get('do_crf', True)
         time_pt_col = kwargs.get('time_pt_col', '#42eff5')
-        fig = kwargs.get('fig', 'beep') #plt.figure())
+        fig = kwargs.get('fig', plt.figure()) #plt.figure())
         fig.clear()
         return_fig = kwargs.get('return_fig', True)
         dpi = kwargs.get('dpi', 100)
@@ -634,8 +634,8 @@ class TSPlotter(Prf1T1M):
                 handlelength=0, handletextpad=0, fancybox=True,
                 bbox_to_anchor=(1.3, 1), loc='upper right',
                 )
-            for item in leg.legendHandles:
-                item.set_visible(False)        
+            # for item in leg.legendHandles:
+            #     item.set_visible(False)        
             for color,text in zip(self.SF_cols.values(),leg.get_texts()):
                 text.set_color(color)        
     

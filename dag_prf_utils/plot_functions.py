@@ -218,7 +218,7 @@ def dag_add_ax_basics(ax, **kwargs):
 
 
 
-def dag_update_fig_fontsize(fig, new_font_size):
+def dag_update_fig_fontsize(fig, new_font_size, **kwargs):
     '''dag_update_fig_fontsize
     Description:
         Update the font size of a figure
@@ -231,7 +231,7 @@ def dag_update_fig_fontsize(fig, new_font_size):
     fig_kids = fig.get_children() # Get the children of the figure, i.e., the axes
     for i_kid in fig_kids: # Loop through the children
         if isinstance(i_kid, mpl.axes.Axes): # If the child is an axes, update the font size of the axes
-            dag_update_ax_fontsize(i_kid, new_font_size)
+            dag_update_ax_fontsize(i_kid, new_font_size, **kwargs)
         elif isinstance(i_kid, mpl.text.Text): # If the child is a text, update the font size of the text
             i_kid.set_fontsize(new_font_size)            
 
@@ -952,7 +952,8 @@ def dag_scatter(X,Y,ax=None, **kwargs):
     
     if alt_plot == 'kde':
         sns.kdeplot(
-            X,Y, color=dot_col,
+            x=X,y=Y, color=dot_col,
+
             **alt_kwargs
             )
     elif alt_plot == 'joint_sns':
@@ -984,6 +985,7 @@ def dag_multi_scatter(data_in, **kwargs):
     '''
     do_dag_scatter = kwargs.get('dag_scatter', False)
     skip_hist = kwargs.get('skip_hist', False)
+    truths = kwargs.get('truths', None)
     # Which labels for x and y?
     p_labels = kwargs.get('p_labels', None)
     transpose_subplots = kwargs.get('transpose_subplots', False)
@@ -1044,6 +1046,9 @@ def dag_multi_scatter(data_in, **kwargs):
                 #     ax.hist(data_dict[x_param])
                 if (x_param==y_param) and (not skip_hist):
                     ax.hist(data_dict[x_param])
+                    if truths is not None:
+                        # Add vline
+                        ax.vlines(truths[x_param], ymin=ax.get_ylim()[0], ymax=ax.get_ylim()[1])
                 else:
                     if not do_dag_scatter:
                         ax.set_ylabel(y_param)
@@ -1061,11 +1066,95 @@ def dag_multi_scatter(data_in, **kwargs):
                             **kwargs
                         )           
                         ax.set_xlabel(x_param)
-                        ax.set_ylabel(y_param)                 
+                        ax.set_ylabel(y_param)
+                    if truths is not None:
+                        ax.vlines(truths[x_param], ymin=ax.get_ylim()[0], ymax=ax.get_ylim()[1])
+                        ax.hlines(truths[y_param], xmin=ax.get_xlim()[0], xmax=ax.get_xlim()[1])
             plot_i += 1
         fig.set_tight_layout('tight')
     return fig, ax_list
 
+
+def edit_pair_plot(axes, **kwargs):
+    """
+    Adds vertical and horizontal lines to each subplot in a Seaborn pairplot.
+
+    Annoyingly the x and y axis aren't consistently named in pairplot...
+
+    Parameters:
+    - pairplot (sns.PairGrid): The Seaborn pairplot to modify.
+    - lines_dict (dict): Dictionary where keys are column names in the dataset, 
+                         and values are the x or y values where lines should be drawn.
+    """
+    lines_dict = kwargs.pop('lines_dict', None)    
+    lim_dict = kwargs.pop('lim_dict', None)
+    n_r, n_c = axes.shape
+    x_labels = [['']*n_c for _ in range(n_r)]
+    y_labels = [['']*n_c for _ in range(n_r)]
+    # Sometimes each row has a label...    
+    for iR,axR in enumerate(axes):
+        for iC,ax in enumerate(axR):
+            if ax is None:
+                continue
+            x_labels[iR][iC] = axes[iR,iC].get_xlabel()
+            y_labels[iR][iC] = axes[iR,iC].get_ylabel()
+
+    # Now lets consolidate
+    x_by_col = []
+    for iC in range(n_c):
+        v = ''
+        i = 0 
+        while v == '':
+            v = x_labels[i][iC]
+            i += 1
+        x_by_col.append(v)
+
+    y_by_row = []
+    for iR in range(n_r):
+        v = ''
+        i = 0 
+        while v == '':
+            v = y_labels[iR][i]
+            i += 1
+        y_by_row.append(v)
+    if lines_dict is not None:
+        label_list = list(lines_dict.keys())
+        for iR,vR in enumerate(y_by_row):
+            for iC,vC in enumerate(x_by_col):
+                if axes[iR,iC] is None:
+                    continue
+
+                x_label = axes[iR,iC].get_xlabel()
+                y_label = axes[iR,iC].get_ylabel()
+                if (x_label in label_list) & (y_label in label_list):
+                    # Both in there? then it must be a scatter plot 
+                    # Plot them both
+                    axes[iR,iC].axvline(x=lines_dict[x_label], **kwargs)
+                    axes[iR,iC].axhline(y=lines_dict[y_label], **kwargs)
+                else:
+                    # Missing labels... must be a histogram
+                    if vR in label_list:
+                        axes[iR,iC].axvline(x=lines_dict[vR], **kwargs)
+    if lim_dict is not None:
+        label_list = list(lim_dict.keys())
+        for iR,vR in enumerate(y_by_row):
+            for iC,vC in enumerate(x_by_col):
+                if axes[iR,iC] is None:
+                    continue
+
+                x_label = axes[iR,iC].get_xlabel()
+                y_label = axes[iR,iC].get_ylabel()
+                if (x_label in label_list) & (y_label in label_list):
+                    # Both in there? then it must be a scatter plot 
+                    # Plot them both
+                    axes[iR,iC].set_xlim(lim_dict[x_label])
+                    axes[iR,iC].set_ylim(lim_dict[y_label])
+                else:
+                    # Missing labels... must be a histogram
+                    if vR in label_list:
+                        axes[iR,iC].set_xlim(lim_dict[vR])
+
+    return 
 
 
 # VIOLIN STUFF

@@ -17,9 +17,13 @@ This package is still in development and its API might change.
 
 ## Installation 
 
-### Basic setup - you'll need to add prfpy or whatever is compatible 
+### Basic setup (recommended for most peopls) - you'll need to add prfpy or whatever is compatible 
 Just run the usual 
+> pip install -r requirements.txt
 > pip install -e . 
+
+
+
 
 ### Full setup - download some of my other packages / forks of other peoples stuff
 [1] Create a new environment 

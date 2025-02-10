@@ -27,7 +27,9 @@ except:
 try: 
     import cortex
     from cortex.formats import read_gii
+    have_cortex=True
 except:
+    have_cortex=False
     print('No cortex')
 
 path_to_utils = os.path.abspath(os.path.dirname(__file__))
@@ -46,7 +48,6 @@ class GenMeshMaker(FSMaker):
         if isinstance(output_dir, str):
             if not os.path.exists(self.output_dir):
                 os.makedirs(self.output_dir)                  
-        
         # [1] Load mesh info
         # PULL FROM FREESURFER
         self.do_offsets = kwargs.get('do_offsets', True)
@@ -264,6 +265,7 @@ class GenMeshMaker(FSMaker):
     
     def get_mesh_info(self, key):
         if (key not in self.mesh_info.keys()) or (self.mesh_info[key] is {}):
+            print('bloop')
             self.mesh_info[key] = self._return_fs_mesh_coords_both_hemis(mesh=key)
         return self.mesh_info[key]
     #endregion MESH COORDS
@@ -441,25 +443,31 @@ class GenMeshMaker(FSMaker):
         Add the flatmap to the mesh_info
         '''
         flat_name = kwargs.get('flat_name', 'flat')
-        print(flat_name)
-        if flat_name in self.mesh_info.keys() and self.mesh_info[flat_name] != {}:
-            return
+        flat_pts_hemi = kwargs.get('flat_pts', None)
+        flat_polys_hemi = kwargs.get('flat_polys', None)        
+        # if flat_name in self.mesh_info.keys() and self.mesh_info[flat_name] != {}:
+        #     return
         import nibabel as nib
         self.mesh_info[flat_name] = {}
         for hemi in ['lh','rh']:
-            # Find the flatmap -> try the specified flat_name
-            flat_surf_path = dag_find_file_in_folder(
-                filt=[hemi, flat_name, 'gii'],
-                path=self.sub_ctx_path,
-                return_msg=None,
-            )
-            if flat_surf_path is None:
-                # try the default
-                flat_surf_path = opj(self.sub_ctx_path, 'surfaces', f'{flat_name}_{hemi}.gii')
-                    
-            flat = nib.load(flat_surf_path)
-            flat_pts = flat.darrays[0].data
-            flat_polys = flat.darrays[1].data
+            
+            if have_cortex:
+                # Find the flatmap -> try the specified flat_name
+                flat_surf_path = dag_find_file_in_folder(
+                    filt=[hemi, flat_name, 'gii'],
+                    path=self.sub_ctx_path,
+                    return_msg=None,
+                )
+                if flat_surf_path is None:
+                    # try the default
+                    flat_surf_path = opj(self.sub_ctx_path, 'surfaces', f'{flat_name}_{hemi}.gii')
+                        
+                flat = nib.load(flat_surf_path)
+                flat_pts = flat.darrays[0].data
+                flat_polys = flat.darrays[1].data
+            else:
+                flat_pts = flat_pts_hemi[hemi]
+                flat_polys = flat_polys_hemi[hemi]
             self.mesh_info[flat_name][hemi] = {}
             self.mesh_info[flat_name][hemi]['coords'] = flat_pts
             self.mesh_info[flat_name][hemi]['faces'] = flat_polys
@@ -516,7 +524,8 @@ class GenMeshMaker(FSMaker):
             hemi_kwargs['morph'] = morph
             if centre_roi is not None:
                 # Load the ROI bool for this hemisphere
-                centre_bool_hemi[hemi] |= self._return_roi_bool_both_hemis(centre_roi)[hemi]
+                centre_bool_hemi[hemi] |= self._return_roi_bool_both_hemis(centre_roi, **kwargs)[hemi]
+                print(centre_bool)
             # Cut a box around them?            
             if cut_box:
                 hemi_kwargs['vx_to_include'] = dag_cut_box(
@@ -530,8 +539,10 @@ class GenMeshMaker(FSMaker):
                 **hemi_kwargs)        
             flat = pts
             # do some cleaning...
-            polys = cortex.freesurfer._remove_disconnected_polys(polys)
-            flat = cortex.freesurfer._move_disconnect_points_to_zero(flat, polys)
+            if have_cortex:
+                polys = cortex.freesurfer._remove_disconnected_polys(polys)
+                flat = cortex.freesurfer._move_disconnect_points_to_zero(flat, polys)
+
             # Demean everything
             # Disconnected points 
             connected_pts = np.zeros(len(pts), dtype=bool)
@@ -543,13 +554,14 @@ class GenMeshMaker(FSMaker):
                 # Flip x and y,
                 pts[:,0] = -pts[:,0]
                 pts[:,1] = -pts[:,1]                 
-            flat_surf_path = opj(self.sub_ctx_path, 'surfaces', f'{flat_name}_{hemi}.gii')
-            print("saving to %s"%flat_surf_path)
             if hemi == 'lh':
                 max_x_lh = flat[:,0].max()
             else:
                 flat[:,0] += max_x_lh - flat[:,0].min() + .1 * (max_x_lh - flat[:,0].min())
-            cortex.formats.write_gii(flat_surf_path, pts=flat, polys=polys)
+            if have_cortex:
+                flat_surf_path = opj(self.sub_ctx_path, 'surfaces', f'{flat_name}_{hemi}.gii')
+                print("saving to %s"%flat_surf_path)
+                cortex.formats.write_gii(flat_surf_path, pts=flat, polys=polys)
             hemi_pts[hemi] = flat.copy()
             hemi_polys[hemi] = polys.copy()
             pts_combined.append(flat)
@@ -559,7 +571,8 @@ class GenMeshMaker(FSMaker):
 
         pts_combined = np.vstack(pts_combined)
         polys_combined = np.vstack(polys_combined)
-        self.add_flat_to_mesh_info(flat_name=flat_name)
+        self.add_flat_to_mesh_info(flat_name=flat_name, flat_pts=hemi_pts, flat_polys=hemi_polys)
+
 
     def flat_mpl(self, **kwargs):
         '''Plot using matplotlib 
@@ -572,9 +585,9 @@ class GenMeshMaker(FSMaker):
             roi_list = [roi_list]
         flat_name = kwargs.pop('flat_name', 'flat')
         try:
-            self.add_flat_to_mesh_info(flat_name=flat_name)
-        except:
             self.get_mesh_info(flat_name)
+        except:
+            self.add_flat_to_mesh_info(flat_name=flat_name)
         hemi_list = kwargs.get('hemi_list', ['lh', 'rh'])
         ax = kwargs.pop('ax', None)
         if ax is None:

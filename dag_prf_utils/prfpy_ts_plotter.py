@@ -184,7 +184,7 @@ class TSPlotter(Prf1T1M):
         ax[1].plot(ts_x,this_pred_ts, **ts_kwargs) 
         if self.real_ts is not None:
             self.real_ts_plot(ax=ax[1], idx=idx)
-        ax[1].plot((0,ts_x[-1]), (0,0), 'k')   
+        # ax[1].plot((0,ts_x[-1]), (0,0), 'k')   
         # Do dm?
         dag_update_fig_fontsize(fig, 15)        
         if do_dm:
@@ -261,7 +261,7 @@ class TSPlotter(Prf1T1M):
         ts_ax.plot(ts_x,this_pred_ts, **ts_kwargs)
         if self.real_ts is not None:
             self.real_ts_plot(ax=ts_ax, idx=idx)        
-        ts_ax.plot((0,ts_x[-1]), (0,0), 'k')   
+        # ts_ax.plot((0,ts_x[-1]), (0,0), 'k')   
 
         # Do dm?        
         if do_dm:
@@ -652,7 +652,7 @@ class TSPlotter(Prf1T1M):
             ts_ax.plot(self.real_ts[idx,:time_pt], color='k', linestyle=':', marker='^', linewidth=3, alpha=0.8)
         ts_ax.set_xlim(0, ncsf_info['ts'].shape[-1])
         ts_ax.set_title('')
-        ts_ax.plot((0,ncsf_info['ts'].shape[-1]), (0,0), 'k')   
+        # ts_ax.plot((0,ncsf_info['ts'].shape[-1]), (0,0), 'k')   
         # Find the time for 0 stimulation, add grey patches
         id_no_stim = self.prfpy_model.stimulus.SF_seq==0.0
         x = np.arange(len(id_no_stim))

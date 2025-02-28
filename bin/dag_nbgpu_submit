@@ -1,0 +1,20 @@
+#!/bin/bash
+#$ -j Y
+#$ -cwd
+#$ -V
+
+nb_in=$1
+if [ -n "$2" ]; then
+    nb_out=$2
+else
+    nb_out=$1
+fi
+# Get the directory of this script.
+# this_dir="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+this_dir="$(pwd)"
+
+nr_jobs=1
+job="qsub -b y -j y -q cuda.q@jupiter -pe smp ${nr_jobs} -wd ${this_dir} -N nb -o nb.txt"
+# Submit the job, explicitly calling the current conda python interpreter.
+papermill_cmd=$(realpath "$(which papermill)")
+${job} $papermill_cmd --kernel bcoder005-kernel $nb_in ${nb_out}

@@ -17,8 +17,8 @@ from scipy import io, interpolate
 from collections import OrderedDict
 
 import io as io_module
-from IPython.utils import io as ipy_io
-import contextlib
+# from IPython.utils import io as ipy_io
+# import contextlib
 
 class DagCaptureOutputs:
     def __enter__(self):
@@ -511,20 +511,67 @@ def dag_id_occ_ctx(sub, fs_dir, split_LR=False, max_y=-35):
     '''
     Return the rough coordinates for the occipital cortex
     '''
-    occ_idx = []
-    occ_idx_split = {}
-    for i_hemi in ['lh', 'rh']:
-        surf = opj(fs_dir, sub, 'surf', f'{i_hemi}.inflated')
-        mesh_info = dag_read_fs_mesh(surf)
-        occ_idx.append(mesh_info['coords'][:,0]>=max_y)        
-        occ_idx_split[i_hemi] = mesh_info['coords'][:,0]>=max_y
-    
-    occ_idx = np.concatenate(occ_idx)
 
+    # occ_idx = []
+    # occ_idx_split = {}
+    # for i_hemi in ['lh', 'rh']:
+    #     surf = opj(fs_dir, sub, 'surf', f'{i_hemi}.inflated')
+    #     mesh_info = dag_read_fs_mesh(surf)
+    #     occ_idx.append(mesh_info['coords'][:,0]>=max_y)        
+    #     occ_idx_split[i_hemi] = mesh_info['coords'][:,0]>=max_y
+    
+    # occ_idx = np.concatenate(occ_idx)
+
+    # if split_LR:
+    #     return occ_idx_split
+    # else:
+    #     return occ_idx    
+
+    occ_idx = {}
+    import nibabel as nib
+    for hemi in ['lh', 'rh']:
+        annot_file = f"{fs_dir}/{sub}/label/{hemi}.aparc.annot"
+        try:
+            labels, ctab, names = nib.freesurfer.read_annot(annot_file)
+        except Exception as e:
+            print(f"Error reading annotation file: {annot_file}")
+            print(e)
+            return None
+
+        occipital_labels = [
+            # "inferiorparietal", # Broadly considered posterior/visual stream
+            # "superiorparietal", # Broadly considered posterior/visual stream
+            # "precuneus", # Broadly considered posterior/visual stream
+            # "cuneus",
+            # "lingual",
+            "lateraloccipital",
+            # "fusiform",
+            # "parahippocampal", # Medial temporal lobe, but posterior part has visual connections
+            # "temporalpole", # Anterior temporal, but sometimes considered in broader networks
+            # "inferiortemporal",
+            # "middletemporal",
+            # "superiortemporal",
+            # "transversetemporal",
+            # "entorhinal",
+            # "perirhinal",
+            # "bankssts",
+            # "insula", # Sometimes included in broader networks
+            # "caudalanteriorcingulate", # Cingulate cortex, but posterior parts have visual connections
+            # "caudalposteriorcingulate", # Cingulate cortex, but posterior parts have visual connections
+            # "isthmuscingulate", # Cingulate cortex, but posterior parts have visual connections
+        ]
+
+        is_occipital = np.zeros(len(labels), dtype=bool)
+        for i, name in enumerate(names):
+            label_name = str(name, 'utf-8')
+            if ("occ" in label_name) or ("calc" in label_name) or (label_name in occipital_labels):
+                is_occipital = is_occipital | (labels == i)
+        occ_idx[hemi] = is_occipital
     if split_LR:
-        return occ_idx_split
+        return occ_idx
     else:
-        return occ_idx    
+        occ_idx = np.concatenate([occ_idx['lh'], occ_idx['rh']])
+        return occ_idx
 
 def dag_hyphen_parse(str_prefix, str_in):
     '''dag_hyphen_parse

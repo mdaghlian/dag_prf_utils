@@ -496,10 +496,12 @@ def dag_flatten(mesh_info, **kwargs):
     if method=='latlon':
         p1, p2 = dag_sph2flat(mesh_info['coords'], **kwargs)
     elif method=='igl':
-        p1, p2, vx_to_include_IGL, face_to_include_IGL = dag_igl_flatten(mesh_info, **kwargs)
-        vx_to_include = vx_to_include_IGL
-        f_to_include = face_to_include_IGL
-
+        try:
+            p1, p2, vx_to_include_IGL, face_to_include_IGL = dag_igl_flatten(mesh_info, **kwargs)
+            vx_to_include = vx_to_include_IGL
+            f_to_include = face_to_include_IGL
+        except:
+            p1, p2 = dag_sph2flat(mesh_info['coords'], **kwargs)
 
     # find relative scale...
     flat_info['x'] = p1 #- p1.mean()# Demean
@@ -548,8 +550,9 @@ def dag_flatten(mesh_info, **kwargs):
     flat_info['j']      = mesh_info['j'][f_to_include]
     flat_info['k']      = mesh_info['k'][f_to_include]
 
-    pts = np.vstack([flat_info['x'],flat_info['y'], flat_info['z']]).T    
-    # pts[cut_bool] = 0 # Move pts to cut to 0
+    pts = np.vstack([flat_info['x'],flat_info['y'], flat_info['z']]).T        
+    print('warning - move to zero - cehck this')
+    pts[vx_not_included] = 0 # Move pts to cut to 0 ? 
     polys = flat_info['faces']
     return pts, polys, vx_to_include
 
@@ -674,9 +677,10 @@ def dag_cut_box(mesh_info, **kwargs):
     borders['z_max'] = kwargs.get('z_max', None)
     vx_bool = kwargs.get('vx_bool', None)
     if vx_bool is not None:
-        for b in ['x', 'y', 'z']:
-            borders[f'{b}_min'] = mesh_info[b][vx_bool].min()
-            borders[f'{b}_max'] = mesh_info[b][vx_bool].max()
+        if vx_bool.sum()!=0:        
+            for b in ['x', 'y', 'z']:
+                borders[f'{b}_min'] = mesh_info[b][vx_bool].min()
+                borders[f'{b}_max'] = mesh_info[b][vx_bool].max()
     # Now find the vx to include 
     vx_to_include = np.ones_like(mesh_info['x'], dtype=bool)
     # find the biggest distance

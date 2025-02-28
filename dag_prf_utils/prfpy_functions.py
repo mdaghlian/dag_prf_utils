@@ -9,8 +9,9 @@ opj = os.path.join
 
 try:
     from prfpy_csenf.csenf_plot_functions import *
+    from prfpy_csenf.csenf_plot_functions import ncsf_calculate_aulcsf, ncsf_calculate_sfmax
 except:
-    print('')
+    print('helppppppp')
 
 
 from dag_prf_utils.utils import *

@@ -26,11 +26,13 @@ except:
     print('no dash..')
 try: 
     import cortex
+    import cortex.freesurfer
     from cortex.formats import read_gii
     have_cortex=True
 except:
     have_cortex=False
     print('No cortex')
+have_cortex = False
 
 path_to_utils = os.path.abspath(os.path.dirname(__file__))
 
@@ -100,15 +102,37 @@ class GenMeshMaker(FSMaker):
                                                                 Default: max in data
             return_cmap_dict bool                                                                 
         '''
+        if not isinstance(data, (np.ndarray, list, pd.DataFrame, pd.Series)):
+            print(f'Just using undersurface file..')
+            data = np.zeros(self.total_n_vx)
+            kwargs['data_alpha'] = np.zeros(self.total_n_vx)  
+        
         split_hemi = kwargs.get('split_hemi', False)
         unit_rgb = kwargs.get('unit_rgb', True)
         return_cmap_dict = kwargs.get('return_cmap_dict', False)
         under_surf = kwargs.get('under_surf', 'curv')
         # Load mask for data to be plotted on surface
-        data_mask = kwargs.get('data_mask', np.ones(self.total_n_vx, dtype=bool))
-        data_alpha = kwargs.get('data_alpha', np.ones(self.total_n_vx))
+        data_mask = kwargs.get('data_mask', np.ones_like(data, dtype=bool))
+        data_sub_mask = kwargs.get('data_sub_mask', None)        
+        data_alpha = kwargs.get('data_alpha', np.ones_like(data))
         clear_lower = kwargs.get('clear_lower', False)
         clear_upper = kwargs.get('clear_upper', False)
+        
+        if data_sub_mask is not None:
+            d_full = np.zeros(self.total_n_vx)
+            d_full[data_sub_mask] = data
+            data = d_full
+            #
+            dm_full = np.zeros(self.total_n_vx, dtype=bool)
+            dm_full[data_sub_mask] = data_mask
+            data_mask = dm_full
+            #
+            da_full = np.zeros(self.total_n_vx)
+            da_full[data_sub_mask] = data_alpha
+            data_alpha = da_full
+
+            
+
         data_alpha[~data_mask] = 0 # Make values to be masked have alpha=0
         
         # ROI arguments
@@ -119,10 +143,18 @@ class GenMeshMaker(FSMaker):
         roi_fill = kwargs.get('roi_fill', False)
         roi_col = kwargs.get('roi_col', [1,0,0,1])
 
-        if not isinstance(data, (np.ndarray, list, pd.DataFrame)):
-            print(f'Just using undersurface file..')
-            data = np.zeros(self.total_n_vx)
-            data_alpha = np.zeros(self.total_n_vx)        
+
+        # # If only passed part of the data map it...
+        # if data_alpha.shape[0]!= self.total_n_vx:
+        #     data_a_full = np.zeros(self.total_n_vx)
+        #     data_a_full[self.idx2bool(data_sub_mask)] = data_alpha
+        #     data_alpha = data_a_full
+        # if data.shape[0] != self.total_n_vx:
+        #     # We only passed data for some of the VX
+        #     data_full = np.zeros(self.total_n_vx)            
+        #     data_full[self.idx2bool(data_sub_mask)] = data
+        #     data = data_full
+        #     data_alpha[~self.idx2bool(data_sub_mask)] = 0
         
         # Load colormap properties: (cmap, vmin, vmax)
         cmap = kwargs.get('cmap', 'viridis')    
@@ -268,6 +300,11 @@ class GenMeshMaker(FSMaker):
             print('bloop')
             self.mesh_info[key] = self._return_fs_mesh_coords_both_hemis(mesh=key)
         return self.mesh_info[key]
+    
+    def idx2bool(self,idx):
+        b_out = np.zeros(self.total_n_vx, dtype=bool)
+        b_out[idx] = True
+        return b_out
     #endregion MESH COORDS
     
 
@@ -542,7 +579,6 @@ class GenMeshMaker(FSMaker):
             if have_cortex:
                 polys = cortex.freesurfer._remove_disconnected_polys(polys)
                 flat = cortex.freesurfer._move_disconnect_points_to_zero(flat, polys)
-
             # Demean everything
             # Disconnected points 
             connected_pts = np.zeros(len(pts), dtype=bool)

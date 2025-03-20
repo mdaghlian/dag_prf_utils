@@ -11,7 +11,7 @@ try:
     from prfpy_csenf.csenf_plot_functions import *
     from prfpy_csenf.csenf_plot_functions import ncsf_calculate_aulcsf, ncsf_calculate_sfmax
 except:
-    print('helppppppp')
+    print('prfpy version...')
 
 
 from dag_prf_utils.utils import *

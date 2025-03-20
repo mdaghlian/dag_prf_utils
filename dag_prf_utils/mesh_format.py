@@ -403,7 +403,6 @@ def dag_igl_flatten(mesh_info, **kwargs):
     roi_bool = centre_bool.copy()
     successful_flatten = False
     # morph = kwargs.pop('morph', 0)
-    import contextlib
     n_steps = 0
     total_morph = 0
     while (not successful_flatten) & (n_steps<100):        
@@ -551,7 +550,6 @@ def dag_flatten(mesh_info, **kwargs):
     flat_info['k']      = mesh_info['k'][f_to_include]
 
     pts = np.vstack([flat_info['x'],flat_info['y'], flat_info['z']]).T        
-    print('warning - move to zero - cehck this')
     pts[vx_not_included] = 0 # Move pts to cut to 0 ? 
     polys = flat_info['faces']
     return pts, polys, vx_to_include

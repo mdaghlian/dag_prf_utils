@@ -1538,6 +1538,7 @@ import nibabel as nb
 import numpy as np
 import scipy as sp
 from scipy import stats
+from tqdm import tqdm
 
 
 class Subsurface(object):
@@ -1580,7 +1581,7 @@ class Subsurface(object):
         self.get_surfaces()
         self.generate()
         self.get_geometry()        
-        self.pad_distance_matrices()
+        # self.pad_distance_matrices()
 
     def get_surfaces(self):
         """get_surfaces
@@ -1633,7 +1634,7 @@ class Subsurface(object):
         
 
 
-    def get_geometry(self):
+    def get_geometry(self, **kwargs):
         """get_geometry
         Calculates geometric info about the sub-surfaces. Computes geodesic distances from each point of the sub-surface.
         Returns
@@ -1652,11 +1653,11 @@ class Subsurface(object):
         ldists, rdists = [], []
 
         print('Creating distance by distance matrices')
-
-        for i in range(len(self.subsurface_verts_L)):
+        for i in tqdm(range(len(self.subsurface_verts_L)), desc="Processing Left Hemisphere"):
             ldists.append(self.subsurface_L.geodesic_distance([i]))
         self.dists_L = np.array(ldists)
-        for i in range(len(self.subsurface_verts_R)):
+
+        for i in tqdm(range(len(self.subsurface_verts_R)), desc="Processing Right Hemisphere"):
             rdists.append(self.subsurface_R.geodesic_distance([i]))
         self.dists_R = np.array(rdists)
 

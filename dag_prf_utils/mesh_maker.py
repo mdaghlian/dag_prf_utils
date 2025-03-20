@@ -71,7 +71,7 @@ class GenMeshMaker(FSMaker):
                 vmin=vmin, vmax=vmax, cmap='Greys_r',
             )
         # ... other
-        self.ply_files = {}
+        self.ply_files = {}            
 
     # *****************************************************************
     # *****************************************************************
@@ -142,19 +142,6 @@ class GenMeshMaker(FSMaker):
                 roi_list = [roi_list]
         roi_fill = kwargs.get('roi_fill', False)
         roi_col = kwargs.get('roi_col', [1,0,0,1])
-
-
-        # # If only passed part of the data map it...
-        # if data_alpha.shape[0]!= self.total_n_vx:
-        #     data_a_full = np.zeros(self.total_n_vx)
-        #     data_a_full[self.idx2bool(data_sub_mask)] = data_alpha
-        #     data_alpha = data_a_full
-        # if data.shape[0] != self.total_n_vx:
-        #     # We only passed data for some of the VX
-        #     data_full = np.zeros(self.total_n_vx)            
-        #     data_full[self.idx2bool(data_sub_mask)] = data
-        #     data = data_full
-        #     data_alpha[~self.idx2bool(data_sub_mask)] = 0
         
         # Load colormap properties: (cmap, vmin, vmax)
         cmap = kwargs.get('cmap', 'viridis')    
@@ -463,18 +450,7 @@ class GenMeshMaker(FSMaker):
     # *****************************************************************
     # *****************************************************************
     # *****************************************************************
-    #region FLAT FUNCTIONS
-    def ctx_get_ready(self, **kwargs):
-        from dag_prf_utils.pycortex import set_ctx_path, get_ctx_path
-        self.ctx_path = kwargs.get('ctx_path', None)
-        # self.special_flat_dir = 
-        if self.ctx_path is not None:
-            set_ctx_path(self.ctx_path)            
-            self.sub_ctx_path = opj(self.ctx_path, self.sub)
-        else:
-            self.ctx_path = get_ctx_path()
-            self.sub_ctx_path = opj(self.ctx_path, self.sub)
-        
+    #region FLAT FUNCTIONS        
     def add_flat_to_mesh_info(self, **kwargs):
         '''
         Add the flatmap to the mesh_info
@@ -482,29 +458,10 @@ class GenMeshMaker(FSMaker):
         flat_name = kwargs.get('flat_name', 'flat')
         flat_pts_hemi = kwargs.get('flat_pts', None)
         flat_polys_hemi = kwargs.get('flat_polys', None)        
-        # if flat_name in self.mesh_info.keys() and self.mesh_info[flat_name] != {}:
-        #     return
-        import nibabel as nib
         self.mesh_info[flat_name] = {}
-        for hemi in ['lh','rh']:
-            
-            if have_cortex:
-                # Find the flatmap -> try the specified flat_name
-                flat_surf_path = dag_find_file_in_folder(
-                    filt=[hemi, flat_name, 'gii'],
-                    path=self.sub_ctx_path,
-                    return_msg=None,
-                )
-                if flat_surf_path is None:
-                    # try the default
-                    flat_surf_path = opj(self.sub_ctx_path, 'surfaces', f'{flat_name}_{hemi}.gii')
-                        
-                flat = nib.load(flat_surf_path)
-                flat_pts = flat.darrays[0].data
-                flat_polys = flat.darrays[1].data
-            else:
-                flat_pts = flat_pts_hemi[hemi]
-                flat_polys = flat_polys_hemi[hemi]
+        for hemi in ['lh','rh']:            
+            flat_pts = flat_pts_hemi[hemi]
+            flat_polys = flat_polys_hemi[hemi]
             self.mesh_info[flat_name][hemi] = {}
             self.mesh_info[flat_name][hemi]['coords'] = flat_pts
             self.mesh_info[flat_name][hemi]['faces'] = flat_polys
@@ -515,7 +472,7 @@ class GenMeshMaker(FSMaker):
             self.mesh_info[flat_name][hemi]['j'] = flat_polys[:,1]
             self.mesh_info[flat_name][hemi]['k'] = flat_polys[:,2]    
 
-    def make_flat_map(self, **kwargs):
+    def make_flat_map(self, centre_bool=None, **kwargs):
         '''
         Pycotex uses flatmaps for a bunch of things
         But if you can't be bothered to do it properly, and just want
@@ -527,6 +484,7 @@ class GenMeshMaker(FSMaker):
 
         TODO: remove cut from Y 
         '''
+
         if not os.path.exists(self.custom_surf_dir):
             os.makedirs(self.custom_surf_dir)
         method = kwargs.pop('method', 'latlon')
@@ -534,11 +492,18 @@ class GenMeshMaker(FSMaker):
         hemi_project = kwargs.get('hemi_project', 'sphere')
         flat_name = kwargs.get('flat_name', 'flat')
         centre_roi = kwargs.get('centre_roi', None)
-        centre_bool = kwargs.pop('centre_bool', np.zeros(self.total_n_vx, dtype=bool))
+        if centre_bool is None:
+            centre_bool = np.ones_like(self.total_n_vx, dtype=bool)
         centre_bool_hemi = {
             'lh': centre_bool[:self.n_vx['lh']],
             'rh': centre_bool[self.n_vx['lh']:]
         }
+        vx_to_include = kwargs.pop('vx_to_include', centre_bool)        
+        vx_to_include = {
+            'lh': vx_to_include[:self.n_vx['lh']],
+            'rh': vx_to_include[self.n_vx['lh']:]
+        }
+
         cut_box = kwargs.get('cut_box', False)                        
         
         hemi_pts = {}
@@ -552,13 +517,11 @@ class GenMeshMaker(FSMaker):
         infl_x = np.hstack(
             [self.mesh_info['inflated']['lh']['x'],self.mesh_info['inflated']['rh']['x']]
             )
-        infl_y = np.hstack(
-            [self.mesh_info['inflated']['lh']['y'],self.mesh_info['inflated']['rh']['y']]
-            )
+
         for hemi in ['lh','rh']:
             hemi_kwargs = kwargs.copy()
             hemi_kwargs['z'] = new_z
-            hemi_kwargs['morph'] = morph
+            # hemi_kwargs['morph'] = morph
             if centre_roi is not None:
                 # Load the ROI bool for this hemisphere
                 centre_bool_hemi[hemi] |= self._return_roi_bool_both_hemis(centre_roi, **kwargs)[hemi]
@@ -569,6 +532,12 @@ class GenMeshMaker(FSMaker):
                     mesh_info=self.mesh_info['inflated'][hemi],
                     vx_bool=centre_bool_hemi[hemi],
                 )
+            else:
+                hemi_kwargs['vx_to_include'] = vx_to_include[hemi]
+            hemi_kwargs['vx_to_include'] = dag_mesh_morph(
+                mesh_info=self.mesh_info['inflated'][hemi], 
+                vx_bool=hemi_kwargs['vx_to_include'], 
+                morph=morph)
             hemi_kwargs['centre_bool'] = centre_bool_hemi[hemi]
             pts,polys,_ = dag_flatten(
                 mesh_info=self.mesh_info[hemi_project][hemi], 
@@ -576,9 +545,7 @@ class GenMeshMaker(FSMaker):
                 **hemi_kwargs)        
             flat = pts
             # do some cleaning...
-            if have_cortex:
-                polys = cortex.freesurfer._remove_disconnected_polys(polys)
-                flat = cortex.freesurfer._move_disconnect_points_to_zero(flat, polys)
+
             # Demean everything
             # Disconnected points 
             connected_pts = np.zeros(len(pts), dtype=bool)
@@ -586,18 +553,15 @@ class GenMeshMaker(FSMaker):
             flat[connected_pts] -= flat[connected_pts].mean(axis=0)
             scale_x = (infl_x.max() - infl_x.min()) / (flat[:,0].max() - flat[:,0].min())
             flat *= scale_x*3 # Meh seems nice enough
-            if hemi == 'rh':
-                # Flip x and y,
-                pts[:,0] = -pts[:,0]
-                pts[:,1] = -pts[:,1]                 
+            # if hemi == 'rh':
+            #     # Flip x and y,
+            #     # pts[:,0] = -pts[:,0]
+            #     pts[:,1] = -pts[:,1]                 
             if hemi == 'lh':
                 max_x_lh = flat[:,0].max()
             else:
                 flat[:,0] += max_x_lh - flat[:,0].min() + .1 * (max_x_lh - flat[:,0].min())
-            if have_cortex:
-                flat_surf_path = opj(self.sub_ctx_path, 'surfaces', f'{flat_name}_{hemi}.gii')
-                print("saving to %s"%flat_surf_path)
-                cortex.formats.write_gii(flat_surf_path, pts=flat, polys=polys)
+
             hemi_pts[hemi] = flat.copy()
             hemi_polys[hemi] = polys.copy()
             pts_combined.append(flat)
@@ -634,31 +598,22 @@ class GenMeshMaker(FSMaker):
         disp_rgb, cmap_dict = self.return_display_rgb(
             data=data, split_hemi=True, return_cmap_dict=True, **kwargs
         )
-        print(cmap_dict)
-        try:
-            self.get_mesh_info(flat_name)
-            mpts = {
-                'lh': self.mesh_info[flat_name]['lh']['coords'],
-                'rh': self.mesh_info[flat_name]['rh']['coords'],
-            }
-            mpolys = {
-                'lh': self.mesh_info[flat_name]['lh']['faces'],
-                'rh': self.mesh_info[flat_name]['rh']['faces'],
-            }
-        except:
-            mL, mR = cortex.db.get_surf(self.sub, flat_name, merge=False, nudge=True)
-            mpts = {
-                'lh': mL[0],
-                'rh': mR[0],
-            }
-            mpolys = {
-                'lh': mL[1],
-                'rh': mR[1],
-            }
+        self.get_mesh_info(flat_name)
+        mpts = {
+            'lh': self.mesh_info[flat_name]['lh']['coords'],
+            'rh': self.mesh_info[flat_name]['rh']['coords'],
+        }
+        mpolys = {
+            'lh': self.mesh_info[flat_name]['lh']['faces'],
+            'rh': self.mesh_info[flat_name]['rh']['faces'],
+        }
+
 
         for hemi in hemi_list: 
             if rot_angles is not None:
-                mpts[hemi] = dag_coord_rot(mpts[hemi], rot_angles)           
+                mpts[hemi] = dag_coord_rot(mpts[hemi], rot_angles)         
+            if np.isnan(mpts[hemi][0][0]):
+                continue
             triang = mpl.tri.Triangulation(
                 mpts[hemi][:,0],
                 mpts[hemi][:,1],
@@ -685,8 +640,9 @@ class GenMeshMaker(FSMaker):
                     x,y, 
                     # roi_dict['border_coords'][:,0],
                     # roi_dict['border_coords'][:,1],
+                    '.',
                     color='k',
-                    linewidth=2,
+                    linewidth=2, markersize=.8,
                     label=roi_dict['roi'] if roi_dict['first_instance'] else None,
                 )
         # Add color bar
@@ -698,6 +654,7 @@ class GenMeshMaker(FSMaker):
         ax.axis('off')
         ax.set_aspect('equal')
         return cmap_dict
+    
     def reload_flat(self, flat_name):
         '''Reload the flatmap
         '''
@@ -705,60 +662,6 @@ class GenMeshMaker(FSMaker):
         self.add_flat_to_mesh_info(flat_name=flat_name)
 
     #endregion FLAT FUNCTIONS
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
@@ -826,3 +729,4 @@ class GenMeshMaker(FSMaker):
         subprocess.run(mlab_cmd, shell=True, cwd=self.output_dir)
     
     #endregion PLY FUNCTIONS
+

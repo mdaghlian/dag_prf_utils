@@ -1,7 +1,10 @@
 # dag_prf_utils repository
 This repository is a collection of useful tools (mainly) for analysing and visualising PRF data. It is designed to work with prfpy 
 
-Credit due to many people - (TODO: do this properly)
+
+[Watch a demo video](./notebooks/mov.mp4)
+
+Credit due to many people
 
 Much stolen from:
 

@@ -257,7 +257,7 @@ class TSPlotter(Prf1T1M):
             param_text = self.make_prf_str(idx)        
             ts_ax.text(1.35, 0.20, param_text, transform=ts_ax.transAxes, fontsize=10, va='center', ha='right', family='monospace',)
         # ts
-        ts_x = np.arange(this_pred_ts.shape[-1]) * 1.5        
+        ts_x = np.arange(this_pred_ts.shape[-1]) * self.TR_in_s     
         ts_ax.plot(ts_x,this_pred_ts, **ts_kwargs)
         if self.real_ts is not None:
             self.real_ts_plot(ax=ts_ax, idx=idx)        

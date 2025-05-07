@@ -686,7 +686,7 @@ def dag_plot_bin_line(ax, X,Y, bin_using, **kwargs):
             lw=lw,
             **line_kwargs,
             )
-        # bloop
+        # bleep
         ax.fill_between(
             X_mid,
             Y_lower_shade,
@@ -998,6 +998,9 @@ def dag_multi_scatter(data_in, **kwargs):
         if p_labels is None:
             p_labels = np.arange(n_pdim)    
             p_labels = [f'p{i}' for i in p_labels]
+        px_labels = kwargs.get('px_labels', p_labels)
+        py_labels = kwargs.get('py_labels', p_labels)    
+
         data_dict = {}
         for i,p in enumerate(p_labels):
             data_dict[p] = data_in[:,i]

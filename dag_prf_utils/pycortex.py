@@ -1013,10 +1013,17 @@ class PyctxMaker(GenMeshMaker):
         flat_name = kwargs.get('flat_name', self.flat_name)
         write_to_default = True if flat_name == 'default' else False
         centre_roi = kwargs.get('centre_roi', None)
-        centre_bool = kwargs.pop('centre_bool', np.zeros(self.total_n_vx, dtype=bool))
+        centre_bool = kwargs.get('centre_bool', None)
+        if centre_bool is None:
+            centre_bool = np.ones_like(self.total_n_vx, dtype=bool)
         centre_bool_hemi = {
             'lh': centre_bool[:self.n_vx['lh']],
             'rh': centre_bool[self.n_vx['lh']:]
+        }
+        vx_to_include = kwargs.pop('vx_to_include', centre_bool)        
+        vx_to_include = {
+            'lh': vx_to_include[:self.n_vx['lh']],
+            'rh': vx_to_include[self.n_vx['lh']:]
         }
         cut_box = kwargs.get('cut_box', False)
 
@@ -1055,21 +1062,27 @@ class PyctxMaker(GenMeshMaker):
         for hemi in ['lh','rh']:
             hemi_kwargs = kwargs.copy()
             hemi_kwargs['z'] = new_z
-            hemi_kwargs['morph'] = morph
+            # hemi_kwargs['morph'] = morph
             if centre_roi is not None:
                 # Load the ROI bool for this hemisphere
-                centre_bool_hemi[hemi] |= self._return_roi_bool_both_hemis(centre_roi)[hemi]
+                centre_bool_hemi[hemi] |= self._return_roi_bool_both_hemis(centre_roi, **kwargs)[hemi]
             # Cut a box around them?            
             if cut_box:
                 hemi_kwargs['vx_to_include'] = dag_cut_box(
                     mesh_info=self.mesh_info['inflated'][hemi],
                     vx_bool=centre_bool_hemi[hemi],
                 )
+            else:
+                hemi_kwargs['vx_to_include'] = vx_to_include[hemi]
+            hemi_kwargs['vx_to_include'] = dag_mesh_morph(
+                mesh_info=self.mesh_info['inflated'][hemi], 
+                vx_bool=hemi_kwargs['vx_to_include'], 
+                morph=morph)
             hemi_kwargs['centre_bool'] = centre_bool_hemi[hemi]
-            pts,polys,vx_to_include = dag_flatten(
+            pts,polys,_ = dag_flatten(
                 mesh_info=self.mesh_info[hemi_project][hemi], 
                 method=method,
-                **hemi_kwargs)        
+                **hemi_kwargs)         
             flat = pts
             # do some cleaning...
             polys = cortex.freesurfer._remove_disconnected_polys(polys)

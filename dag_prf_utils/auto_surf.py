@@ -13,12 +13,15 @@ except:
     from prfpy.stimulus import PRFStimulus2D
     from prfpy.model import Iso2DGaussianModel, Norm_Iso2DGaussianModel, DoG_Iso2DGaussianModel, CSS_Iso2DGaussianModel
 import nibabel as nib
-import cortex
 from dag_prf_utils.prfpy_functions import prfpy_params_dict, Prf1T1M
 from dag_prf_utils.prfpy_ts_plotter import TSPlotter
 from dag_prf_utils.mesh_dash import MeshDash, dag_mesh_pickle
 from dag_prf_utils.fs_tools import FSMaker
-from dag_prf_utils.pycortex import PyctxMaker, set_ctx_path
+try:
+    import cortex
+    from dag_prf_utils.pycortex import PyctxMaker, set_ctx_path
+except:
+    print('Could not import pycortex')
 
 def dag_auto_surf_function(surf_type, **kwargs):
     '''

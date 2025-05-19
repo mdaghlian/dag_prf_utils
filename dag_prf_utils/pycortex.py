@@ -1688,10 +1688,10 @@ class Subsurface(object):
 
         # Pad the right hem with np.inf.
         padL = np.pad(
-            self.dists_L, ((0, 0), (0, self.dists_R.shape[-1])), constant_values=np.Inf)
+            self.dists_L, ((0, 0), (0, self.dists_R.shape[-1])), constant_values=np.inf)
         # pad the left hem with np.inf..
         padR = np.pad(
-            self.dists_R, ((0, 0), (self.dists_L.shape[-1], 0)), constant_values=np.Inf)
+            self.dists_R, ((0, 0), (self.dists_L.shape[-1], 0)), constant_values=np.inf)
 
         self.distance_matrix = np.vstack([padL, padR])  # Now stack.
 
